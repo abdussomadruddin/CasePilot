@@ -553,7 +553,7 @@ export function CaseDashboard() {
             </div>
             <div>
               <h1 className="text-xl font-semibold text-ink">
-                Honda Case Operation System
+                Case Operation System
               </h1>
               <p className="text-sm text-muted">Checking Supabase session</p>
             </div>
@@ -573,7 +573,7 @@ export function CaseDashboard() {
             </div>
             <div>
               <h1 className="text-xl font-semibold text-ink">
-                Honda Case Operation System
+                Case Operation System
               </h1>
               <p className="text-sm text-muted">Supabase sign in</p>
             </div>
@@ -633,11 +633,11 @@ export function CaseDashboard() {
               </div>
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-extrabold tracking-normal text-white sm:text-2xl">
-                  Honda Case Operation System
+                  Case Operation System
                 </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
                   <span className="rounded-full border border-red-500/30 bg-red-950/50 px-2.5 py-1 text-red-100">
-                    Supabase connected
+                    LIVE
                   </span>
                   <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-zinc-200">
                     {formatRole(role)}

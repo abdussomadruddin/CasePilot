@@ -3,7 +3,7 @@ import { ViewportLock } from "@/components/viewport-lock";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Honda Case Operation System",
+  title: "Case Operation System",
   description: "Role-based Honda car buying case operation dashboard.",
   manifest: "/manifest.webmanifest",
 };
