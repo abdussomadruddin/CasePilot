@@ -14,9 +14,12 @@ type CaseStatus =
   | "submission"
   | "rejected"
   | "lou_received"
-  | "lou_submitted_for_order"
-  | "car_registered"
-  | "car_delivered"
+  | "hint_submitted"
+  | "booking_form_received"
+  | "registration_needed"
+  | "roadtax_grant_process"
+  | "prepare_delivery"
+  | "car_delivery"
   | "cancelled";
 
 type RequestBody = {

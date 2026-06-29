@@ -14,7 +14,11 @@ import {
   type Role,
   type UploadDocumentInput,
 } from "@/lib/types";
-import { createActivity, getAssignedRoles, nextFollowUpFrom } from "@/lib/workflow";
+import {
+  createActivity,
+  getNotificationRoles,
+  nextFollowUpFrom,
+} from "@/lib/workflow";
 
 const documentRetentionMs = 45 * 24 * 60 * 60 * 1000;
 
@@ -81,6 +85,7 @@ type ProfileRow = {
   full_name: string | null;
   role: Role;
   phone: string | null;
+  active: boolean | null;
 };
 
 function mapCase(row: CaseRow): CaseRecord {
@@ -179,18 +184,24 @@ function mapProfile(row: ProfileRow): Profile {
     fullName: row.full_name || row.email || roleLabels[row.role],
     role: row.role,
     phone: row.phone || undefined,
+    active: row.active ?? true,
   };
 }
 
-export async function loadTeamMembers(): Promise<Profile[]> {
+export async function loadTeamMembers(includeInactive = false): Promise<Profile[]> {
   const supabase = getSupabaseClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("profiles")
-    .select("id,email,full_name,role,phone")
-    .eq("active", true)
+    .select("id,email,full_name,role,phone,active")
     .order("role", { ascending: true })
     .order("full_name", { ascending: true });
+
+  if (!includeInactive) {
+    query = query.eq("active", true);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw error;
 
@@ -260,7 +271,7 @@ export async function saveCase(
     updatedAt: now,
     createdAt: previousRecord?.createdAt || record.createdAt || now,
     nextFollowUpAt:
-      record.status === "car_delivered" || record.status === "cancelled"
+      record.status === "car_delivery" || record.status === "cancelled"
         ? ""
         : record.nextFollowUpAt || nextFollowUpFrom(),
     activities: [...record.activities, ...activities].sort(sortOldestFirst),
@@ -305,7 +316,7 @@ export async function saveCase(
   }
 
   if (statusChanged || isNew) {
-    const rolesToNotify = getAssignedRoles(savedRecord.status);
+    const rolesToNotify = getNotificationRoles(savedRecord.status);
     const reason = isNew
       ? `New case created with status ${statusLabels[savedRecord.status]}.`
       : `Case status changed to ${statusLabels[savedRecord.status]}.`;

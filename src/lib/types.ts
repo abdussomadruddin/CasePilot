@@ -22,23 +22,29 @@ export const caseStatuses = [
   "submission",
   "rejected",
   "lou_received",
-  "lou_submitted_for_order",
-  "car_registered",
-  "car_delivered",
+  "hint_submitted",
+  "booking_form_received",
+  "registration_needed",
+  "roadtax_grant_process",
+  "prepare_delivery",
+  "car_delivery",
   "cancelled",
 ] as const;
 
 export type CaseStatus = (typeof caseStatuses)[number];
 
 export const statusLabels: Record<CaseStatus, string> = {
-  documents_collected: "Documents collected",
-  more_documents_needed: "More documents needed",
+  documents_collected: "Documents Collected",
+  more_documents_needed: "More Documents Needed",
   submission: "Submission",
   rejected: "Rejected",
-  lou_received: "LOU received",
-  lou_submitted_for_order: "LOU submitted for order",
-  car_registered: "Car registered",
-  car_delivered: "Car delivered",
+  lou_received: "LOU Received",
+  hint_submitted: "HINT Submitted",
+  booking_form_received: "Booking Form Received",
+  registration_needed: "Registration Needed",
+  roadtax_grant_process: "Roadtax & Grant Process",
+  prepare_delivery: "Prepare Delivery",
+  car_delivery: "Car Delivery",
   cancelled: "Cancelled",
 };
 
@@ -63,10 +69,12 @@ export const documentTypes = [
   "license",
   "pay_slip",
   "bank_statement",
+  "offer_letter",
   "vso",
   "lou",
-  "hint",
-  "jpj_registration",
+  "booking_form",
+  "jpj_registration_slip",
+  "roadtax_grant",
 ] as const;
 
 export type DocumentType = (typeof documentTypes)[number] | "other";
@@ -76,10 +84,12 @@ export const documentTypeLabels: Record<DocumentType, string> = {
   license: "License",
   pay_slip: "Pay Slip",
   bank_statement: "Bank Statement",
+  offer_letter: "Offer Letter",
   vso: "VSO",
   lou: "LOU",
-  hint: "HINT",
-  jpj_registration: "JPJ Registration",
+  booking_form: "Booking Form",
+  jpj_registration_slip: "JPJ Registration Slip",
+  roadtax_grant: "Roadtax & Grant",
   other: "Other Documents",
 };
 
@@ -146,7 +156,8 @@ export type DashboardTab =
   | "tasks"
   | "attention"
   | "followup"
-  | "completed";
+  | "completed"
+  | "team";
 
 export type Profile = {
   id: string;
@@ -154,4 +165,5 @@ export type Profile = {
   fullName: string;
   role: Role;
   phone?: string;
+  active?: boolean;
 };

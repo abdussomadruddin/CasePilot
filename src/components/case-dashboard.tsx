@@ -22,6 +22,8 @@ import {
   Shield,
   Trash2,
   Upload,
+  UserPlus,
+  Users,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -42,9 +44,15 @@ import {
   isNotificationSupported,
 } from "@/lib/notifications";
 import {
+  createTeamMember,
+  updateTeamMember,
+  type TeamMemberFormValues,
+} from "@/lib/team-store";
+import {
   caseStatuses,
   documentTypeLabels,
   documentTypes,
+  roles,
   roleLabels,
   statusLabels,
   type BankDetail,
@@ -100,6 +108,7 @@ const tabs: TabDefinition[] = [
   { id: "attention", label: "Need Attention", icon: Bell },
   { id: "followup", label: "Follow Up Due", icon: CalendarClock },
   { id: "completed", label: "Completed", icon: CheckCircle2 },
+  { id: "team", label: "Team", icon: Users },
 ];
 
 const statusTone: Record<CaseStatus, string> = {
@@ -108,9 +117,12 @@ const statusTone: Record<CaseStatus, string> = {
   submission: "border-indigo-200 bg-indigo-50 text-indigo-800",
   rejected: "border-rose-200 bg-rose-50 text-rose-800",
   lou_received: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  lou_submitted_for_order: "border-cyan-200 bg-cyan-50 text-cyan-800",
-  car_registered: "border-violet-200 bg-violet-50 text-violet-800",
-  car_delivered: "border-green-200 bg-green-50 text-green-800",
+  hint_submitted: "border-cyan-200 bg-cyan-50 text-cyan-800",
+  booking_form_received: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800",
+  registration_needed: "border-violet-200 bg-violet-50 text-violet-800",
+  roadtax_grant_process: "border-orange-200 bg-orange-50 text-orange-800",
+  prepare_delivery: "border-teal-200 bg-teal-50 text-teal-800",
+  car_delivery: "border-green-200 bg-green-50 text-green-800",
   cancelled: "border-slate-300 bg-slate-100 text-slate-700",
 };
 
@@ -120,9 +132,12 @@ const statusAccent: Record<CaseStatus, string> = {
   submission: "border-l-indigo-500",
   rejected: "border-l-rose-500",
   lou_received: "border-l-emerald-500",
-  lou_submitted_for_order: "border-l-cyan-500",
-  car_registered: "border-l-violet-500",
-  car_delivered: "border-l-green-500",
+  hint_submitted: "border-l-cyan-500",
+  booking_form_received: "border-l-fuchsia-500",
+  registration_needed: "border-l-violet-500",
+  roadtax_grant_process: "border-l-orange-500",
+  prepare_delivery: "border-l-teal-500",
+  car_delivery: "border-l-green-500",
   cancelled: "border-l-slate-400",
 };
 
@@ -209,6 +224,7 @@ export function CaseDashboard() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [teamSaving, setTeamSaving] = useState(false);
   const [error, setError] = useState("");
   const [login, setLogin] = useState(initialLogin);
   const [authLoading, setAuthLoading] = useState(false);
@@ -232,7 +248,7 @@ export function CaseDashboard() {
           setRole(currentProfile.role);
           const [result, members] = await Promise.all([
             loadCases(),
-            loadTeamMembers(),
+            loadTeamMembers(currentProfile.role === "admin"),
           ]);
           if (!mounted) return;
           setCases(result.cases);
@@ -252,6 +268,12 @@ export function CaseDashboard() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (role !== "admin" && activeTab === "team") {
+      setActiveTab("all");
+    }
+  }, [activeTab, role]);
 
   useEffect(() => {
     if (!profile) return;
@@ -278,6 +300,11 @@ export function CaseDashboard() {
   const visibleCases = useMemo(
     () => getVisibleCases(cases, role),
     [cases, role],
+  );
+
+  const visibleTabs = useMemo(
+    () => tabs.filter((tab) => role === "admin" || tab.id !== "team"),
+    [role],
   );
 
   const tabCases = useMemo(() => {
@@ -315,7 +342,7 @@ export function CaseDashboard() {
       setError("");
       const [result, members] = await Promise.all([
         loadCases(),
-        loadTeamMembers(),
+        loadTeamMembers(role === "admin"),
       ]);
       setCases(result.cases);
       setTeamMembers(members);
@@ -339,7 +366,7 @@ export function CaseDashboard() {
         setRole(currentProfile.role);
         const [result, members] = await Promise.all([
           loadCases(),
-          loadTeamMembers(),
+          loadTeamMembers(currentProfile.role === "admin"),
         ]);
         setCases(result.cases);
         setTeamMembers(members);
@@ -440,6 +467,42 @@ export function CaseDashboard() {
       setError(caught instanceof Error ? caught.message : "Unable to save case.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function refreshTeamMembers() {
+    const members = await loadTeamMembers(role === "admin");
+    setTeamMembers(members);
+
+    if (profile) {
+      const currentMember = members.find((member) => member.id === profile.id);
+      if (currentMember) setProfile(currentMember);
+    }
+  }
+
+  async function handleCreateTeamMember(values: TeamMemberFormValues) {
+    try {
+      setTeamSaving(true);
+      setError("");
+      await createTeamMember(values);
+      await refreshTeamMembers();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to create team member.");
+    } finally {
+      setTeamSaving(false);
+    }
+  }
+
+  async function handleUpdateTeamMember(values: TeamMemberFormValues) {
+    try {
+      setTeamSaving(true);
+      setError("");
+      await updateTeamMember(values);
+      await refreshTeamMembers();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to update team member.");
+    } finally {
+      setTeamSaving(false);
     }
   }
 
@@ -645,7 +708,7 @@ export function CaseDashboard() {
 
         <section className="surface-card overflow-x-auto p-1.5">
           <div className="flex min-w-max gap-1">
-            {tabs.map((tab) => {
+            {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
 
@@ -668,26 +731,37 @@ export function CaseDashboard() {
         </section>
 
         <section className="grid gap-3">
-          {loading ? (
-            <div className="surface-card p-8 text-center text-sm text-muted">
-              Loading cases
-            </div>
-          ) : tabCases.length ? (
-            tabCases.map((record) => (
-              <CaseCard
-                key={record.id}
-                record={record}
-                role={role}
-                saving={saving}
-                teamMembers={teamMembers}
-                onEdit={openEditForm}
-                onDelete={handleDelete}
-              />
-            ))
+          {activeTab === "team" && role === "admin" ? (
+            <TeamManagementPanel
+              members={teamMembers}
+              saving={teamSaving}
+              onCreate={handleCreateTeamMember}
+              onUpdate={handleUpdateTeamMember}
+            />
           ) : (
-            <div className="surface-card p-8 text-center text-sm text-muted">
-              No cases in this tab
-            </div>
+            <>
+              {loading ? (
+                <div className="surface-card p-8 text-center text-sm text-muted">
+                  Loading cases
+                </div>
+              ) : tabCases.length ? (
+                tabCases.map((record) => (
+                  <CaseCard
+                    key={record.id}
+                    record={record}
+                    role={role}
+                    saving={saving}
+                    teamMembers={teamMembers}
+                    onEdit={openEditForm}
+                    onDelete={handleDelete}
+                  />
+                ))
+              ) : (
+                <div className="surface-card p-8 text-center text-sm text-muted">
+                  No cases in this tab
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>
@@ -734,6 +808,261 @@ function MetricCard({
   );
 }
 
+function TeamManagementPanel({
+  members,
+  saving,
+  onCreate,
+  onUpdate,
+}: {
+  members: Profile[];
+  saving: boolean;
+  onCreate: (values: TeamMemberFormValues) => Promise<void>;
+  onUpdate: (values: TeamMemberFormValues) => Promise<void>;
+}) {
+  return (
+    <div className="surface-card grid gap-4 p-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-ink">Team Management</h2>
+          <p className="text-sm text-muted">
+            Manage login ID, password, name, phone and role.
+          </p>
+        </div>
+        <span className="rounded-full border border-line bg-slate-50 px-3 py-1 text-xs font-semibold text-muted">
+          {members.length} members
+        </span>
+      </div>
+
+      <TeamMemberCreateForm saving={saving} onCreate={onCreate} />
+
+      <div className="grid gap-2">
+        {members.map((member) => (
+          <TeamMemberEditor
+            key={member.id}
+            member={member}
+            saving={saving}
+            onUpdate={onUpdate}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TeamMemberCreateForm({
+  saving,
+  onCreate,
+}: {
+  saving: boolean;
+  onCreate: (values: TeamMemberFormValues) => Promise<void>;
+}) {
+  const [values, setValues] = useState<TeamMemberFormValues>({
+    email: "",
+    password: "",
+    fullName: "",
+    phone: "",
+    role: "customer_service",
+    active: true,
+  });
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await onCreate(values);
+    setValues({
+      email: "",
+      password: "",
+      fullName: "",
+      phone: "",
+      role: "customer_service",
+      active: true,
+    });
+  }
+
+  return (
+    <form
+      className="grid gap-3 rounded-md bg-slate-50 p-3 ring-1 ring-line/80 lg:grid-cols-[1fr_1fr_1fr_1fr_150px_auto]"
+      onSubmit={submit}
+    >
+      <Field label="Login ID / Email">
+        <input
+          className="field"
+          type="email"
+          value={values.email}
+          onChange={(event) =>
+            setValues((current) => ({ ...current, email: event.target.value }))
+          }
+          required
+        />
+      </Field>
+      <Field label="Password">
+        <input
+          className="field"
+          type="password"
+          value={values.password}
+          onChange={(event) =>
+            setValues((current) => ({ ...current, password: event.target.value }))
+          }
+          required
+        />
+      </Field>
+      <Field label="Name">
+        <input
+          className="field"
+          value={values.fullName}
+          onChange={(event) =>
+            setValues((current) => ({ ...current, fullName: event.target.value }))
+          }
+          required
+        />
+      </Field>
+      <Field label="Phone">
+        <input
+          className="field"
+          type="tel"
+          value={values.phone}
+          onChange={(event) =>
+            setValues((current) => ({ ...current, phone: event.target.value }))
+          }
+        />
+      </Field>
+      <Field label="Role">
+        <select
+          className="field"
+          value={values.role}
+          onChange={(event) =>
+            setValues((current) => ({
+              ...current,
+              role: event.target.value as Role,
+            }))
+          }
+        >
+          {roles.map((role) => (
+            <option key={role} value={role}>
+              {roleLabels[role]}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <button className="primary-button self-end" disabled={saving}>
+        <UserPlus className="h-4 w-4" aria-hidden="true" />
+        Add
+      </button>
+    </form>
+  );
+}
+
+function TeamMemberEditor({
+  member,
+  saving,
+  onUpdate,
+}: {
+  member: Profile;
+  saving: boolean;
+  onUpdate: (values: TeamMemberFormValues) => Promise<void>;
+}) {
+  const [values, setValues] = useState<TeamMemberFormValues>({
+    id: member.id,
+    email: member.email,
+    password: "",
+    fullName: member.fullName,
+    phone: member.phone || "",
+    role: member.role,
+    active: member.active ?? true,
+  });
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await onUpdate(values);
+    setValues((current) => ({ ...current, password: "" }));
+  }
+
+  return (
+    <form
+      className={`grid gap-3 rounded-md border p-3 lg:grid-cols-[1fr_1fr_1fr_1fr_150px_110px_auto] ${
+        values.active
+          ? "border-line bg-white"
+          : "border-slate-200 bg-slate-50 opacity-75"
+      }`}
+      onSubmit={submit}
+    >
+      <Field label="Login ID / Email">
+        <input
+          className="field"
+          type="email"
+          value={values.email}
+          onChange={(event) =>
+            setValues((current) => ({ ...current, email: event.target.value }))
+          }
+          required
+        />
+      </Field>
+      <Field label="New Password">
+        <input
+          className="field"
+          type="password"
+          value={values.password}
+          placeholder="No change"
+          onChange={(event) =>
+            setValues((current) => ({ ...current, password: event.target.value }))
+          }
+        />
+      </Field>
+      <Field label="Name">
+        <input
+          className="field"
+          value={values.fullName}
+          onChange={(event) =>
+            setValues((current) => ({ ...current, fullName: event.target.value }))
+          }
+          required
+        />
+      </Field>
+      <Field label="Phone">
+        <input
+          className="field"
+          type="tel"
+          value={values.phone}
+          onChange={(event) =>
+            setValues((current) => ({ ...current, phone: event.target.value }))
+          }
+        />
+      </Field>
+      <Field label="Role">
+        <select
+          className="field"
+          value={values.role}
+          onChange={(event) =>
+            setValues((current) => ({
+              ...current,
+              role: event.target.value as Role,
+            }))
+          }
+        >
+          {roles.map((role) => (
+            <option key={role} value={role}>
+              {roleLabels[role]}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <label className="flex items-end gap-2 pb-2 text-sm font-semibold text-ink">
+        <input
+          type="checkbox"
+          checked={values.active}
+          onChange={(event) =>
+            setValues((current) => ({ ...current, active: event.target.checked }))
+          }
+        />
+        Active
+      </label>
+      <button className="secondary-button self-end" disabled={saving}>
+        <Save className="h-4 w-4" aria-hidden="true" />
+        Save
+      </button>
+    </form>
+  );
+}
+
 function CaseCard({
   record,
   role,
@@ -759,7 +1088,9 @@ function CaseCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [whatsAppRecipient, setWhatsAppRecipient] =
     useState<WhatsAppRecipient | null>(null);
-  const activeTeamMembers = teamMembers.filter((member) => member.phone?.trim());
+  const activeTeamMembers = teamMembers.filter(
+    (member) => member.active !== false && member.phone?.trim(),
+  );
 
   return (
     <article
@@ -1563,10 +1894,12 @@ function emptyDocumentFiles(): Record<DocumentType, File[]> {
     license: [],
     pay_slip: [],
     bank_statement: [],
+    offer_letter: [],
     vso: [],
     lou: [],
-    hint: [],
-    jpj_registration: [],
+    booking_form: [],
+    jpj_registration_slip: [],
+    roadtax_grant: [],
     other: [],
   };
 }

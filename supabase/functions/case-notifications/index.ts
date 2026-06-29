@@ -14,9 +14,12 @@ type CaseStatus =
   | "submission"
   | "rejected"
   | "lou_received"
-  | "lou_submitted_for_order"
-  | "car_registered"
-  | "car_delivered"
+  | "hint_submitted"
+  | "booking_form_received"
+  | "registration_needed"
+  | "roadtax_grant_process"
+  | "prepare_delivery"
+  | "car_delivery"
   | "cancelled";
 
 type CaseRow = {
@@ -34,19 +37,22 @@ function assignedRoles(status: CaseStatus): Role[] {
     case "documents_collected":
       return ["finance", "caller"];
     case "submission":
-      return ["finance"];
-    case "more_documents_needed":
-    case "rejected":
-      return ["customer_service"];
-    case "lou_received":
-      return ["finance", "caller"];
-    case "lou_submitted_for_order":
-      return ["caller"];
-    case "car_registered":
-    case "car_delivered":
-      return ["operator"];
-    case "cancelled":
       return ["customer_service", "finance", "caller"];
+    case "more_documents_needed":
+      return ["customer_service", "finance"];
+    case "rejected":
+      return ["customer_service", "finance", "caller"];
+    case "lou_received":
+    case "hint_submitted":
+    case "booking_form_received":
+    case "registration_needed":
+    case "roadtax_grant_process":
+      return ["customer_service", "finance", "caller"];
+    case "prepare_delivery":
+    case "car_delivery":
+      return ["customer_service", "finance", "caller", "operator"];
+    case "cancelled":
+      return ["customer_service", "finance", "caller", "operator"];
     default:
       return [];
   }
@@ -92,7 +98,7 @@ Deno.serve(async () => {
   for (const record of (cases || []) as CaseRow[]) {
     const rolesToNotify = assignedRoles(record.status);
     const isTerminal =
-      record.status === "car_delivered" || record.status === "cancelled";
+      record.status === "car_delivery" || record.status === "cancelled";
 
     for (const role of rolesToNotify) {
       const { data: latestAction } = await supabase

@@ -23,14 +23,24 @@ begin
     'submission',
     'rejected',
     'lou_received',
-    'lou_submitted_for_order',
-    'car_registered',
-    'car_delivered',
+    'hint_submitted',
+    'booking_form_received',
+    'registration_needed',
+    'roadtax_grant_process',
+    'prepare_delivery',
+    'car_delivery',
     'cancelled'
   );
 exception
   when duplicate_object then null;
 end $$;
+
+alter type public.case_status add value if not exists 'hint_submitted';
+alter type public.case_status add value if not exists 'booking_form_received';
+alter type public.case_status add value if not exists 'registration_needed';
+alter type public.case_status add value if not exists 'roadtax_grant_process';
+alter type public.case_status add value if not exists 'prepare_delivery';
+alter type public.case_status add value if not exists 'car_delivery';
 
 do $$
 begin
@@ -131,10 +141,12 @@ check (
     'license',
     'pay_slip',
     'bank_statement',
+    'offer_letter',
     'vso',
     'lou',
-    'hint',
-    'jpj_registration',
+    'booking_form',
+    'jpj_registration_slip',
+    'roadtax_grant',
     'other'
   )
 );
@@ -303,6 +315,12 @@ on public.profiles for update
 to authenticated
 using (id = auth.uid() or public.current_app_role() = 'admin')
 with check (id = auth.uid() or public.current_app_role() = 'admin');
+
+drop policy if exists "profiles insert admin" on public.profiles;
+create policy "profiles insert admin"
+on public.profiles for insert
+to authenticated
+with check (public.current_app_role() = 'admin');
 
 drop policy if exists "cases read authenticated" on public.cases;
 create policy "cases read authenticated"

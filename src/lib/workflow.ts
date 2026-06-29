@@ -12,22 +12,54 @@ const sixHoursMs = 6 * 60 * 60 * 1000;
 const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
 
 export const activeStatuses = caseStatuses.filter(
-  (status) => status !== "car_delivered" && status !== "cancelled",
+  (status) => status !== "car_delivery" && status !== "cancelled",
 );
 
-export const completedStatuses: CaseStatus[] = ["car_delivered", "cancelled"];
+export const completedStatuses: CaseStatus[] = ["car_delivery", "cancelled"];
 
 export const roleStatusPermissions: Record<Role, CaseStatus[]> = {
   admin: [...caseStatuses],
   customer_service: [
-    "documents_collected",
     "more_documents_needed",
+    "submission",
     "rejected",
+    "lou_received",
+    "hint_submitted",
+    "booking_form_received",
+    "registration_needed",
+    "roadtax_grant_process",
+    "prepare_delivery",
+    "car_delivery",
     "cancelled",
   ],
-  finance: ["documents_collected", "submission", "lou_received"],
-  caller: ["lou_received", "lou_submitted_for_order"],
-  operator: ["car_registered", "car_delivered"],
+  finance: [
+    "documents_collected",
+    "more_documents_needed",
+    "submission",
+    "rejected",
+    "lou_received",
+    "hint_submitted",
+    "booking_form_received",
+    "registration_needed",
+    "roadtax_grant_process",
+    "prepare_delivery",
+    "car_delivery",
+    "cancelled",
+  ],
+  caller: [
+    "documents_collected",
+    "submission",
+    "rejected",
+    "lou_received",
+    "hint_submitted",
+    "booking_form_received",
+    "registration_needed",
+    "roadtax_grant_process",
+    "prepare_delivery",
+    "car_delivery",
+    "cancelled",
+  ],
+  operator: ["prepare_delivery", "car_delivery", "cancelled"],
 };
 
 export function getAssignedRoles(status: CaseStatus): Role[] {
@@ -35,22 +67,29 @@ export function getAssignedRoles(status: CaseStatus): Role[] {
     case "documents_collected":
       return ["finance", "caller"];
     case "submission":
-      return ["finance"];
-    case "more_documents_needed":
-    case "rejected":
-      return ["customer_service"];
-    case "lou_received":
-      return ["finance", "caller"];
-    case "lou_submitted_for_order":
-      return ["caller"];
-    case "car_registered":
-    case "car_delivered":
-      return ["operator"];
-    case "cancelled":
       return ["customer_service", "finance", "caller"];
+    case "more_documents_needed":
+      return ["customer_service", "finance"];
+    case "rejected":
+      return ["customer_service", "finance", "caller"];
+    case "lou_received":
+    case "hint_submitted":
+    case "booking_form_received":
+    case "registration_needed":
+    case "roadtax_grant_process":
+      return ["customer_service", "finance", "caller"];
+    case "prepare_delivery":
+    case "car_delivery":
+      return ["customer_service", "finance", "caller", "operator"];
+    case "cancelled":
+      return ["customer_service", "finance", "caller", "operator"];
     default:
       return [];
   }
+}
+
+export function getNotificationRoles(status: CaseStatus): Role[] {
+  return ["admin", ...getAssignedRoles(status)];
 }
 
 export function canCreateCase(role: Role) {
