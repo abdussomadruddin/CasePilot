@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { ViewportLock } from "@/components/viewport-lock";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -8,7 +9,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#111827",
+  width: "device-width",
+  initialScale: 1,
+  minimumScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#050505",
 };
 
 export default function RootLayout({
@@ -18,7 +25,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ViewportLock />
+        {children}
+      </body>
     </html>
   );
 }

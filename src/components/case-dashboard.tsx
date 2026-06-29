@@ -113,18 +113,18 @@ const tabs: TabDefinition[] = [
 ];
 
 const statusTone: Record<CaseStatus, string> = {
-  documents_collected: "border-blue-200 bg-blue-50 text-blue-800",
-  more_documents_needed: "border-amber-200 bg-amber-50 text-amber-800",
-  submission: "border-indigo-200 bg-indigo-50 text-indigo-800",
-  rejected: "border-rose-200 bg-rose-50 text-rose-800",
-  lou_received: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  hint_submitted: "border-cyan-200 bg-cyan-50 text-cyan-800",
-  booking_form_received: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800",
-  registration_needed: "border-violet-200 bg-violet-50 text-violet-800",
-  roadtax_grant_process: "border-orange-200 bg-orange-50 text-orange-800",
-  prepare_delivery: "border-teal-200 bg-teal-50 text-teal-800",
-  car_delivery: "border-green-200 bg-green-50 text-green-800",
-  cancelled: "border-slate-300 bg-slate-100 text-slate-700",
+  documents_collected: "border-blue-500/50 bg-blue-500/15 text-blue-100",
+  more_documents_needed: "border-amber-400/50 bg-amber-400/15 text-amber-100",
+  submission: "border-indigo-400/50 bg-indigo-400/15 text-indigo-100",
+  rejected: "border-red-500/60 bg-red-600/20 text-red-100",
+  lou_received: "border-emerald-400/50 bg-emerald-400/15 text-emerald-100",
+  hint_submitted: "border-cyan-400/50 bg-cyan-400/15 text-cyan-100",
+  booking_form_received: "border-fuchsia-400/50 bg-fuchsia-400/15 text-fuchsia-100",
+  registration_needed: "border-violet-400/50 bg-violet-400/15 text-violet-100",
+  roadtax_grant_process: "border-orange-400/50 bg-orange-400/15 text-orange-100",
+  prepare_delivery: "border-teal-400/50 bg-teal-400/15 text-teal-100",
+  car_delivery: "border-green-400/50 bg-green-400/15 text-green-100",
+  cancelled: "border-zinc-600 bg-zinc-800 text-zinc-200",
 };
 
 const statusAccent: Record<CaseStatus, string> = {
@@ -530,7 +530,7 @@ export function CaseDashboard() {
       <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
         <section className="surface-card mx-auto max-w-md overflow-hidden p-6">
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-md bg-ink text-white shadow-sm">
+            <div className="grid h-11 w-11 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
               <Shield className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
@@ -550,7 +550,7 @@ export function CaseDashboard() {
       <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
         <section className="surface-card mx-auto max-w-md overflow-hidden p-6">
           <div className="mb-6 flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-md bg-ink text-white shadow-sm">
+            <div className="grid h-11 w-11 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
               <Shield className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
@@ -588,7 +588,11 @@ export function CaseDashboard() {
               />
             </Field>
 
-            {error ? <p className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p> : null}
+            {error ? (
+              <p className="rounded-md border border-red-900 bg-red-950/70 p-3 text-sm text-red-100">
+                {error}
+              </p>
+            ) : null}
 
             <button className="primary-button w-full" disabled={authLoading}>
               <LogIn className="h-4 w-4" aria-hidden="true" />
@@ -601,23 +605,23 @@ export function CaseDashboard() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1480px] flex-col gap-5">
+    <main className="min-h-screen px-3 py-3 sm:px-5 sm:py-5 lg:px-8">
+      <div className="mx-auto flex max-w-[1560px] flex-col gap-5">
         <header className="surface-card overflow-hidden">
-          <div className="flex flex-col gap-5 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-5 bg-gradient-to-r from-red-950/70 via-zinc-950 to-zinc-950 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-4">
-              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-ink text-white shadow-sm">
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
                 <FolderKanban className="h-6 w-6" aria-hidden="true" />
               </div>
               <div className="min-w-0">
-                <h1 className="truncate text-xl font-semibold text-ink sm:text-2xl">
+                <h1 className="truncate text-xl font-extrabold tracking-normal text-white sm:text-2xl">
                   Honda Case Operation System
                 </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
-                  <span className="rounded-full border border-line bg-white px-2.5 py-1">
+                  <span className="rounded-full border border-red-500/30 bg-red-950/50 px-2.5 py-1 text-red-100">
                     Supabase connected
                   </span>
-                  <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1">
+                  <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-zinc-200">
                     {formatRole(role)}
                   </span>
                 </div>
@@ -629,7 +633,7 @@ export function CaseDashboard() {
                 <button
                   className={`secondary-button ${
                     pushStatus === "enabled"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-100"
                       : ""
                   }`}
                   onClick={handleEnableAlerts}
@@ -674,17 +678,17 @@ export function CaseDashboard() {
         </header>
 
         {error ? (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          <div className="rounded-lg border border-red-900 bg-red-950/70 p-4 text-sm text-red-100">
             {error}
           </div>
         ) : null}
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
           <MetricCard
             label="All Cases"
             value={metrics.all}
             icon={FolderKanban}
-            toneClass="bg-ink text-white"
+            toneClass="bg-honda text-white"
           />
           <MetricCard
             label="My Tasks"
@@ -721,10 +725,10 @@ export function CaseDashboard() {
               return (
                 <button
                   key={tab.id}
-                  className={`flex items-center gap-2 rounded-md px-3.5 py-2.5 text-sm font-semibold transition ${
+                  className={`flex min-h-11 items-center gap-2 rounded-md px-3.5 py-2.5 text-sm font-semibold transition ${
                     isActive
-                      ? "bg-ink text-white shadow-sm"
-                      : "text-muted hover:bg-slate-100 hover:text-ink"
+                      ? "bg-honda text-white shadow-sm shadow-red-950/60"
+                      : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
                   }`}
                   onClick={() => setActiveTab(tab.id)}
                 >
@@ -800,13 +804,13 @@ function MetricCard({
   toneClass: string;
 }) {
   return (
-    <div className="surface-card group p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-lift">
+    <div className="surface-card touch-tile group p-4 transition duration-200 hover:-translate-y-1 hover:scale-[1.01] hover:border-zinc-600 hover:shadow-lift">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-muted">{label}</p>
-          <p className="mt-1 text-2xl font-semibold text-ink">{value}</p>
+          <p className="text-sm font-medium text-zinc-400">{label}</p>
+          <p className="mt-1 text-2xl font-bold text-white">{value}</p>
         </div>
-        <div className={`grid h-11 w-11 place-items-center rounded-md shadow-sm ${toneClass}`}>
+        <div className={`grid h-11 w-11 place-items-center rounded-md shadow-sm shadow-black/40 ${toneClass}`}>
           <Icon className="h-5 w-5" aria-hidden="true" />
         </div>
       </div>
@@ -834,7 +838,7 @@ function TeamManagementPanel({
             Manage login ID, password, name, phone and role.
           </p>
         </div>
-        <span className="rounded-full border border-line bg-slate-50 px-3 py-1 text-xs font-semibold text-muted">
+        <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs font-semibold text-zinc-400">
           {members.length} members
         </span>
       </div>
@@ -886,7 +890,7 @@ function TeamMemberCreateForm({
 
   return (
     <form
-      className="grid gap-3 rounded-md bg-slate-50 p-3 ring-1 ring-line/80 lg:grid-cols-[1fr_1fr_1fr_1fr_150px_auto]"
+      className="grid gap-3 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800 lg:grid-cols-[1fr_1fr_1fr_1fr_150px_auto]"
       onSubmit={submit}
     >
       <Field label="Login ID / Email">
@@ -986,8 +990,8 @@ function TeamMemberEditor({
     <form
       className={`grid gap-3 rounded-md border p-3 lg:grid-cols-[1fr_1fr_1fr_1fr_150px_110px_auto] ${
         values.active
-          ? "border-line bg-white"
-          : "border-slate-200 bg-slate-50 opacity-75"
+          ? "border-zinc-800 bg-zinc-950"
+          : "border-zinc-800 bg-zinc-900/70 opacity-75"
       }`}
       onSubmit={submit}
     >
@@ -1111,12 +1115,12 @@ function CaseCard({
 
   return (
     <article
-      className={`surface-card overflow-hidden border-l-4 transition duration-200 hover:shadow-lift ${statusAccent[record.status]}`}
+      className={`surface-card touch-tile overflow-hidden border-l-4 transition duration-200 hover:-translate-y-1 hover:scale-[1.005] hover:border-zinc-600 hover:shadow-lift ${statusAccent[record.status]}`}
     >
       <div
         role="button"
         tabIndex={0}
-        className="grid w-full cursor-pointer gap-3 p-3 text-left transition hover:bg-slate-50/80 sm:p-4 lg:grid-cols-[minmax(190px,1.25fr)_minmax(170px,1fr)_minmax(160px,0.9fr)_auto_auto] lg:items-center"
+        className="grid w-full cursor-pointer gap-3 bg-gradient-to-r from-zinc-950 via-zinc-950 to-zinc-900/80 p-3 text-left transition hover:from-zinc-900 hover:via-zinc-950 hover:to-red-950/30 sm:p-4 md:grid-cols-[minmax(180px,1fr)_minmax(180px,1fr)] lg:grid-cols-[minmax(190px,1.25fr)_minmax(170px,1fr)_minmax(160px,0.9fr)_auto_auto] lg:items-center"
         aria-expanded={isExpanded}
         onClick={toggleExpanded}
         onKeyDown={(event) => {
@@ -1127,19 +1131,19 @@ function CaseCard({
         }}
       >
         <div className="min-w-0">
-          <h2 className="truncate text-base font-semibold leading-tight text-ink">
+          <h2 className="truncate text-base font-bold leading-tight text-white">
             {record.customerName || "Unnamed customer"}
           </h2>
-          <p className="mt-1 truncate text-xs font-medium text-muted">
+          <p className="mt-1 truncate text-xs font-medium text-zinc-400">
             {record.customerPhone || "No phone"}
           </p>
         </div>
 
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-ink">
+          <p className="truncate text-sm font-semibold text-zinc-100">
             {record.carModel} {record.carVariant}
           </p>
-          <p className="mt-1 truncate text-xs text-muted">{record.carColor || "No color"}</p>
+          <p className="mt-1 truncate text-xs text-zinc-500">{record.carColor || "No color"}</p>
         </div>
 
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -1151,13 +1155,13 @@ function CaseCard({
         </div>
 
         <div
-          className="flex flex-wrap items-center gap-2 lg:justify-end"
+          className="grid grid-cols-2 gap-2 md:col-span-2 lg:col-span-1 lg:flex lg:flex-wrap lg:items-center lg:justify-end"
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
         >
           <button
             type="button"
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/15 px-2.5 text-xs font-semibold text-emerald-100 shadow-sm transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto lg:min-h-9"
             disabled={!hasCustomerPhone}
             onClick={() => setWhatsAppRecipient(customerRecipient)}
             aria-label={`WhatsApp ${record.customerName || "customer"}`}
@@ -1166,10 +1170,10 @@ function CaseCard({
             WhatsApp
           </button>
           <a
-            className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold shadow-sm transition ${
+            className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold shadow-sm transition lg:w-auto lg:min-h-9 ${
               hasCustomerPhone
-                ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                : "pointer-events-none border-line bg-slate-50 text-muted opacity-50"
+                ? "border-zinc-600 bg-zinc-800 text-zinc-100 hover:bg-zinc-700"
+                : "pointer-events-none border-zinc-800 bg-zinc-900 text-zinc-600 opacity-50"
             }`}
             href={buildTelUrl(record.customerPhone)}
             aria-label={`Call ${record.customerName || "customer"}`}
@@ -1179,11 +1183,11 @@ function CaseCard({
           </a>
         </div>
 
-        <div className="flex min-w-0 items-center justify-between gap-3 lg:justify-end">
-          <p className="line-clamp-2 min-w-0 text-xs leading-5 text-muted lg:hidden">
+        <div className="flex min-w-0 items-center justify-between gap-3 md:col-span-2 lg:col-span-1 lg:justify-end">
+          <p className="line-clamp-2 min-w-0 text-xs leading-5 text-zinc-400 lg:hidden">
             {latestRemark}
           </p>
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-line bg-white text-muted shadow-sm">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-zinc-700 bg-zinc-900 text-zinc-300 shadow-sm">
             <ChevronDown
               className={`h-4 w-4 transition ${isExpanded ? "rotate-180" : ""}`}
               aria-hidden="true"
@@ -1191,26 +1195,26 @@ function CaseCard({
           </span>
         </div>
 
-        <div className="hidden min-w-0 border-t border-line/70 pt-2 lg:col-span-4 lg:block">
-          <p className="truncate text-xs leading-5 text-muted">
-            <span className="font-semibold text-slate-600">Remark:</span> {latestRemark}
+        <div className="hidden min-w-0 border-t border-zinc-800 pt-2 lg:col-span-5 lg:block">
+          <p className="truncate text-xs leading-5 text-zinc-400">
+            <span className="font-semibold text-zinc-200">Remark:</span> {latestRemark}
           </p>
         </div>
       </div>
 
       {isExpanded ? (
         <>
-          <div className="border-t border-line/80 px-3 py-2.5 sm:px-4">
+          <div className="border-t border-zinc-800 px-3 py-2.5 sm:px-4">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 {needsAttention ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/15 px-2.5 py-1 text-xs font-semibold text-amber-100">
                     <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                     Need attention
                   </span>
                 ) : null}
                 {followUpDue ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-800">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-cyan-400/40 bg-cyan-400/15 px-2.5 py-1 text-xs font-semibold text-cyan-100">
                     <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
                     Follow up due
                   </span>
@@ -1220,16 +1224,16 @@ function CaseCard({
                 ) : null}
               </div>
 
-              <div className="flex flex-wrap gap-2 lg:justify-end">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap lg:justify-end">
                 {allowEdit ? (
-                  <button className="secondary-button" onClick={() => onEdit(record)}>
+                  <button className="secondary-button w-full sm:w-auto" onClick={() => onEdit(record)}>
                     <Pencil className="h-4 w-4" aria-hidden="true" />
                     Edit / Upload
                   </button>
                 ) : null}
                 {allowDelete ? (
                   <button
-                    className="danger-button"
+                    className="danger-button w-full sm:w-auto"
                     onClick={() => onDelete(record)}
                     disabled={saving}
                   >
@@ -1243,7 +1247,7 @@ function CaseCard({
 
           <div className="grid gap-3 p-3 pt-0 sm:p-4 sm:pt-0 xl:grid-cols-[0.8fr_1fr_0.9fr_0.8fr]">
             <div className="grid content-start gap-3">
-              <dl className="grid gap-1.5 rounded-md bg-white p-3 ring-1 ring-line/80">
+              <dl className="grid gap-1.5 rounded-md bg-zinc-950 p-3 ring-1 ring-zinc-800">
                 <CompactInfoItem
                   label="Team"
                   value={describeAssignedTeam(record.status)}
@@ -1256,7 +1260,7 @@ function CaseCard({
                 <CompactInfoItem label="Phone" value={record.customerPhone} />
               </dl>
 
-              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-line/80">
+              <div className="rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-normal text-muted">
                   Latest remark
                 </p>
@@ -1272,7 +1276,7 @@ function CaseCard({
                     record.documents.length ? (
                       <button
                         type="button"
-                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-white px-2.5 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-950 px-2.5 text-xs font-semibold text-zinc-100 shadow-sm transition hover:bg-zinc-900"
                         onClick={() => downloadDocuments(record.documents)}
                       >
                         <Download className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1286,11 +1290,11 @@ function CaseCard({
                       {record.documents.map((doc) => (
                         <li
                           key={doc.id}
-                          className="flex items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5 text-sm ring-1 ring-line/80"
+                          className="touch-tile flex items-center justify-between gap-2 rounded-md bg-zinc-950 px-2.5 py-1.5 text-sm ring-1 ring-zinc-800 transition hover:bg-zinc-900"
                         >
                           <div className="min-w-0">
                             <div className="flex min-w-0 items-center gap-2">
-                              <span className="shrink-0 rounded border border-line bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-muted">
+                              <span className="shrink-0 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-zinc-400">
                                 {getDocumentTypeLabel(doc.documentType)}
                               </span>
                               <p className="truncate font-semibold leading-5 text-ink">
@@ -1326,7 +1330,7 @@ function CaseCard({
                         {record.banks.map((bank) => (
                           <li
                             key={bank.id}
-                            className="flex items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5 text-sm ring-1 ring-line/80"
+                            className="touch-tile flex items-center justify-between gap-2 rounded-md bg-zinc-950 px-2.5 py-1.5 text-sm ring-1 ring-zinc-800 transition hover:bg-zinc-900"
                           >
                             <div className="min-w-0">
                               <p className="truncate font-semibold leading-5 text-ink">
@@ -1339,7 +1343,7 @@ function CaseCard({
                             {bank.bankerPhone.trim() ? (
                               <button
                                 type="button"
-                                className="icon-button h-8 w-8 text-emerald-700"
+                                className="icon-button h-8 w-8 text-emerald-300"
                                 onClick={() =>
                                   setWhatsAppRecipient({
                                     id: bank.id,
@@ -1360,7 +1364,7 @@ function CaseCard({
                       <p className="text-sm text-muted">No bank added</p>
                     )}
 
-                    <div className="border-t border-line/80 pt-2">
+                    <div className="border-t border-zinc-800 pt-2">
                       <p className="mb-1.5 text-xs font-semibold uppercase tracking-normal text-muted">
                         Team WhatsApp
                       </p>
@@ -1369,7 +1373,7 @@ function CaseCard({
                           {activeTeamMembers.map((member) => (
                             <li
                               key={member.id}
-                              className="flex items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5 text-sm ring-1 ring-line/80"
+                              className="touch-tile flex items-center justify-between gap-2 rounded-md bg-zinc-950 px-2.5 py-1.5 text-sm ring-1 ring-zinc-800 transition hover:bg-zinc-900"
                             >
                               <div className="min-w-0">
                                 <p className="truncate font-semibold leading-5 text-ink">
@@ -1381,7 +1385,7 @@ function CaseCard({
                               </div>
                               <button
                                 type="button"
-                                className="icon-button h-8 w-8 text-emerald-700"
+                                className="icon-button h-8 w-8 text-emerald-300"
                                 onClick={() =>
                                   setWhatsAppRecipient({
                                     id: member.id,
@@ -1406,12 +1410,12 @@ function CaseCard({
             </div>
 
             <Panel title="Activity timeline" icon={Clock3}>
-              <ol className="relative grid max-h-80 gap-2 overflow-y-auto pr-1 before:absolute before:bottom-2 before:left-3 before:top-2 before:w-px before:bg-line">
+              <ol className="relative grid max-h-80 gap-2 overflow-y-auto pr-1 before:absolute before:bottom-2 before:left-3 before:top-2 before:w-px before:bg-zinc-800">
                 {[...record.activities]
                   .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
                   .map((activity) => (
                     <li key={activity.id} className="flex gap-2">
-                      <span className="relative z-10 mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-muted ring-1 ring-line">
+                      <span className="relative z-10 mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-zinc-950 text-muted ring-1 ring-zinc-800">
                         <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
                       </span>
                       <div className="min-w-0">
@@ -1429,7 +1433,7 @@ function CaseCard({
           </div>
 
           {assignedRoles.includes(role) && !isTerminalStatus(record.status) ? (
-            <div className="border-t border-line/80 bg-slate-50/70 px-4 py-3 text-sm text-slate-600 sm:px-5">
+            <div className="border-t border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-400 sm:px-5">
               <span className="font-medium text-ink">{roleLabels[role]}</span> should add a
               remark or update the case status before the reminder window closes.
             </div>
@@ -1511,9 +1515,9 @@ function WhatsAppComposer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/50 p-4 backdrop-blur-sm">
-      <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-white/80 bg-white shadow-lift">
-        <div className="flex items-center justify-between gap-3 border-b border-line bg-slate-50/80 p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
+      <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-lift">
+        <div className="flex items-center justify-between gap-3 border-b border-zinc-800 bg-gradient-to-r from-red-950/60 via-zinc-950 to-zinc-950 p-4">
           <div className="min-w-0">
             <h2 className="truncate text-lg font-semibold text-ink">
               WhatsApp {recipient.name}
@@ -1536,7 +1540,7 @@ function WhatsAppComposer({
             />
           </Field>
 
-          <section className="grid gap-2 rounded-md bg-slate-50 p-3 ring-1 ring-line/80">
+          <section className="grid gap-2 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-muted" aria-hidden="true" />
               <h3 className="text-sm font-semibold text-ink">Documents to forward</h3>
@@ -1547,7 +1551,7 @@ function WhatsAppComposer({
                 {availableDocuments.map((document) => (
                   <label
                     key={document.id}
-                    className="flex min-h-14 cursor-pointer items-center gap-3 rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80 transition hover:bg-slate-50"
+                    className="touch-tile flex min-h-14 cursor-pointer items-center gap-3 rounded-md bg-zinc-950 px-3 py-2 text-sm ring-1 ring-zinc-800 transition hover:bg-zinc-900"
                   >
                     <input
                       type="checkbox"
@@ -1603,7 +1607,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-md bg-slate-50 p-2.5 ring-1 ring-line/80">
+    <section className="rounded-md bg-zinc-900/70 p-2.5 ring-1 ring-zinc-800">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <Icon className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
@@ -1641,7 +1645,7 @@ function DocumentUploadField({
   onChange: (files: File[]) => void;
 }) {
   return (
-    <label className="flex min-h-32 cursor-pointer flex-col justify-between gap-3 rounded-md border border-dashed border-slate-300 bg-white p-3 text-sm text-muted transition hover:border-honda hover:bg-red-50/30">
+    <label className="touch-tile flex min-h-32 cursor-pointer flex-col justify-between gap-3 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-3 text-sm text-muted transition hover:border-honda hover:bg-red-950/30">
       <span className="flex items-center gap-2 font-semibold text-ink">
         <Upload className="h-4 w-4 text-muted" aria-hidden="true" />
         {documentTypeLabels[documentType]}
@@ -1746,9 +1750,9 @@ function CaseForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/50 p-4 backdrop-blur-sm">
-      <div className="mx-auto max-w-3xl overflow-hidden rounded-lg border border-white/80 bg-white shadow-lift">
-        <div className="flex items-center justify-between gap-3 border-b border-line bg-slate-50/80 p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
+      <div className="mx-auto max-w-3xl overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-lift">
+        <div className="flex items-center justify-between gap-3 border-b border-zinc-800 bg-gradient-to-r from-red-950/60 via-zinc-950 to-zinc-950 p-4">
           <div>
             <h2 className="text-lg font-semibold text-ink">
               {isNew ? "New Case" : "Edit Case"}
@@ -1828,7 +1832,7 @@ function CaseForm({
             />
           </Field>
 
-          <section className="grid gap-3 rounded-md bg-slate-50 p-3 ring-1 ring-line/80">
+          <section className="grid gap-3 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Banknote className="h-4 w-4 text-muted" aria-hidden="true" />
@@ -1846,7 +1850,7 @@ function CaseForm({
               {values.banks.map((bank, index) => (
                 <div
                   key={bank.id}
-                  className="grid gap-3 rounded-md bg-white p-3 ring-1 ring-line/80 md:grid-cols-[1fr_1fr_1fr_auto]"
+                  className="grid gap-3 rounded-md bg-zinc-950 p-3 ring-1 ring-zinc-800 md:grid-cols-[1fr_1fr_1fr_auto]"
                 >
                   <Field label="Bank name">
                     <input
@@ -1894,7 +1898,7 @@ function CaseForm({
           </section>
 
           {canAttachDocuments ? (
-            <section className="grid gap-2 rounded-md bg-slate-50 p-3 ring-1 ring-line/80">
+            <section className="grid gap-2 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-muted" aria-hidden="true" />
                 <h3 className="text-sm font-semibold text-ink">Document upload</h3>
