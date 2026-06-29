@@ -1,9 +1,11 @@
 import { NextRequest } from "next/server";
 
+const casePilotSupabaseHost = "kfyqyxiycvdknlcpjmts.supabase.co";
+
 function isAllowedDocumentUrl(url: URL) {
   return (
     url.protocol === "https:" &&
-    url.hostname.endsWith(".supabase.co") &&
+    url.hostname === casePilotSupabaseHost &&
     url.pathname.startsWith("/storage/v1/object/public/case-documents/")
   );
 }
