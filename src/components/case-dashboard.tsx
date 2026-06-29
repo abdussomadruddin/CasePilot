@@ -690,8 +690,6 @@ function CaseCard({
   const [whatsAppRecipient, setWhatsAppRecipient] =
     useState<WhatsAppRecipient | null>(null);
   const activeTeamMembers = teamMembers.filter((member) => member.phone?.trim());
-  const latestUpdate = formatShort(getLatestUpdateTime(record));
-  const compactNextFollowUp = formatShort(nextFollowUp);
 
   return (
     <article
@@ -699,7 +697,7 @@ function CaseCard({
     >
       <button
         type="button"
-        className="grid w-full gap-3 p-3 text-left transition hover:bg-slate-50/80 sm:p-4 lg:grid-cols-[minmax(190px,1.25fr)_minmax(170px,1fr)_minmax(160px,0.9fr)_minmax(190px,1fr)_auto] lg:items-center"
+        className="grid w-full gap-3 p-3 text-left transition hover:bg-slate-50/80 sm:p-4 lg:grid-cols-[minmax(190px,1.25fr)_minmax(170px,1fr)_minmax(160px,0.9fr)_auto] lg:items-center"
         aria-expanded={isExpanded}
         onClick={() => setIsExpanded((current) => !current)}
       >
@@ -725,35 +723,6 @@ function CaseCard({
           >
             {formatStatus(record.status)}
           </span>
-          {needsAttention ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold leading-none text-amber-800">
-              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-              Attention
-            </span>
-          ) : null}
-          {followUpDue ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2 py-1 text-xs font-semibold leading-none text-cyan-800">
-              <CalendarClock className="h-3 w-3" aria-hidden="true" />
-              Follow up
-            </span>
-          ) : null}
-        </div>
-
-        <div className="grid min-w-0 gap-1 rounded-md bg-slate-50 px-3 py-2 ring-1 ring-line/70 lg:bg-transparent lg:px-0 lg:py-0 lg:ring-0">
-          <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
-            <span className="text-muted">Team</span>
-            <span className="truncate font-semibold text-ink">
-              {describeAssignedTeam(record.status)}
-            </span>
-          </div>
-          <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
-            <span className="text-muted">Updated</span>
-            <span className="truncate font-medium text-slate-700">{latestUpdate}</span>
-          </div>
-          <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
-            <span className="text-muted">Next</span>
-            <span className="truncate font-medium text-slate-700">{compactNextFollowUp}</span>
-          </div>
         </div>
 
         <div className="flex min-w-0 items-center justify-between gap-3 lg:justify-end">
@@ -768,7 +737,7 @@ function CaseCard({
           </span>
         </div>
 
-        <div className="hidden min-w-0 border-t border-line/70 pt-2 lg:col-span-5 lg:block">
+        <div className="hidden min-w-0 border-t border-line/70 pt-2 lg:col-span-4 lg:block">
           <p className="truncate text-xs leading-5 text-muted">
             <span className="font-semibold text-slate-600">Remark:</span> {latestRemark}
           </p>
