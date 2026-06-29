@@ -29,6 +29,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { getCurrentProfile, signInWithPassword, signOut } from "@/lib/auth";
 import { createEmptyCase } from "@/lib/case-factory";
@@ -1115,7 +1116,7 @@ function CaseCard({
 
   return (
     <article
-      className={`surface-card touch-tile overflow-hidden border-l-4 transition duration-200 hover:-translate-y-1 hover:scale-[1.005] hover:border-zinc-600 hover:shadow-lift ${statusAccent[record.status]}`}
+      className={`surface-card overflow-hidden border-l-4 transition duration-200 hover:border-zinc-600 hover:shadow-lift ${statusAccent[record.status]}`}
     >
       <div
         role="button"
@@ -1474,6 +1475,15 @@ function WhatsAppComposer({
   recipient: WhatsAppRecipient;
   onClose: () => void;
 }) {
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
   const availableDocuments = record.documents.filter(
     (document) => document.url && document.url !== "#",
   );
@@ -1516,15 +1526,15 @@ function WhatsAppComposer({
     onClose();
   }
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
-      <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-lift">
-        <div className="flex items-center justify-between gap-3 border-b border-zinc-800 bg-gradient-to-r from-red-950/60 via-zinc-950 to-zinc-950 p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/80 p-3 backdrop-blur-sm sm:p-4">
+      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-lift sm:max-w-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-800 bg-gradient-to-r from-red-950/60 via-zinc-950 to-zinc-950 p-3 sm:p-4">
           <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold text-ink">
+            <h2 className="line-clamp-2 break-words text-lg font-semibold text-ink">
               WhatsApp {recipient.name}
             </h2>
-            <p className="text-sm text-muted">
+            <p className="break-words text-sm text-muted">
               {recipient.subtitle} · {recipient.phone}
             </p>
           </div>
@@ -1533,10 +1543,10 @@ function WhatsAppComposer({
           </button>
         </div>
 
-        <div className="grid gap-4 p-4">
+        <div className="grid flex-1 gap-3 overflow-y-auto p-3 sm:gap-4 sm:p-4">
           <Field label="Message">
             <textarea
-              className="field min-h-36 resize-y"
+              className="field min-h-28 resize-y sm:min-h-36"
               value={message}
               onChange={(event) => setMessage(event.target.value)}
             />
@@ -1553,19 +1563,19 @@ function WhatsAppComposer({
                 {availableDocuments.map((document) => (
                   <label
                     key={document.id}
-                    className="touch-tile flex min-h-14 cursor-pointer items-center gap-3 rounded-md bg-zinc-950 px-3 py-2 text-sm ring-1 ring-zinc-800 transition hover:bg-zinc-900"
+                    className="touch-tile flex min-h-12 cursor-pointer items-center gap-3 rounded-md bg-zinc-950 px-3 py-2 text-sm ring-1 ring-zinc-800 transition hover:bg-zinc-900"
                   >
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-line text-honda focus:ring-honda"
+                      className="h-4 w-4 shrink-0 rounded border-line text-honda focus:ring-honda"
                       checked={selectedDocumentIds.includes(document.id)}
                       onChange={() => toggleDocument(document.id)}
                     />
                     <span className="min-w-0">
-                      <span className="block truncate font-medium text-ink">
+                      <span className="block break-words font-medium text-ink">
                         {documentTypeLabels[document.documentType]}
                       </span>
-                      <span className="block truncate text-xs text-muted">
+                      <span className="block line-clamp-2 break-words text-xs text-muted">
                         {document.name}
                       </span>
                     </span>
@@ -1576,24 +1586,25 @@ function WhatsAppComposer({
               <p className="text-sm text-muted">No document link available</p>
             )}
           </section>
+        </div>
 
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button type="button" className="secondary-button" onClick={onClose}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="primary-button bg-emerald-600 hover:bg-emerald-700"
-              onClick={sendWhatsApp}
-              disabled={!canSend}
-            >
-              <MessageCircle className="h-4 w-4" aria-hidden="true" />
-              Send WhatsApp
-            </button>
-          </div>
+        <div className="grid shrink-0 gap-2 border-t border-zinc-800 bg-zinc-950 p-3 sm:flex sm:flex-row-reverse sm:justify-start sm:p-4">
+          <button
+            type="button"
+            className="primary-button bg-emerald-600 hover:bg-emerald-700"
+            onClick={sendWhatsApp}
+            disabled={!canSend}
+          >
+            <MessageCircle className="h-4 w-4" aria-hidden="true" />
+            Send WhatsApp
+          </button>
+          <button type="button" className="secondary-button" onClick={onClose}>
+            Cancel
+          </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
