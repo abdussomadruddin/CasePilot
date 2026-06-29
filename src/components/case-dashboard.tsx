@@ -14,6 +14,7 @@ import {
   ListChecks,
   LogIn,
   LogOut,
+  MessageCircle,
   Pencil,
   Plus,
   RefreshCw,
@@ -30,6 +31,7 @@ import { getCurrentProfile, signInWithPassword, signOut } from "@/lib/auth";
 import { createEmptyCase } from "@/lib/demo-data";
 import {
   loadCases,
+  loadTeamMembers,
   removeCase,
   saveCase,
   uploadDocuments,
@@ -78,6 +80,13 @@ type TabDefinition = {
   id: DashboardTab;
   label: string;
   icon: LucideIcon;
+};
+
+type WhatsAppRecipient = {
+  id: string;
+  name: string;
+  phone: string;
+  subtitle: string;
 };
 
 const tabs: TabDefinition[] = [
@@ -168,8 +177,29 @@ function normalizedPhone(phone: string) {
   return phone.replace(/[^\d+]/g, "");
 }
 
+function whatsappPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("0")) return `60${digits.slice(1)}`;
+  return digits;
+}
+
+function buildWhatsAppUrl(phone: string, message: string) {
+  return `https://wa.me/${whatsappPhone(phone)}?text=${encodeURIComponent(message)}`;
+}
+
+function defaultWhatsAppMessage(record: CaseRecord) {
+  return [
+    `Hi, sharing case update for ${record.customerName}.`,
+    "",
+    `Car: ${record.carModel} ${record.carVariant}`,
+    `Status: ${statusLabels[record.status]}`,
+    `Remark: ${getLatestRemark(record)}`,
+  ].join("\n");
+}
+
 export function CaseDashboard() {
   const [cases, setCases] = useState<CaseRecord[]>([]);
+  const [teamMembers, setTeamMembers] = useState<Profile[]>([]);
   const [role, setRole] = useState<Role>("admin");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [source, setSource] = useState<"supabase" | "demo">("demo");
@@ -199,16 +229,24 @@ export function CaseDashboard() {
           setProfile(currentProfile);
           if (currentProfile) {
             setRole(currentProfile.role);
-            const result = await loadCases();
+            const [result, members] = await Promise.all([
+              loadCases(),
+              loadTeamMembers(),
+            ]);
             if (!mounted) return;
             setCases(result.cases);
             setSource(result.source);
+            setTeamMembers(members);
           }
         } else {
-          const result = await loadCases();
+          const [result, members] = await Promise.all([
+            loadCases(),
+            loadTeamMembers(),
+          ]);
           if (!mounted) return;
           setCases(result.cases);
           setSource(result.source);
+          setTeamMembers(members);
         }
       } catch (caught) {
         if (!mounted) return;
@@ -263,9 +301,13 @@ export function CaseDashboard() {
     try {
       setLoading(true);
       setError("");
-      const result = await loadCases();
+      const [result, members] = await Promise.all([
+        loadCases(),
+        loadTeamMembers(),
+      ]);
       setCases(result.cases);
       setSource(result.source);
+      setTeamMembers(members);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to refresh cases.");
     } finally {
@@ -284,9 +326,13 @@ export function CaseDashboard() {
 
       if (currentProfile) {
         setRole(currentProfile.role);
-        const result = await loadCases();
+        const [result, members] = await Promise.all([
+          loadCases(),
+          loadTeamMembers(),
+        ]);
         setCases(result.cases);
         setSource(result.source);
+        setTeamMembers(members);
       } else {
         setError("Signed in, but no role profile was found.");
       }
@@ -303,6 +349,7 @@ export function CaseDashboard() {
       await signOut();
       setProfile(null);
       setCases([]);
+      setTeamMembers([]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to sign out.");
     } finally {
@@ -570,6 +617,7 @@ export function CaseDashboard() {
                 record={record}
                 role={role}
                 saving={saving}
+                teamMembers={teamMembers}
                 onEdit={openEditForm}
                 onDelete={handleDelete}
               />
@@ -628,12 +676,14 @@ function CaseCard({
   record,
   role,
   saving,
+  teamMembers,
   onEdit,
   onDelete,
 }: {
   record: CaseRecord;
   role: Role;
   saving: boolean;
+  teamMembers: Profile[];
   onEdit: (record: CaseRecord) => void;
   onDelete: (record: CaseRecord) => void;
 }) {
@@ -645,6 +695,9 @@ function CaseCard({
   const allowEdit = canEditCase(role, record);
   const allowDelete = canDeleteCase(role);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [whatsAppRecipient, setWhatsAppRecipient] =
+    useState<WhatsAppRecipient | null>(null);
+  const activeTeamMembers = teamMembers.filter((member) => member.phone?.trim());
 
   return (
     <article
@@ -838,16 +891,74 @@ function CaseCard({
                       {record.banks.map((bank) => (
                         <li
                           key={bank.id}
-                          className="rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80"
+                          className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80"
                         >
-                          <p className="font-medium text-ink">{bank.bankName}</p>
-                          <p className="text-slate-600">{bank.bankerName}</p>
-                          <p className="text-muted">{bank.bankerPhone}</p>
+                          <div className="min-w-0">
+                            <p className="font-medium text-ink">{bank.bankName}</p>
+                            <p className="text-slate-600">{bank.bankerName}</p>
+                            <p className="text-muted">{bank.bankerPhone}</p>
+                          </div>
+                          {bank.bankerPhone.trim() ? (
+                            <button
+                              type="button"
+                              className="icon-button text-emerald-700"
+                              onClick={() =>
+                                setWhatsAppRecipient({
+                                  id: bank.id,
+                                  name: bank.bankerName || bank.bankName,
+                                  phone: bank.bankerPhone,
+                                  subtitle: bank.bankName,
+                                })
+                              }
+                              aria-label={`WhatsApp ${bank.bankerName || bank.bankName}`}
+                            >
+                              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          ) : null}
                         </li>
                       ))}
                     </ul>
                   ) : (
                     <p className="text-sm text-muted">No bank added</p>
+                  )}
+                </Panel>
+
+                <Panel title="Team WhatsApp" icon={MessageCircle}>
+                  {activeTeamMembers.length ? (
+                    <ul className="grid gap-2">
+                      {activeTeamMembers.map((member) => (
+                        <li
+                          key={member.id}
+                          className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-ink">
+                              {member.fullName}
+                            </p>
+                            <p className="text-muted">
+                              {roleLabels[member.role]} · {member.phone}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="icon-button text-emerald-700"
+                            onClick={() =>
+                              setWhatsAppRecipient({
+                                id: member.id,
+                                name: member.fullName,
+                                phone: member.phone || "",
+                                subtitle: roleLabels[member.role],
+                              })
+                            }
+                            aria-label={`WhatsApp ${member.fullName}`}
+                          >
+                            <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted">No team phone added</p>
                   )}
                 </Panel>
               </div>
@@ -882,6 +993,14 @@ function CaseCard({
           ) : null}
         </>
       ) : null}
+
+      {whatsAppRecipient ? (
+        <WhatsAppComposer
+          record={record}
+          recipient={whatsAppRecipient}
+          onClose={() => setWhatsAppRecipient(null)}
+        />
+      ) : null}
     </article>
   );
 }
@@ -893,6 +1012,138 @@ function InfoItem({ label, value }: { label: string; value: string }) {
         {label}
       </dt>
       <dd className="mt-1 break-words text-sm font-medium text-ink">{value || "None"}</dd>
+    </div>
+  );
+}
+
+function WhatsAppComposer({
+  record,
+  recipient,
+  onClose,
+}: {
+  record: CaseRecord;
+  recipient: WhatsAppRecipient;
+  onClose: () => void;
+}) {
+  const availableDocuments = record.documents.filter(
+    (document) => document.url && document.url !== "#",
+  );
+  const [message, setMessage] = useState(defaultWhatsAppMessage(record));
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>(
+    availableDocuments.map((document) => document.id),
+  );
+  const selectedDocuments = availableDocuments.filter((document) =>
+    selectedDocumentIds.includes(document.id),
+  );
+  const canSend = whatsappPhone(recipient.phone) && message.trim();
+
+  function toggleDocument(documentId: string) {
+    setSelectedDocumentIds((current) =>
+      current.includes(documentId)
+        ? current.filter((id) => id !== documentId)
+        : [...current, documentId],
+    );
+  }
+
+  function messageWithDocuments() {
+    const trimmed = message.trim();
+
+    if (!selectedDocuments.length) return trimmed;
+
+    return [
+      trimmed,
+      "",
+      "Documents:",
+      ...selectedDocuments.map(
+        (document) =>
+          `- ${documentTypeLabels[document.documentType]}: ${document.name}\n${document.url}`,
+      ),
+    ].join("\n");
+  }
+
+  function sendWhatsApp() {
+    if (!canSend) return;
+    window.open(buildWhatsAppUrl(recipient.phone, messageWithDocuments()), "_blank", "noopener");
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/50 p-4 backdrop-blur-sm">
+      <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-white/80 bg-white shadow-lift">
+        <div className="flex items-center justify-between gap-3 border-b border-line bg-slate-50/80 p-4">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-semibold text-ink">
+              WhatsApp {recipient.name}
+            </h2>
+            <p className="text-sm text-muted">
+              {recipient.subtitle} · {recipient.phone}
+            </p>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Close">
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="grid gap-4 p-4">
+          <Field label="Message">
+            <textarea
+              className="field min-h-36 resize-y"
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+            />
+          </Field>
+
+          <section className="grid gap-2 rounded-md bg-slate-50 p-3 ring-1 ring-line/80">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-muted" aria-hidden="true" />
+              <h3 className="text-sm font-semibold text-ink">Documents to forward</h3>
+            </div>
+
+            {availableDocuments.length ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {availableDocuments.map((document) => (
+                  <label
+                    key={document.id}
+                    className="flex min-h-14 cursor-pointer items-center gap-3 rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80 transition hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-line text-honda focus:ring-honda"
+                      checked={selectedDocumentIds.includes(document.id)}
+                      onChange={() => toggleDocument(document.id)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-ink">
+                        {documentTypeLabels[document.documentType]}
+                      </span>
+                      <span className="block truncate text-xs text-muted">
+                        {document.name}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted">No document link available</p>
+            )}
+          </section>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button type="button" className="secondary-button" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="primary-button bg-emerald-600 hover:bg-emerald-700"
+              onClick={sendWhatsApp}
+              disabled={!canSend}
+            >
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              Send WhatsApp
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

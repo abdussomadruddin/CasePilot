@@ -153,4 +153,5 @@ export type Profile = {
   email: string;
   fullName: string;
   role: Role;
+  phone?: string;
 };

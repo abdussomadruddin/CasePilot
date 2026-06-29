@@ -6,6 +6,7 @@ import {
   type CaseRecord,
   type CaseStatus,
   type DocumentType,
+  type Profile,
   type Role,
 } from "@/lib/types";
 import { nextFollowUpFrom } from "@/lib/workflow";
@@ -272,6 +273,46 @@ export function seedCases(): CaseRecord[] {
       createdAt: danielCreated,
       updatedAt: daysAgo(1),
       nextFollowUpAt: "",
+    },
+  ];
+}
+
+export function seedTeamMembers(): Profile[] {
+  return [
+    {
+      id: "demo-admin",
+      email: "admin@honda-case.local",
+      fullName: "Admin Team",
+      role: "admin",
+      phone: "+60 12-100 0001",
+    },
+    {
+      id: "demo-customer-service",
+      email: "cs@honda-case.local",
+      fullName: "Customer Service",
+      role: "customer_service",
+      phone: "+60 12-100 0002",
+    },
+    {
+      id: "demo-finance",
+      email: "finance@honda-case.local",
+      fullName: "Finance Team",
+      role: "finance",
+      phone: "+60 12-100 0003",
+    },
+    {
+      id: "demo-caller",
+      email: "caller@honda-case.local",
+      fullName: "Caller Team",
+      role: "caller",
+      phone: "+60 12-100 0004",
+    },
+    {
+      id: "demo-operator",
+      email: "operator@honda-case.local",
+      fullName: "Operator Team",
+      role: "operator",
+      phone: "+60 12-100 0005",
     },
   ];
 }

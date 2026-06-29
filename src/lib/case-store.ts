@@ -1,4 +1,4 @@
-import { seedCases } from "@/lib/demo-data";
+import { seedCases, seedTeamMembers } from "@/lib/demo-data";
 import { getSupabaseClient, hasSupabaseConfig } from "@/lib/supabase";
 import {
   roleLabels,
@@ -9,6 +9,7 @@ import {
   type CaseRecord,
   type CaseStatus,
   type DocumentType,
+  type Profile,
   type Role,
   type UploadDocumentInput,
 } from "@/lib/types";
@@ -72,6 +73,14 @@ type ActivityRow = {
   message: string;
   status: CaseStatus | null;
   created_at: string;
+};
+
+type ProfileRow = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  role: Role;
+  phone: string | null;
 };
 
 function isBrowser() {
@@ -180,6 +189,33 @@ function toCaseRow(record: CaseRecord) {
     updated_by_role: record.updatedBy,
     next_follow_up_at: record.nextFollowUpAt || null,
   };
+}
+
+function mapProfile(row: ProfileRow): Profile {
+  return {
+    id: row.id,
+    email: row.email || "",
+    fullName: row.full_name || row.email || roleLabels[row.role],
+    role: row.role,
+    phone: row.phone || undefined,
+  };
+}
+
+export async function loadTeamMembers(): Promise<Profile[]> {
+  const supabase = getSupabaseClient();
+
+  if (!supabase) return seedTeamMembers();
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,email,full_name,role,phone")
+    .eq("active", true)
+    .order("role", { ascending: true })
+    .order("full_name", { ascending: true });
+
+  if (error) throw error;
+
+  return ((data || []) as ProfileRow[]).map(mapProfile);
 }
 
 export async function loadCases(): Promise<StoreResult> {

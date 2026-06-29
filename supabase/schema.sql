@@ -49,6 +49,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   full_name text,
+  phone text,
   role public.app_role not null default 'customer_service',
   active boolean not null default true,
   created_at timestamptz not null default now(),
@@ -73,6 +74,9 @@ create table if not exists public.cases (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles
+add column if not exists phone text;
 
 create table if not exists public.case_banks (
   id uuid primary key default gen_random_uuid(),
@@ -232,11 +236,12 @@ begin
       requested_role := 'customer_service'::public.app_role;
   end;
 
-  insert into public.profiles (id, email, full_name, role)
+  insert into public.profiles (id, email, full_name, phone, role)
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data ->> 'full_name', new.email),
+    new.raw_user_meta_data ->> 'phone',
     requested_role
   )
   on conflict (id) do nothing;
@@ -258,10 +263,11 @@ alter table public.case_activities enable row level security;
 alter table public.case_notifications enable row level security;
 
 drop policy if exists "profiles read own or admin" on public.profiles;
-create policy "profiles read own or admin"
+drop policy if exists "profiles read active team" on public.profiles;
+create policy "profiles read active team"
 on public.profiles for select
 to authenticated
-using (id = auth.uid() or public.current_app_role() = 'admin');
+using (active = true or id = auth.uid() or public.current_app_role() = 'admin');
 
 drop policy if exists "profiles update own or admin" on public.profiles;
 create policy "profiles update own or admin"

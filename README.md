@@ -8,6 +8,7 @@ A Next.js, TypeScript, Tailwind CSS, and Supabase web app for managing Honda car
 - Case creation and editing with customer, car, document, bank, status, and remark fields.
 - Tabs for All Cases, My Tasks, Need Attention, Follow Up Due, and Completed.
 - Full case cards showing status, assigned team, latest remark, latest update, next follow-up, documents, banks, and activity timeline.
+- WhatsApp composer for team members and bankers with selectable document links.
 - Supabase-ready database schema, authentication profile model, storage bucket setup, notification worker, and 45-day document cleanup worker.
 - Demo mode when Supabase environment variables are not present.
 
@@ -25,7 +26,7 @@ Open `http://localhost:3000`.
 1. Create a Supabase project.
 2. Run `supabase/schema.sql` in the Supabase SQL editor.
 3. Create app users in Supabase Auth.
-4. Add a row in `profiles` for each user with one of these roles:
+4. Add a row in `profiles` for each user with `full_name`, `phone`, and one of these roles:
    - `admin`
    - `customer_service`
    - `finance`
