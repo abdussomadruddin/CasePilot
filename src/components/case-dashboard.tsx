@@ -153,6 +153,28 @@ function getDocumentDownloadUrl(doc: { name: string; url: string }) {
   return `/api/download-document?${params.toString()}`;
 }
 
+function getAbsoluteDocumentDownloadUrl(doc: { name: string; url: string }) {
+  if (typeof window === "undefined") return getDocumentDownloadUrl(doc);
+  return new URL(getDocumentDownloadUrl(doc), window.location.origin).toString();
+}
+
+async function shortenDocumentUrl(url: string) {
+  try {
+    const response = await fetch("/api/shorten-link", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+
+    if (!response.ok) return url;
+
+    const result = (await response.json()) as { shortUrl?: string };
+    return result.shortUrl || url;
+  } catch {
+    return url;
+  }
+}
+
 function downloadDocuments(documents: Array<{ name: string; url: string }>) {
   documents.filter((doc) => doc.url && doc.url !== "#").forEach((doc, index) => {
     window.setTimeout(() => {
@@ -1491,6 +1513,7 @@ function WhatsAppComposer({
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>(
     availableDocuments.map((document) => document.id),
   );
+  const [isPreparingWhatsApp, setIsPreparingWhatsApp] = useState(false);
   const selectedDocuments = availableDocuments.filter((document) =>
     selectedDocumentIds.includes(document.id),
   );
@@ -1504,26 +1527,50 @@ function WhatsAppComposer({
     );
   }
 
-  function messageWithDocuments() {
+  async function messageWithDocuments() {
     const trimmed = message.trim();
 
     if (!selectedDocuments.length) return trimmed;
+
+    const documentLines = await Promise.all(
+      selectedDocuments.map(async (document) => {
+        const shortUrl = await shortenDocumentUrl(getAbsoluteDocumentDownloadUrl(document));
+        return `- ${documentTypeLabels[document.documentType]}: ${document.name}\n${shortUrl}`;
+      }),
+    );
 
     return [
       trimmed,
       "",
       "Documents:",
-      ...selectedDocuments.map(
-        (document) =>
-          `- ${documentTypeLabels[document.documentType]}: ${document.name}\n${document.url}`,
-      ),
+      ...documentLines,
     ].join("\n");
   }
 
-  function sendWhatsApp() {
+  async function sendWhatsApp() {
     if (!canSend) return;
-    window.open(buildWhatsAppUrl(recipient.phone, messageWithDocuments()), "_blank", "noopener");
-    onClose();
+
+    const pendingWindow = window.open("about:blank", "_blank");
+    if (pendingWindow) {
+      pendingWindow.opener = null;
+    }
+
+    try {
+      setIsPreparingWhatsApp(true);
+      const whatsAppUrl = buildWhatsAppUrl(recipient.phone, await messageWithDocuments());
+
+      if (pendingWindow) {
+        pendingWindow.location.href = whatsAppUrl;
+      } else {
+        window.location.href = whatsAppUrl;
+      }
+
+      onClose();
+    } catch {
+      pendingWindow?.close();
+    } finally {
+      setIsPreparingWhatsApp(false);
+    }
   }
 
   return createPortal(
@@ -1593,10 +1640,10 @@ function WhatsAppComposer({
             type="button"
             className="primary-button bg-emerald-600 hover:bg-emerald-700"
             onClick={sendWhatsApp}
-            disabled={!canSend}
+            disabled={!canSend || isPreparingWhatsApp}
           >
             <MessageCircle className="h-4 w-4" aria-hidden="true" />
-            Send WhatsApp
+            {isPreparingWhatsApp ? "Preparing link" : "Send WhatsApp"}
           </button>
           <button type="button" className="secondary-button" onClick={onClose}>
             Cancel
