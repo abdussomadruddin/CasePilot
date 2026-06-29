@@ -128,7 +128,6 @@ const workflowSteps: CaseStatus[] = [
 
 const documentDisplayTypes: DocumentType[] = [
   ...documentTypes,
-  "other",
 ];
 
 function downloadDocuments(documents: Array<{ name: string; url: string }>) {
@@ -760,7 +759,14 @@ function CaseCard({
                       </button>
 
                       <div className="grid gap-2">
-                        {documentDisplayTypes.map((documentType) => {
+                        {[
+                          ...documentDisplayTypes,
+                          ...(record.documents.some(
+                            (doc) => doc.documentType === "other",
+                          )
+                            ? (["other"] as DocumentType[])
+                            : []),
+                        ].map((documentType) => {
                           const documents = record.documents.filter(
                             (doc) => doc.documentType === documentType,
                           );
@@ -1283,6 +1289,10 @@ function emptyDocumentFiles(): Record<DocumentType, File[]> {
     license: [],
     pay_slip: [],
     bank_statement: [],
+    vso: [],
+    lou: [],
+    hint: [],
+    jpj_registration: [],
     other: [],
   };
 }

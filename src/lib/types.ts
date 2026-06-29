@@ -63,6 +63,10 @@ export const documentTypes = [
   "license",
   "pay_slip",
   "bank_statement",
+  "vso",
+  "lou",
+  "hint",
+  "jpj_registration",
 ] as const;
 
 export type DocumentType = (typeof documentTypes)[number] | "other";
@@ -72,6 +76,10 @@ export const documentTypeLabels: Record<DocumentType, string> = {
   license: "License",
   pay_slip: "Pay Slip",
   bank_statement: "Bank Statement",
+  vso: "VSO",
+  lou: "LOU",
+  hint: "HINT",
+  jpj_registration: "JPJ Registration",
   other: "Other Documents",
 };
 

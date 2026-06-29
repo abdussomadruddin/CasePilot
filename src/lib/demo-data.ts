@@ -118,6 +118,7 @@ export function seedCases(): CaseRecord[] {
         document("License.pdf", "customer_service", daysAgo(3), "license"),
         document("Salary slip March.pdf", "customer_service", daysAgo(3), "pay_slip"),
         document("Bank statement.pdf", "customer_service", daysAgo(3), "bank_statement"),
+        document("VSO.pdf", "customer_service", daysAgo(3), "vso"),
       ],
       activities: [
         activity("case", "customer_service", "Case created.", aliCreated),
@@ -182,7 +183,7 @@ export function seedCases(): CaseRecord[] {
       remark: "LOU received from bank. Customer needs a call today.",
       banks: [bank("RHB", "Amira", "+60 14-991 2525")],
       documents: [
-        document("LOU RHB.pdf", "finance", daysAgo(1)),
+        document("LOU RHB.pdf", "finance", daysAgo(1), "lou"),
         document("Loan application.pdf", "customer_service", daysAgo(8), "bank_statement"),
       ],
       activities: [
@@ -218,8 +219,8 @@ export function seedCases(): CaseRecord[] {
       remark: "Registration complete. Arrange delivery slot.",
       banks: [bank("Hong Leong Bank", "Jason", "+60 12-111 6609")],
       documents: [
-        document("JPJ registration.pdf", "operator", hoursAgo(8)),
-        document("LOU.pdf", "finance", daysAgo(1)),
+        document("JPJ registration.pdf", "operator", hoursAgo(8), "jpj_registration"),
+        document("LOU.pdf", "finance", daysAgo(1), "lou"),
       ],
       activities: [
         activity("case", "customer_service", "Case created.", aisyahCreated),
