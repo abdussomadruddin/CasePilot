@@ -641,169 +641,200 @@ function CaseCard({
   const allowUpload = canUploadDocuments(role);
   const allowEdit = canEditCase(role, record);
   const allowDelete = canDeleteCase(role);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <article
       className={`surface-card overflow-hidden border-l-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-lift ${statusAccent[record.status]}`}
     >
-      <div className="flex flex-col gap-3 border-b border-line/80 p-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[record.status]}`}>
-              {formatStatus(record.status)}
-            </span>
-            {needsAttention ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
-                <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
-                Need attention
-              </span>
-            ) : null}
-            {followUpDue ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-800">
-                <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-                Follow up due
-              </span>
-            ) : null}
-          </div>
-          <h2 className="text-lg font-semibold text-ink sm:text-xl">
+      <button
+        type="button"
+        className="flex w-full flex-col gap-3 p-4 text-left transition hover:bg-slate-50/80 sm:p-5 md:flex-row md:items-center md:justify-between"
+        aria-expanded={isExpanded}
+        onClick={() => setIsExpanded((current) => !current)}
+      >
+        <div className="grid min-w-0 gap-1">
+          <h2 className="truncate text-base font-semibold text-ink sm:text-lg">
             {record.customerName || "Unnamed customer"}
           </h2>
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
-            <span>{record.carModel}</span>
-            <span>{record.carVariant}</span>
-            <span>{record.carColor}</span>
+          <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-sm text-muted">
+            <span className="truncate">{record.carModel}</span>
+            <span className="text-slate-300" aria-hidden="true">
+              /
+            </span>
+            <span className="truncate">{record.carVariant}</span>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          {allowUpload ? (
-            <label className="secondary-button cursor-pointer">
-              <Upload className="h-4 w-4" aria-hidden="true" />
-              Upload
-              <input
-                className="sr-only"
-                type="file"
-                multiple
-                onChange={(event) => onQuickUpload(record, event.target.files)}
-                disabled={saving}
-              />
-            </label>
-          ) : null}
-          {allowEdit ? (
-            <button className="secondary-button" onClick={() => onEdit(record)}>
-              <Pencil className="h-4 w-4" aria-hidden="true" />
-              Edit
-            </button>
-          ) : null}
-          {allowDelete ? (
-            <button
-              className="danger-button"
-              onClick={() => onDelete(record)}
-              disabled={saving}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-              Delete
-            </button>
-          ) : null}
+        <div className="flex shrink-0 items-center justify-between gap-3 md:justify-end">
+          <span
+            className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[record.status]}`}
+          >
+            {formatStatus(record.status)}
+          </span>
+          <span className="grid h-9 w-9 place-items-center rounded-md border border-line bg-white text-muted shadow-sm">
+            <ChevronDown
+              className={`h-4 w-4 transition ${isExpanded ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
+          </span>
         </div>
-      </div>
+      </button>
 
-      <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="grid gap-4">
-          <WorkflowRail status={record.status} />
+      {isExpanded ? (
+        <>
+          <div className="border-t border-line/80 px-4 py-3 sm:px-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                {needsAttention ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                    Need attention
+                  </span>
+                ) : null}
+                {followUpDue ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-800">
+                    <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+                    Follow up due
+                  </span>
+                ) : null}
+                {!needsAttention && !followUpDue ? (
+                  <span className="text-sm text-muted">Case details</span>
+                ) : null}
+              </div>
 
-          <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <InfoItem label="Assigned team" value={describeAssignedTeam(record.status)} />
-            <InfoItem label="Latest update" value={formatShort(getLatestUpdateTime(record))} />
-            <InfoItem label="Next follow up" value={formatShort(nextFollowUp)} />
-            <InfoItem label="Customer phone" value={record.customerPhone} />
-          </dl>
-
-          <div className="rounded-md bg-slate-50 p-4 ring-1 ring-line/80">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-normal text-muted">
-              Latest remark
-            </p>
-            <p className="text-sm leading-6 text-ink">{latestRemark}</p>
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                {allowUpload ? (
+                  <label className="secondary-button cursor-pointer">
+                    <Upload className="h-4 w-4" aria-hidden="true" />
+                    Upload
+                    <input
+                      className="sr-only"
+                      type="file"
+                      multiple
+                      onChange={(event) => onQuickUpload(record, event.target.files)}
+                      disabled={saving}
+                    />
+                  </label>
+                ) : null}
+                {allowEdit ? (
+                  <button className="secondary-button" onClick={() => onEdit(record)}>
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                    Edit
+                  </button>
+                ) : null}
+                {allowDelete ? (
+                  <button
+                    className="danger-button"
+                    onClick={() => onDelete(record)}
+                    disabled={saving}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    Delete
+                  </button>
+                ) : null}
+              </div>
+            </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Panel title="Document files" icon={FileText}>
-              {record.documents.length ? (
-                <ul className="grid gap-2">
-                  {record.documents.map((doc) => (
-                    <li
-                      key={doc.id}
-                      className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80"
-                    >
+          <div className="grid gap-5 p-4 pt-0 sm:p-5 sm:pt-0 xl:grid-cols-[1.2fr_0.8fr]">
+            <div className="grid gap-4">
+              <WorkflowRail status={record.status} />
+
+              <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <InfoItem label="Assigned team" value={describeAssignedTeam(record.status)} />
+                <InfoItem label="Latest update" value={formatShort(getLatestUpdateTime(record))} />
+                <InfoItem label="Next follow up" value={formatShort(nextFollowUp)} />
+                <InfoItem label="Customer phone" value={record.customerPhone} />
+              </dl>
+
+              <div className="rounded-md bg-slate-50 p-4 ring-1 ring-line/80">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-normal text-muted">
+                  Latest remark
+                </p>
+                <p className="text-sm leading-6 text-ink">{latestRemark}</p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Panel title="Document files" icon={FileText}>
+                  {record.documents.length ? (
+                    <ul className="grid gap-2">
+                      {record.documents.map((doc) => (
+                        <li
+                          key={doc.id}
+                          className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-ink">{doc.name}</p>
+                            <p className="text-xs text-muted">
+                              {roleLabels[doc.uploadedBy]} · {formatShort(doc.uploadedAt)}
+                            </p>
+                          </div>
+                          <a
+                            className="icon-button"
+                            href={doc.url}
+                            download={doc.name}
+                            aria-label={`Download ${doc.name}`}
+                          >
+                            <Download className="h-4 w-4" aria-hidden="true" />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted">No files uploaded</p>
+                  )}
+                </Panel>
+
+                <Panel title="Bank list" icon={Banknote}>
+                  {record.banks.length ? (
+                    <ul className="grid gap-2">
+                      {record.banks.map((bank) => (
+                        <li
+                          key={bank.id}
+                          className="rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80"
+                        >
+                          <p className="font-medium text-ink">{bank.bankName}</p>
+                          <p className="text-slate-600">{bank.bankerName}</p>
+                          <p className="text-muted">{bank.bankerPhone}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted">No bank added</p>
+                  )}
+                </Panel>
+              </div>
+            </div>
+
+            <Panel title="Activity timeline" icon={Clock3}>
+              <ol className="relative grid gap-3 before:absolute before:bottom-2 before:left-3 before:top-2 before:w-px before:bg-line">
+                {[...record.activities]
+                  .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+                  .map((activity) => (
+                    <li key={activity.id} className="flex gap-3">
+                      <span className="relative z-10 mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-muted ring-1 ring-line">
+                        <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-ink">{doc.name}</p>
+                        <p className="text-sm font-medium text-ink">{activity.message}</p>
                         <p className="text-xs text-muted">
-                          {roleLabels[doc.uploadedBy]} · {formatShort(doc.uploadedAt)}
+                          {activity.actorName} · {formatDateTime(activity.createdAt)}
                         </p>
                       </div>
-                      <a
-                        className="icon-button"
-                        href={doc.url}
-                        download={doc.name}
-                        aria-label={`Download ${doc.name}`}
-                      >
-                        <Download className="h-4 w-4" aria-hidden="true" />
-                      </a>
                     </li>
                   ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted">No files uploaded</p>
-              )}
-            </Panel>
-
-            <Panel title="Bank list" icon={Banknote}>
-              {record.banks.length ? (
-                <ul className="grid gap-2">
-                  {record.banks.map((bank) => (
-                    <li
-                      key={bank.id}
-                      className="rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80"
-                    >
-                      <p className="font-medium text-ink">{bank.bankName}</p>
-                      <p className="text-slate-600">{bank.bankerName}</p>
-                      <p className="text-muted">{bank.bankerPhone}</p>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted">No bank added</p>
-              )}
+              </ol>
             </Panel>
           </div>
-        </div>
 
-        <Panel title="Activity timeline" icon={Clock3}>
-          <ol className="relative grid gap-3 before:absolute before:bottom-2 before:left-3 before:top-2 before:w-px before:bg-line">
-            {[...record.activities]
-              .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
-              .map((activity) => (
-                <li key={activity.id} className="flex gap-3">
-                  <span className="relative z-10 mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-muted ring-1 ring-line">
-                    <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-ink">{activity.message}</p>
-                    <p className="text-xs text-muted">
-                      {activity.actorName} · {formatDateTime(activity.createdAt)}
-                    </p>
-                  </div>
-                </li>
-              ))}
-          </ol>
-        </Panel>
-      </div>
-
-      {assignedRoles.includes(role) && !isTerminalStatus(record.status) ? (
-        <div className="border-t border-line/80 bg-slate-50/70 px-4 py-3 text-sm text-slate-600 sm:px-5">
-          <span className="font-medium text-ink">{roleLabels[role]}</span> should add a
-          remark or update the case status before the reminder window closes.
-        </div>
+          {assignedRoles.includes(role) && !isTerminalStatus(record.status) ? (
+            <div className="border-t border-line/80 bg-slate-50/70 px-4 py-3 text-sm text-slate-600 sm:px-5">
+              <span className="font-medium text-ink">{roleLabels[role]}</span> should add a
+              remark or update the case status before the reminder window closes.
+            </div>
+          ) : null}
+        </>
       ) : null}
     </article>
   );
