@@ -92,11 +92,27 @@ create table if not exists public.case_documents (
   storage_path text,
   uploaded_by uuid references public.profiles(id),
   uploaded_by_role public.app_role not null default 'customer_service',
-  uploaded_at timestamptz not null default now()
+  uploaded_at timestamptz not null default now(),
+  expires_at timestamptz,
+  deleted_at timestamptz,
+  delete_reason text,
+  storage_deleted boolean not null default false
 );
 
 alter table public.case_documents
 add column if not exists document_type text not null default 'other';
+
+alter table public.case_documents
+add column if not exists expires_at timestamptz;
+
+alter table public.case_documents
+add column if not exists deleted_at timestamptz;
+
+alter table public.case_documents
+add column if not exists delete_reason text;
+
+alter table public.case_documents
+add column if not exists storage_deleted boolean not null default false;
 
 alter table public.case_documents
 drop constraint if exists case_documents_document_type_check;
@@ -142,6 +158,9 @@ create table if not exists public.case_notifications (
 
 create index if not exists cases_status_idx on public.cases(status);
 create index if not exists cases_updated_at_idx on public.cases(updated_at desc);
+create index if not exists case_documents_expiry_idx
+on public.case_documents(expires_at)
+where deleted_at is null;
 create index if not exists case_activities_case_id_idx on public.case_activities(case_id, created_at desc);
 create index if not exists case_notifications_due_idx on public.case_notifications(role, due_at);
 
@@ -164,6 +183,28 @@ drop trigger if exists touch_cases_updated_at on public.cases;
 create trigger touch_cases_updated_at
 before update on public.cases
 for each row execute function public.touch_updated_at();
+
+create or replace function public.set_case_document_expiry()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.expires_at is null then
+    new.expires_at = new.uploaded_at + interval '45 days';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists set_case_document_expiry on public.case_documents;
+create trigger set_case_document_expiry
+before insert or update of uploaded_at, expires_at on public.case_documents
+for each row execute function public.set_case_document_expiry();
+
+update public.case_documents
+set expires_at = uploaded_at + interval '45 days'
+where expires_at is null;
 
 create or replace function public.current_app_role()
 returns public.app_role

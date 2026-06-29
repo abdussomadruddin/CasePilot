@@ -22,6 +22,10 @@ function daysFromNow(days: number) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 }
 
+function retentionFrom(uploadedAt: string) {
+  return new Date(+new Date(uploadedAt) + 45 * 24 * 60 * 60 * 1000).toISOString();
+}
+
 function activity(
   type: ActivityEvent["type"],
   actorRole: Role,
@@ -66,6 +70,7 @@ function document(
     documentType,
     uploadedBy,
     uploadedAt,
+    expiresAt: retentionFrom(uploadedAt),
   };
 }
 

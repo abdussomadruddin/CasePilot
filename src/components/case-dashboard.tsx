@@ -131,7 +131,7 @@ const documentDisplayTypes: DocumentType[] = [
 ];
 
 function downloadDocuments(documents: Array<{ name: string; url: string }>) {
-  documents.forEach((doc, index) => {
+  documents.filter((doc) => doc.url && doc.url !== "#").forEach((doc, index) => {
     window.setTimeout(() => {
       const link = window.document.createElement("a");
       link.href = doc.url;
@@ -803,6 +803,9 @@ function CaseCard({
                                         <p className="truncate font-medium text-ink">{doc.name}</p>
                                         <p className="text-xs text-muted">
                                           {roleLabels[doc.uploadedBy]} · {formatShort(doc.uploadedAt)}
+                                          {doc.expiresAt
+                                            ? ` · Auto delete ${formatShort(doc.expiresAt)}`
+                                            : ""}
                                         </p>
                                       </div>
                                       <a

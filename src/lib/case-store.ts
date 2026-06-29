@@ -15,6 +15,7 @@ import {
 import { createActivity, nextFollowUpFrom } from "@/lib/workflow";
 
 const storageKey = "honda-case-operation-system:cases";
+const documentRetentionMs = 45 * 24 * 60 * 60 * 1000;
 
 type StoreResult = {
   source: "supabase" | "demo";
@@ -57,6 +58,9 @@ type DocumentRow = {
   storage_path: string | null;
   uploaded_by_role: Role;
   uploaded_at: string;
+  expires_at: string | null;
+  deleted_at: string | null;
+  delete_reason: string | null;
 };
 
 type ActivityRow = {
@@ -110,7 +114,9 @@ function mapCase(row: CaseRow): CaseRecord {
     status: row.status,
     remark: row.remark || "",
     banks: (row.case_banks || []).map(mapBank),
-    documents: (row.case_documents || []).map(mapDocument),
+    documents: (row.case_documents || [])
+      .filter((doc) => !doc.deleted_at)
+      .map(mapDocument),
     activities: (row.case_activities || []).map(mapActivity).sort(sortOldestFirst),
     createdBy: row.created_by_role,
     updatedBy: row.updated_by_role,
@@ -138,6 +144,9 @@ function mapDocument(row: DocumentRow): CaseDocument {
     storagePath: row.storage_path || undefined,
     uploadedBy: row.uploaded_by_role,
     uploadedAt: row.uploaded_at,
+    expiresAt: row.expires_at || undefined,
+    deletedAt: row.deleted_at || undefined,
+    deleteReason: row.delete_reason || undefined,
   };
 }
 
@@ -336,6 +345,7 @@ export async function uploadDocuments(
         documentType,
         uploadedBy: actorRole,
         uploadedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + documentRetentionMs).toISOString(),
       }));
 
       return {
@@ -361,6 +371,7 @@ export async function uploadDocuments(
   const uploaded: CaseDocument[] = [];
 
   for (const { file, documentType } of documents) {
+    const uploadedAt = new Date().toISOString();
     const storagePath = `${caseId}/${documentType}/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage
       .from("case-documents")
@@ -379,7 +390,8 @@ export async function uploadDocuments(
       documentType,
       storagePath,
       uploadedBy: actorRole,
-      uploadedAt: new Date().toISOString(),
+      uploadedAt,
+      expiresAt: new Date(+new Date(uploadedAt) + documentRetentionMs).toISOString(),
     });
   }
 
@@ -393,6 +405,7 @@ export async function uploadDocuments(
       storage_path: doc.storagePath,
       uploaded_by_role: doc.uploadedBy,
       uploaded_at: doc.uploadedAt,
+      expires_at: doc.expiresAt,
     })),
   );
 

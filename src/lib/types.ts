@@ -91,6 +91,9 @@ export type CaseDocument = {
   storagePath?: string;
   uploadedBy: Role;
   uploadedAt: string;
+  expiresAt?: string;
+  deletedAt?: string;
+  deleteReason?: string;
 };
 
 export type UploadDocumentInput = {
