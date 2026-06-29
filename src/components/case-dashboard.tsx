@@ -28,21 +28,24 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getCurrentProfile, signInWithPassword, signOut } from "@/lib/auth";
-import { createEmptyCase } from "@/lib/demo-data";
+import { createEmptyCase } from "@/lib/case-factory";
 import {
   loadCases,
   loadTeamMembers,
   removeCase,
   saveCase,
   uploadDocuments,
-  usingSupabase,
 } from "@/lib/case-store";
+import {
+  enablePushNotifications,
+  getNotificationPermission,
+  isNotificationSupported,
+} from "@/lib/notifications";
 import {
   caseStatuses,
   documentTypeLabels,
   documentTypes,
   roleLabels,
-  roles,
   statusLabels,
   type BankDetail,
   type CaseFormValues,
@@ -88,6 +91,8 @@ type WhatsAppRecipient = {
   phone: string;
   subtitle: string;
 };
+
+type PushStatus = "unsupported" | "default" | "denied" | "enabled" | "loading" | "error";
 
 const tabs: TabDefinition[] = [
   { id: "all", label: "All Cases", icon: FolderKanban },
@@ -194,7 +199,6 @@ export function CaseDashboard() {
   const [teamMembers, setTeamMembers] = useState<Profile[]>([]);
   const [role, setRole] = useState<Role>("admin");
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [source, setSource] = useState<"supabase" | "demo">("demo");
   const [activeTab, setActiveTab] = useState<DashboardTab>("all");
   const [editingCase, setEditingCase] = useState<CaseRecord | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -203,7 +207,8 @@ export function CaseDashboard() {
   const [error, setError] = useState("");
   const [login, setLogin] = useState(initialLogin);
   const [authLoading, setAuthLoading] = useState(false);
-  const supabaseConfigured = usingSupabase();
+  const [pushStatus, setPushStatus] = useState<PushStatus>("default");
+  const [pushMessage, setPushMessage] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -213,31 +218,19 @@ export function CaseDashboard() {
         setLoading(true);
         setError("");
 
-        if (supabaseConfigured) {
-          const currentProfile = await getCurrentProfile();
+        const currentProfile = await getCurrentProfile();
 
-          if (!mounted) return;
+        if (!mounted) return;
 
-          setProfile(currentProfile);
-          if (currentProfile) {
-            setRole(currentProfile.role);
-            const [result, members] = await Promise.all([
-              loadCases(),
-              loadTeamMembers(),
-            ]);
-            if (!mounted) return;
-            setCases(result.cases);
-            setSource(result.source);
-            setTeamMembers(members);
-          }
-        } else {
+        setProfile(currentProfile);
+        if (currentProfile) {
+          setRole(currentProfile.role);
           const [result, members] = await Promise.all([
             loadCases(),
             loadTeamMembers(),
           ]);
           if (!mounted) return;
           setCases(result.cases);
-          setSource(result.source);
           setTeamMembers(members);
         }
       } catch (caught) {
@@ -253,7 +246,29 @@ export function CaseDashboard() {
     return () => {
       mounted = false;
     };
-  }, [supabaseConfigured]);
+  }, []);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    if (!isNotificationSupported()) {
+      setPushStatus("unsupported");
+      setPushMessage("Alerts unsupported");
+      return;
+    }
+
+    const permission = getNotificationPermission();
+    if (permission === "granted") {
+      setPushStatus("enabled");
+      setPushMessage("Alerts on");
+    } else if (permission === "denied") {
+      setPushStatus("denied");
+      setPushMessage("Alerts blocked");
+    } else {
+      setPushStatus("default");
+      setPushMessage("");
+    }
+  }, [profile]);
 
   const visibleCases = useMemo(
     () => getVisibleCases(cases, role),
@@ -298,7 +313,6 @@ export function CaseDashboard() {
         loadTeamMembers(),
       ]);
       setCases(result.cases);
-      setSource(result.source);
       setTeamMembers(members);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to refresh cases.");
@@ -323,7 +337,6 @@ export function CaseDashboard() {
           loadTeamMembers(),
         ]);
         setCases(result.cases);
-        setSource(result.source);
         setTeamMembers(members);
       } else {
         setError("Signed in, but no role profile was found.");
@@ -346,6 +359,32 @@ export function CaseDashboard() {
       setError(caught instanceof Error ? caught.message : "Unable to sign out.");
     } finally {
       setAuthLoading(false);
+    }
+  }
+
+  async function handleEnableAlerts() {
+    if (!profile) return;
+
+    try {
+      setPushStatus("loading");
+      setPushMessage("Turning alerts on");
+      await enablePushNotifications(profile);
+      setPushStatus("enabled");
+      setPushMessage("Alerts on");
+
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("CasePilot alerts enabled", {
+          body: "You will receive case reminders on this device.",
+          icon: "/icon-192.svg",
+        });
+      }
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Unable to enable alerts.";
+      setPushStatus(
+        getNotificationPermission() === "denied" ? "denied" : "error",
+      );
+      setPushMessage(message);
     }
   }
 
@@ -412,7 +451,27 @@ export function CaseDashboard() {
     }
   }
 
-  if (supabaseConfigured && !profile && !loading) {
+  if (!profile && loading) {
+    return (
+      <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
+        <section className="surface-card mx-auto max-w-md overflow-hidden p-6">
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-md bg-ink text-white shadow-sm">
+              <Shield className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold text-ink">
+                Honda Case Operation System
+              </h1>
+              <p className="text-sm text-muted">Checking Supabase session</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (!profile && !loading) {
     return (
       <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
         <section className="surface-card mx-auto max-w-md overflow-hidden p-6">
@@ -482,7 +541,7 @@ export function CaseDashboard() {
                 </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
                   <span className="rounded-full border border-line bg-white px-2.5 py-1">
-                    {source === "supabase" ? "Supabase connected" : "Demo mode"}
+                    Supabase connected
                   </span>
                   <span className="rounded-full border border-line bg-slate-50 px-2.5 py-1">
                     {formatRole(role)}
@@ -492,23 +551,29 @@ export function CaseDashboard() {
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              {!supabaseConfigured ? (
-                <label className="relative">
-                  <span className="sr-only">Role</span>
-                  <select
-                    className="field min-w-48 appearance-none pr-9"
-                    value={role}
-                    onChange={(event) => setRole(event.target.value as Role)}
-                  >
-                    {roles.map((item) => (
-                      <option key={item} value={item}>
-                        {roleLabels[item]}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-muted" />
-                </label>
-              ) : profile ? (
+              {profile ? (
+                <button
+                  className={`secondary-button ${
+                    pushStatus === "enabled"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : ""
+                  }`}
+                  onClick={handleEnableAlerts}
+                  disabled={pushStatus === "loading" || pushStatus === "unsupported"}
+                  title={pushMessage || "Enable web, iOS, and Android alerts"}
+                >
+                  <Bell className="h-4 w-4" aria-hidden="true" />
+                  {pushStatus === "loading"
+                    ? "Turning on"
+                    : pushStatus === "enabled"
+                      ? "Alerts on"
+                      : pushStatus === "denied"
+                        ? "Alerts blocked"
+                        : "Enable alerts"}
+                </button>
+              ) : null}
+
+              {profile ? (
                 <button
                   className="secondary-button"
                   onClick={handleSignOut}

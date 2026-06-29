@@ -160,6 +160,21 @@ create table if not exists public.case_notifications (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  role public.app_role not null,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  user_agent text,
+  active boolean not null default true,
+  last_seen_at timestamptz not null default now(),
+  last_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists cases_status_idx on public.cases(status);
 create index if not exists cases_updated_at_idx on public.cases(updated_at desc);
 create index if not exists case_documents_expiry_idx
@@ -167,6 +182,11 @@ on public.case_documents(expires_at)
 where deleted_at is null;
 create index if not exists case_activities_case_id_idx on public.case_activities(case_id, created_at desc);
 create index if not exists case_notifications_due_idx on public.case_notifications(role, due_at);
+create index if not exists push_subscriptions_role_idx
+on public.push_subscriptions(role)
+where active = true;
+create index if not exists push_subscriptions_user_idx
+on public.push_subscriptions(user_id);
 
 create or replace function public.touch_updated_at()
 returns trigger
@@ -186,6 +206,11 @@ for each row execute function public.touch_updated_at();
 drop trigger if exists touch_cases_updated_at on public.cases;
 create trigger touch_cases_updated_at
 before update on public.cases
+for each row execute function public.touch_updated_at();
+
+drop trigger if exists touch_push_subscriptions_updated_at on public.push_subscriptions;
+create trigger touch_push_subscriptions_updated_at
+before update on public.push_subscriptions
 for each row execute function public.touch_updated_at();
 
 create or replace function public.set_case_document_expiry()
@@ -261,6 +286,7 @@ alter table public.case_banks enable row level security;
 alter table public.case_documents enable row level security;
 alter table public.case_activities enable row level security;
 alter table public.case_notifications enable row level security;
+alter table public.push_subscriptions enable row level security;
 
 drop policy if exists "profiles read own or admin" on public.profiles;
 drop policy if exists "profiles read active team" on public.profiles;
@@ -337,6 +363,37 @@ create policy "case notifications read role"
 on public.case_notifications for select
 to authenticated
 using (role = public.current_app_role() or public.current_app_role() = 'admin');
+
+drop policy if exists "case notifications insert authenticated" on public.case_notifications;
+create policy "case notifications insert authenticated"
+on public.case_notifications for insert
+to authenticated
+with check (public.current_app_role() is not null);
+
+drop policy if exists "push subscriptions read own or admin" on public.push_subscriptions;
+create policy "push subscriptions read own or admin"
+on public.push_subscriptions for select
+to authenticated
+using (user_id = auth.uid() or public.current_app_role() = 'admin');
+
+drop policy if exists "push subscriptions insert own" on public.push_subscriptions;
+create policy "push subscriptions insert own"
+on public.push_subscriptions for insert
+to authenticated
+with check (user_id = auth.uid());
+
+drop policy if exists "push subscriptions update active device" on public.push_subscriptions;
+create policy "push subscriptions update active device"
+on public.push_subscriptions for update
+to authenticated
+using (true)
+with check (user_id = auth.uid());
+
+drop policy if exists "push subscriptions delete own" on public.push_subscriptions;
+create policy "push subscriptions delete own"
+on public.push_subscriptions for delete
+to authenticated
+using (user_id = auth.uid());
 
 insert into storage.buckets (id, name, public, file_size_limit)
 values ('case-documents', 'case-documents', true, 52428800)

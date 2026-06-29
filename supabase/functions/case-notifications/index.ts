@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.0";
+import { sendPushesForRoles } from "../_shared/web-push.ts";
 
 type Role =
   | "admin"
@@ -31,6 +32,7 @@ const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
 function assignedRoles(status: CaseStatus): Role[] {
   switch (status) {
     case "documents_collected":
+      return ["finance", "caller"];
     case "submission":
       return ["finance"];
     case "more_documents_needed":
@@ -165,8 +167,14 @@ Deno.serve(async () => {
     }
   }
 
+  let pushResult = { sent: 0, failed: 0 };
+
   if (notificationRows.length) {
     await supabase.from("case_notifications").insert(notificationRows);
+    pushResult = await sendPushesForRoles(
+      supabase,
+      notificationRows.map((row) => row.role),
+    );
   }
 
   if (activityRows.length) {
@@ -177,5 +185,6 @@ Deno.serve(async () => {
     ok: true,
     notifications: notificationRows.length,
     activities: activityRows.length,
+    push: pushResult,
   });
 });

@@ -1,8 +1,9 @@
-import { seedCases, seedTeamMembers } from "@/lib/demo-data";
-import { getSupabaseClient, hasSupabaseConfig } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
+import { notifyCaseStatusChange } from "@/lib/notifications";
 import {
   roleLabels,
   documentTypeLabels,
+  statusLabels,
   type ActivityEvent,
   type BankDetail,
   type CaseDocument,
@@ -13,13 +14,12 @@ import {
   type Role,
   type UploadDocumentInput,
 } from "@/lib/types";
-import { createActivity, nextFollowUpFrom } from "@/lib/workflow";
+import { createActivity, getAssignedRoles, nextFollowUpFrom } from "@/lib/workflow";
 
-const storageKey = "honda-case-operation-system:cases";
 const documentRetentionMs = 45 * 24 * 60 * 60 * 1000;
 
 type StoreResult = {
-  source: "supabase" | "demo";
+  source: "supabase";
   cases: CaseRecord[];
 };
 
@@ -82,35 +82,6 @@ type ProfileRow = {
   role: Role;
   phone: string | null;
 };
-
-function isBrowser() {
-  return typeof window !== "undefined";
-}
-
-function readDemoCases() {
-  if (!isBrowser()) return seedCases();
-
-  const stored = window.localStorage.getItem(storageKey);
-  if (!stored) {
-    const seeded = seedCases();
-    window.localStorage.setItem(storageKey, JSON.stringify(seeded));
-    return seeded;
-  }
-
-  try {
-    return JSON.parse(stored) as CaseRecord[];
-  } catch {
-    const seeded = seedCases();
-    window.localStorage.setItem(storageKey, JSON.stringify(seeded));
-    return seeded;
-  }
-}
-
-function writeDemoCases(cases: CaseRecord[]) {
-  if (isBrowser()) {
-    window.localStorage.setItem(storageKey, JSON.stringify(cases));
-  }
-}
 
 function mapCase(row: CaseRow): CaseRecord {
   return {
@@ -204,8 +175,6 @@ function mapProfile(row: ProfileRow): Profile {
 export async function loadTeamMembers(): Promise<Profile[]> {
   const supabase = getSupabaseClient();
 
-  if (!supabase) return seedTeamMembers();
-
   const { data, error } = await supabase
     .from("profiles")
     .select("id,email,full_name,role,phone")
@@ -220,10 +189,6 @@ export async function loadTeamMembers(): Promise<Profile[]> {
 
 export async function loadCases(): Promise<StoreResult> {
   const supabase = getSupabaseClient();
-
-  if (!supabase) {
-    return { source: "demo", cases: readDemoCases() };
-  }
 
   const { data, error } = await supabase
     .from("cases")
@@ -293,15 +258,6 @@ export async function saveCase(
 
   const supabase = getSupabaseClient();
 
-  if (!supabase) {
-    const existing = readDemoCases();
-    const next = isNew
-      ? [savedRecord, ...existing]
-      : existing.map((item) => (item.id === savedRecord.id ? savedRecord : item));
-    writeDemoCases(next);
-    return next;
-  }
-
   const { error: caseError } = await supabase.from("cases").upsert(toCaseRow(savedRecord));
   if (caseError) throw caseError;
 
@@ -338,17 +294,42 @@ export async function saveCase(
     if (activityError) throw activityError;
   }
 
+  if (statusChanged || isNew) {
+    const rolesToNotify = getAssignedRoles(savedRecord.status);
+    const reason = isNew
+      ? `New case created with status ${statusLabels[savedRecord.status]}.`
+      : `Case status changed to ${statusLabels[savedRecord.status]}.`;
+    const notificationSent = await notifyCaseStatusChange({
+      caseId: savedRecord.id,
+      status: savedRecord.status,
+      roles: rolesToNotify,
+      reason,
+    });
+
+    if (!notificationSent && rolesToNotify.length) {
+      const { error: notificationError } = await supabase
+        .from("case_notifications")
+        .insert(
+          rolesToNotify.map((role) => ({
+            case_id: savedRecord.id,
+            role,
+            reason,
+            status: savedRecord.status,
+            due_at: now,
+          })),
+        );
+
+      if (notificationError) {
+        console.warn("Unable to create notification rows", notificationError.message);
+      }
+    }
+  }
+
   return (await loadCases()).cases;
 }
 
 export async function removeCase(caseId: string): Promise<CaseRecord[]> {
   const supabase = getSupabaseClient();
-
-  if (!supabase) {
-    const next = readDemoCases().filter((record) => record.id !== caseId);
-    writeDemoCases(next);
-    return next;
-  }
 
   const { error } = await supabase
     .from("cases")
@@ -368,41 +349,6 @@ export async function uploadDocuments(
   if (!documents.length) return (await loadCases()).cases;
 
   const supabase = getSupabaseClient();
-
-  if (!supabase) {
-    const existing = readDemoCases();
-    const next = existing.map((record) => {
-      if (record.id !== caseId) return record;
-
-      const uploadedDocs = documents.map(({ file, documentType }) => ({
-        id: crypto.randomUUID(),
-        name: file.name,
-        url: URL.createObjectURL(file),
-        documentType,
-        uploadedBy: actorRole,
-        uploadedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + documentRetentionMs).toISOString(),
-      }));
-
-      return {
-        ...record,
-        documents: [...record.documents, ...uploadedDocs],
-        activities: [
-          ...record.activities,
-          createActivity(
-            "document",
-            actorRole,
-            `Uploaded ${uploadedDocs.map((doc) => doc.name).join(", ")}.`,
-          ),
-        ],
-        updatedAt: new Date().toISOString(),
-        updatedBy: actorRole,
-      };
-    });
-
-    writeDemoCases(next);
-    return next;
-  }
 
   const uploaded: CaseDocument[] = [];
 
@@ -469,8 +415,4 @@ export async function uploadDocuments(
   if (activityError) throw activityError;
 
   return (await loadCases()).cases;
-}
-
-export function usingSupabase() {
-  return hasSupabaseConfig();
 }

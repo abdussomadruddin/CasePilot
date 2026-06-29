@@ -33,6 +33,7 @@ export const roleStatusPermissions: Record<Role, CaseStatus[]> = {
 export function getAssignedRoles(status: CaseStatus): Role[] {
   switch (status) {
     case "documents_collected":
+      return ["finance", "caller"];
     case "submission":
       return ["finance"];
     case "more_documents_needed":
