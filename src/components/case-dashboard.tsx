@@ -15,6 +15,7 @@ import {
   LogIn,
   LogOut,
   MessageCircle,
+  MoreVertical,
   Pencil,
   PhoneCall,
   Plus,
@@ -254,6 +255,7 @@ export function CaseDashboard() {
   const [authLoading, setAuthLoading] = useState(false);
   const [pushStatus, setPushStatus] = useState<PushStatus>("default");
   const [pushMessage, setPushMessage] = useState("");
+  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -362,6 +364,7 @@ export function CaseDashboard() {
 
   async function refreshCases() {
     try {
+      setIsHeaderMenuOpen(false);
       setLoading(true);
       setError("");
       const [result, members] = await Promise.all([
@@ -406,6 +409,7 @@ export function CaseDashboard() {
 
   async function handleSignOut() {
     try {
+      setIsHeaderMenuOpen(false);
       setAuthLoading(true);
       await signOut();
       setProfile(null);
@@ -422,6 +426,7 @@ export function CaseDashboard() {
     if (!profile) return;
 
     try {
+      setIsHeaderMenuOpen(false);
       setPushStatus("loading");
       setPushMessage("Turning alerts on");
       await enablePushNotifications(profile);
@@ -625,8 +630,8 @@ export function CaseDashboard() {
   return (
     <main className="min-h-screen px-3 py-3 sm:px-5 sm:py-5 lg:px-8">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-5">
-        <header className="surface-card overflow-hidden">
-          <div className="flex flex-col gap-5 bg-gradient-to-r from-red-950/70 via-zinc-950 to-zinc-950 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+        <header className="surface-card relative z-20">
+          <div className="flex flex-col gap-5 rounded-lg bg-gradient-to-r from-red-950/70 via-zinc-950 to-zinc-950 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-4">
               <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
                 <FolderKanban className="h-6 w-6" aria-hidden="true" />
@@ -646,51 +651,100 @@ export function CaseDashboard() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              {profile ? (
-                <button
-                  className={`secondary-button ${
-                    pushStatus === "enabled"
-                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-100"
-                      : ""
-                  }`}
-                  onClick={handleEnableAlerts}
-                  disabled={pushStatus === "loading" || pushStatus === "unsupported"}
-                  title={pushMessage || "Enable web, iOS, and Android alerts"}
-                >
-                  <Bell className="h-4 w-4" aria-hidden="true" />
-                  {pushStatus === "loading"
-                    ? "Turning on"
-                    : pushStatus === "enabled"
-                      ? "Alerts on"
-                      : pushStatus === "denied"
-                        ? "Alerts blocked"
-                        : "Enable alerts"}
-                </button>
-              ) : null}
-
-              {profile ? (
-                <button
-                  className="secondary-button"
-                  onClick={handleSignOut}
-                  disabled={authLoading}
-                >
-                  <LogOut className="h-4 w-4" aria-hidden="true" />
-                  Sign out
-                </button>
-              ) : null}
-
-              <button className="secondary-button" onClick={refreshCases} disabled={loading}>
-                <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                Refresh
-              </button>
-
+            <div className="flex items-center justify-end gap-2">
               {canCreateCase(role) ? (
-                <button className="primary-button" onClick={openCreateForm}>
+                <button
+                  className="primary-button"
+                  onClick={() => {
+                    setIsHeaderMenuOpen(false);
+                    openCreateForm();
+                  }}
+                >
                   <Plus className="h-4 w-4" aria-hidden="true" />
                   New Case
                 </button>
               ) : null}
+
+              <div className="relative">
+                <button
+                  type="button"
+                  className="secondary-button h-11 w-11 justify-center px-0"
+                  onClick={() => setIsHeaderMenuOpen((current) => !current)}
+                  aria-haspopup="menu"
+                  aria-expanded={isHeaderMenuOpen}
+                  aria-label="Open dashboard menu"
+                >
+                  <MoreVertical className="h-5 w-5" aria-hidden="true" />
+                </button>
+
+                {isHeaderMenuOpen ? (
+                  <>
+                    <button
+                      type="button"
+                      className="fixed inset-0 z-40 cursor-default bg-transparent"
+                      aria-label="Close dashboard menu"
+                      onClick={() => setIsHeaderMenuOpen(false)}
+                    />
+                    <div
+                      className="absolute right-0 top-full z-50 mt-2 w-[min(17rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-2xl shadow-black/50"
+                      role="menu"
+                    >
+                      {profile ? (
+                        <button
+                          type="button"
+                          className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-60 ${
+                            pushStatus === "enabled"
+                              ? "text-emerald-100"
+                              : "text-zinc-100"
+                          }`}
+                          onClick={handleEnableAlerts}
+                          disabled={
+                            pushStatus === "loading" ||
+                            pushStatus === "unsupported"
+                          }
+                          title={pushMessage || "Enable web, iOS, and Android alerts"}
+                          role="menuitem"
+                        >
+                          <Bell className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span className="truncate">
+                            {pushStatus === "loading"
+                              ? "Turning on"
+                              : pushStatus === "enabled"
+                                ? "Alerts on"
+                                : pushStatus === "denied"
+                                  ? "Alerts blocked"
+                                  : "Enable alerts"}
+                          </span>
+                        </button>
+                      ) : null}
+
+                      {profile ? (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-zinc-100 transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={handleSignOut}
+                          disabled={authLoading}
+                          role="menuitem"
+                        >
+                          <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span className="truncate">Sign out</span>
+                        </button>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-zinc-100 transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={refreshCases}
+                        disabled={loading}
+                        role="menuitem"
+                      >
+                        <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="truncate">Refresh</span>
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
             </div>
           </div>
         </header>
