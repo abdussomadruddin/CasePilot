@@ -11,6 +11,7 @@
 }
 
 html {
+  width: 100%;
   min-width: 320px;
   max-width: 100%;
   background: #050505;
@@ -21,6 +22,7 @@ html {
 }
 
 body {
+  width: 100%;
   min-height: 100vh;
   margin: 0;
   max-width: 100%;
@@ -72,7 +74,7 @@ a:focus-visible {
 
 @layer components {
   .surface-card {
-    @apply rounded-lg border border-zinc-800/90 bg-zinc-950/90 shadow-soft backdrop-blur;
+    @apply max-w-full rounded-lg border border-zinc-800/90 bg-zinc-950/90 shadow-soft backdrop-blur;
   }
 
   .field {

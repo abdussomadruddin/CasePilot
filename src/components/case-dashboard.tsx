@@ -716,8 +716,8 @@ export function CaseDashboard() {
           />
         </section>
 
-        <section className="surface-card overflow-x-auto p-1.5">
-          <div className="flex min-w-max gap-1">
+        <section className="surface-card overflow-hidden p-1.5">
+          <div className="grid grid-cols-2 gap-1 sm:flex sm:flex-wrap">
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -725,15 +725,15 @@ export function CaseDashboard() {
               return (
                 <button
                   key={tab.id}
-                  className={`flex min-h-11 items-center gap-2 rounded-md px-3.5 py-2.5 text-sm font-semibold transition ${
+                  className={`flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-md px-2.5 py-2.5 text-center text-xs font-semibold leading-tight transition sm:gap-2 sm:px-3.5 sm:text-sm ${
                     isActive
                       ? "bg-honda text-white shadow-sm shadow-red-950/60"
                       : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
                   }`}
                   onClick={() => setActiveTab(tab.id)}
                 >
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                  {tab.label}
+                  <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden="true" />
+                  <span className="min-w-0 break-words">{tab.label}</span>
                 </button>
               );
             })}
@@ -1131,24 +1131,24 @@ function CaseCard({
         }}
       >
         <div className="min-w-0">
-          <h2 className="truncate text-base font-bold leading-tight text-white">
+          <h2 className="line-clamp-2 break-words text-base font-bold leading-tight text-white">
             {record.customerName || "Unnamed customer"}
           </h2>
-          <p className="mt-1 truncate text-xs font-medium text-zinc-400">
+          <p className="mt-1 break-words text-xs font-medium text-zinc-400">
             {record.customerPhone || "No phone"}
           </p>
         </div>
 
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-zinc-100">
+          <p className="line-clamp-2 break-words text-sm font-semibold text-zinc-100">
             {record.carModel} {record.carVariant}
           </p>
-          <p className="mt-1 truncate text-xs text-zinc-500">{record.carColor || "No color"}</p>
+          <p className="mt-1 break-words text-xs text-zinc-500">{record.carColor || "No color"}</p>
         </div>
 
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span
-            className={`rounded-full border px-2.5 py-1 text-xs font-semibold leading-none ${statusTone[record.status]}`}
+            className={`max-w-full rounded-full border px-2.5 py-1 text-xs font-semibold leading-snug ${statusTone[record.status]}`}
           >
             {formatStatus(record.status)}
           </span>
@@ -1297,11 +1297,11 @@ function CaseCard({
                               <span className="shrink-0 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-zinc-400">
                                 {getDocumentTypeLabel(doc.documentType)}
                               </span>
-                              <p className="truncate font-semibold leading-5 text-ink">
+                              <p className="line-clamp-2 min-w-0 break-words font-semibold leading-5 text-ink">
                                 {doc.name}
                               </p>
                             </div>
-                            <p className="truncate text-xs leading-5 text-muted">
+                            <p className="break-words text-xs leading-5 text-muted">
                               {roleLabels[doc.uploadedBy]} · {formatShort(doc.uploadedAt)}
                             </p>
                           </div>
@@ -1333,10 +1333,10 @@ function CaseCard({
                             className="touch-tile flex items-center justify-between gap-2 rounded-md bg-zinc-950 px-2.5 py-1.5 text-sm ring-1 ring-zinc-800 transition hover:bg-zinc-900"
                           >
                             <div className="min-w-0">
-                              <p className="truncate font-semibold leading-5 text-ink">
+                              <p className="break-words font-semibold leading-5 text-ink">
                                 {bank.bankName}
                               </p>
-                              <p className="truncate text-xs leading-5 text-slate-600">
+                              <p className="break-words text-xs leading-5 text-slate-600">
                                 {bank.bankerName} · {bank.bankerPhone}
                               </p>
                             </div>
@@ -1376,10 +1376,10 @@ function CaseCard({
                               className="touch-tile flex items-center justify-between gap-2 rounded-md bg-zinc-950 px-2.5 py-1.5 text-sm ring-1 ring-zinc-800 transition hover:bg-zinc-900"
                             >
                               <div className="min-w-0">
-                                <p className="truncate font-semibold leading-5 text-ink">
+                                <p className="break-words font-semibold leading-5 text-ink">
                                   {member.fullName}
                                 </p>
-                                <p className="truncate text-xs leading-5 text-muted">
+                                <p className="break-words text-xs leading-5 text-muted">
                                   {roleLabels[member.role]} · {member.phone}
                                 </p>
                               </div>
@@ -1454,11 +1454,13 @@ function CaseCard({
 
 function CompactInfoItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
+    <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 text-xs">
       <dt className="shrink-0 font-semibold uppercase tracking-normal text-muted">
         {label}
       </dt>
-      <dd className="truncate text-right font-semibold text-ink">{value || "None"}</dd>
+      <dd className="min-w-0 break-words text-right font-semibold text-ink">
+        {value || "None"}
+      </dd>
     </div>
   );
 }
