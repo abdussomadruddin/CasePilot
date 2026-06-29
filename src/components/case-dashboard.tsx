@@ -761,6 +761,7 @@ export function CaseDashboard() {
             value={metrics.all}
             icon={FolderKanban}
             toneClass="bg-honda text-white"
+            className="col-span-2 sm:col-span-1"
           />
           <MetricCard
             label="My Tasks"
@@ -869,14 +870,16 @@ function MetricCard({
   value,
   icon: Icon,
   toneClass,
+  className = "",
 }: {
   label: string;
   value: number;
   icon: LucideIcon;
   toneClass: string;
+  className?: string;
 }) {
   return (
-    <div className="surface-card touch-tile group p-2.5 transition duration-200 hover:border-zinc-600 hover:shadow-lift sm:p-3">
+    <div className={`surface-card touch-tile group p-2.5 transition duration-200 hover:border-zinc-600 hover:shadow-lift sm:p-3 ${className}`}>
       <div className="flex min-h-[64px] items-center justify-between gap-2 sm:min-h-[70px]">
         <div className="min-w-0">
           <p className="text-xs font-semibold leading-tight text-zinc-400 sm:text-sm">
