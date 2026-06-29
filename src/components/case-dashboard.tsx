@@ -126,15 +126,6 @@ const initialLogin = {
   password: "",
 };
 
-const workflowSteps: CaseStatus[] = [
-  "documents_collected",
-  "submission",
-  "lou_received",
-  "lou_submitted_for_order",
-  "car_registered",
-  "car_delivered",
-];
-
 const documentDisplayTypes: DocumentType[] = [
   ...documentTypes,
 ];
@@ -793,9 +784,7 @@ function CaseCard({
 
       {isExpanded ? (
         <>
-          <div className="grid gap-2 border-t border-line/80 px-3 py-2.5 sm:px-4">
-            <WorkflowRail status={record.status} />
-
+          <div className="border-t border-line/80 px-3 py-2.5 sm:px-4">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 {needsAttention ? (
@@ -1208,50 +1197,6 @@ function WhatsAppComposer({
             </button>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function WorkflowRail({ status }: { status: CaseStatus }) {
-  const currentIndex = workflowSteps.indexOf(status);
-  const isSpecialStatus = currentIndex === -1;
-
-  return (
-    <div className="max-w-full rounded-md bg-slate-50 px-3 py-2.5 ring-1 ring-line/80">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        {workflowSteps.map((step, index) => {
-          const isDone = !isSpecialStatus && index < currentIndex;
-          const isCurrent = step === status || (isSpecialStatus && index === 0);
-
-          return (
-            <div key={step} className="flex items-center gap-2">
-              <div
-                className={`flex items-center gap-2 whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-semibold transition ${
-                  isCurrent
-                    ? "bg-ink text-white shadow-sm"
-                    : isDone
-                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-                      : "bg-white text-muted ring-1 ring-line"
-                }`}
-              >
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    isCurrent
-                      ? "bg-white"
-                      : isDone
-                        ? "bg-emerald-500"
-                        : "bg-slate-300"
-                  }`}
-                />
-                {statusLabels[isSpecialStatus && index === 0 ? status : step]}
-              </div>
-              {index < workflowSteps.length - 1 ? (
-                <span className="h-px w-5 bg-line" aria-hidden="true" />
-              ) : null}
-            </div>
-          );
-        })}
       </div>
     </div>
   );
