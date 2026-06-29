@@ -16,6 +16,7 @@ import {
   LogOut,
   MessageCircle,
   Pencil,
+  PhoneCall,
   Plus,
   RefreshCw,
   Save,
@@ -202,6 +203,11 @@ function whatsappPhone(phone: string) {
 
 function buildWhatsAppUrl(phone: string, message: string) {
   return `https://wa.me/${whatsappPhone(phone)}?text=${encodeURIComponent(message)}`;
+}
+
+function buildTelUrl(phone: string) {
+  const cleanPhone = normalizedPhone(phone);
+  return cleanPhone ? `tel:${cleanPhone}` : "#";
 }
 
 function defaultWhatsAppMessage(record: CaseRecord) {
@@ -1088,19 +1094,37 @@ function CaseCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [whatsAppRecipient, setWhatsAppRecipient] =
     useState<WhatsAppRecipient | null>(null);
+  const hasCustomerPhone = Boolean(record.customerPhone.trim());
   const activeTeamMembers = teamMembers.filter(
     (member) => member.active !== false && member.phone?.trim(),
   );
+  const customerRecipient: WhatsAppRecipient = {
+    id: `${record.id}-customer`,
+    name: record.customerName || "Customer",
+    phone: record.customerPhone,
+    subtitle: "Customer",
+  };
+
+  function toggleExpanded() {
+    setIsExpanded((current) => !current);
+  }
 
   return (
     <article
       className={`surface-card overflow-hidden border-l-4 transition duration-200 hover:shadow-lift ${statusAccent[record.status]}`}
     >
-      <button
-        type="button"
-        className="grid w-full gap-3 p-3 text-left transition hover:bg-slate-50/80 sm:p-4 lg:grid-cols-[minmax(190px,1.25fr)_minmax(170px,1fr)_minmax(160px,0.9fr)_auto] lg:items-center"
+      <div
+        role="button"
+        tabIndex={0}
+        className="grid w-full cursor-pointer gap-3 p-3 text-left transition hover:bg-slate-50/80 sm:p-4 lg:grid-cols-[minmax(190px,1.25fr)_minmax(170px,1fr)_minmax(160px,0.9fr)_auto_auto] lg:items-center"
         aria-expanded={isExpanded}
-        onClick={() => setIsExpanded((current) => !current)}
+        onClick={toggleExpanded}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleExpanded();
+          }
+        }}
       >
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold leading-tight text-ink">
@@ -1126,6 +1150,35 @@ function CaseCard({
           </span>
         </div>
 
+        <div
+          className="flex flex-wrap items-center gap-2 lg:justify-end"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!hasCustomerPhone}
+            onClick={() => setWhatsAppRecipient(customerRecipient)}
+            aria-label={`WhatsApp ${record.customerName || "customer"}`}
+          >
+            <MessageCircle className="h-4 w-4" aria-hidden="true" />
+            WhatsApp
+          </button>
+          <a
+            className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold shadow-sm transition ${
+              hasCustomerPhone
+                ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                : "pointer-events-none border-line bg-slate-50 text-muted opacity-50"
+            }`}
+            href={buildTelUrl(record.customerPhone)}
+            aria-label={`Call ${record.customerName || "customer"}`}
+          >
+            <PhoneCall className="h-4 w-4" aria-hidden="true" />
+            Call
+          </a>
+        </div>
+
         <div className="flex min-w-0 items-center justify-between gap-3 lg:justify-end">
           <p className="line-clamp-2 min-w-0 text-xs leading-5 text-muted lg:hidden">
             {latestRemark}
@@ -1143,7 +1196,7 @@ function CaseCard({
             <span className="font-semibold text-slate-600">Remark:</span> {latestRemark}
           </p>
         </div>
-      </button>
+      </div>
 
       {isExpanded ? (
         <>
