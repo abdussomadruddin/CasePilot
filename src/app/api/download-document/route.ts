@@ -18,6 +18,16 @@ function safeFileName(name: string | null) {
   return cleaned || "document";
 }
 
+function safeAsciiFileName(name: string) {
+  const cleaned = name
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/["\\/]/g, "_")
+    .trim();
+
+  return cleaned || "document";
+}
+
 function encodeHeaderValue(value: string) {
   return encodeURIComponent(value).replace(/['()*]/g, (character) =>
     `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
@@ -27,6 +37,7 @@ function encodeHeaderValue(value: string) {
 export async function GET(request: NextRequest) {
   const rawUrl = request.nextUrl.searchParams.get("url");
   const fileName = safeFileName(request.nextUrl.searchParams.get("name"));
+  const asciiFileName = safeAsciiFileName(fileName);
 
   if (!rawUrl) {
     return new Response("Missing document URL.", { status: 400 });
@@ -57,7 +68,7 @@ export async function GET(request: NextRequest) {
   }
   headers.set(
     "content-disposition",
-    `attachment; filename="${fileName}"; filename*=UTF-8''${encodeHeaderValue(fileName)}`,
+    `attachment; filename="${asciiFileName}"; filename*=UTF-8''${encodeHeaderValue(fileName)}`,
   );
 
   return new Response(upstream.body, {
