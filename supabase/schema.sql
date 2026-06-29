@@ -1,4 +1,6 @@
 create extension if not exists "pgcrypto";
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
 
 do $$
 begin
@@ -306,7 +308,7 @@ drop policy if exists "cases read authenticated" on public.cases;
 create policy "cases read authenticated"
 on public.cases for select
 to authenticated
-using (deleted_at is null);
+using (true);
 
 drop policy if exists "cases insert operations" on public.cases;
 create policy "cases insert operations"
@@ -423,4 +425,32 @@ to authenticated
 using (
   bucket_id = 'case-documents'
   and public.current_app_role() = 'admin'
+);
+
+select cron.unschedule(jobname)
+from cron.job
+where jobname in ('casepilot-case-notifications', 'casepilot-cleanup-case-documents');
+
+select cron.schedule(
+  'casepilot-case-notifications',
+  '*/15 * * * *',
+  $$
+  select net.http_post(
+    url := 'https://kfyqyxiycvdknlcpjmts.supabase.co/functions/v1/case-notifications',
+    headers := '{"Content-Type":"application/json"}'::jsonb,
+    body := '{}'::jsonb
+  );
+  $$
+);
+
+select cron.schedule(
+  'casepilot-cleanup-case-documents',
+  '0 2 * * *',
+  $$
+  select net.http_post(
+    url := 'https://kfyqyxiycvdknlcpjmts.supabase.co/functions/v1/cleanup-case-documents',
+    headers := '{"Content-Type":"application/json"}'::jsonb,
+    body := '{}'::jsonb
+  );
+  $$
 );

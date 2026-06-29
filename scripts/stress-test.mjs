@@ -1,5 +1,5 @@
-const defaultSupabaseUrl = "https://rfqwyhafvfvafiqrcmxa.supabase.co";
-const defaultSupabaseKey = "sb_publishable_or7DVUc_la79KiBz4kR5uw_EIGyN3-l";
+const defaultSupabaseUrl = "https://kfyqyxiycvdknlcpjmts.supabase.co";
+const defaultSupabaseKey = "sb_publishable_Fs_FX9W23A3AbS-T8szB1g_pW_pNDui";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || defaultSupabaseUrl;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || defaultSupabaseKey;
