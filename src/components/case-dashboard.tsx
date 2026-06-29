@@ -793,7 +793,9 @@ function CaseCard({
 
       {isExpanded ? (
         <>
-          <div className="border-t border-line/80 px-3 py-2.5 sm:px-4">
+          <div className="grid gap-2 border-t border-line/80 px-3 py-2.5 sm:px-4">
+            <WorkflowRail status={record.status} />
+
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 {needsAttention ? (
@@ -836,8 +838,6 @@ function CaseCard({
 
           <div className="grid gap-3 p-3 pt-0 sm:p-4 sm:pt-0 xl:grid-cols-[0.8fr_1fr_0.9fr_0.8fr]">
             <div className="grid content-start gap-3">
-              <WorkflowRail status={record.status} />
-
               <dl className="grid gap-1.5 rounded-md bg-white p-3 ring-1 ring-line/80">
                 <CompactInfoItem
                   label="Team"
@@ -1218,8 +1218,8 @@ function WorkflowRail({ status }: { status: CaseStatus }) {
   const isSpecialStatus = currentIndex === -1;
 
   return (
-    <div className="overflow-x-auto rounded-md bg-slate-50 px-3 py-3 ring-1 ring-line/80">
-      <div className="flex min-w-max items-center gap-2">
+    <div className="max-w-full rounded-md bg-slate-50 px-3 py-2.5 ring-1 ring-line/80">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         {workflowSteps.map((step, index) => {
           const isDone = !isSpecialStatus && index < currentIndex;
           const isCurrent = step === status || (isSpecialStatus && index === 0);
@@ -1227,7 +1227,7 @@ function WorkflowRail({ status }: { status: CaseStatus }) {
           return (
             <div key={step} className="flex items-center gap-2">
               <div
-                className={`flex items-center gap-2 rounded-full px-2.5 py-1.5 text-xs font-semibold transition ${
+                className={`flex items-center gap-2 whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-semibold transition ${
                   isCurrent
                     ? "bg-ink text-white shadow-sm"
                     : isDone
