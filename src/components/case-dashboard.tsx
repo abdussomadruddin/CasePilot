@@ -755,7 +755,7 @@ export function CaseDashboard() {
           </div>
         ) : null}
 
-        <section className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+        <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
           <MetricCard
             label="All Cases"
             value={metrics.all}
@@ -876,14 +876,18 @@ function MetricCard({
   toneClass: string;
 }) {
   return (
-    <div className="surface-card touch-tile group p-4 transition duration-200 hover:-translate-y-1 hover:scale-[1.01] hover:border-zinc-600 hover:shadow-lift">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-zinc-400">{label}</p>
-          <p className="mt-1 text-2xl font-bold text-white">{value}</p>
+    <div className="surface-card touch-tile group p-2.5 transition duration-200 hover:border-zinc-600 hover:shadow-lift sm:p-3">
+      <div className="flex min-h-[64px] items-center justify-between gap-2 sm:min-h-[70px]">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold leading-tight text-zinc-400 sm:text-sm">
+            {label}
+          </p>
+          <p className="mt-1 text-xl font-bold leading-none text-white sm:text-2xl">
+            {value}
+          </p>
         </div>
-        <div className={`grid h-11 w-11 place-items-center rounded-md shadow-sm shadow-black/40 ${toneClass}`}>
-          <Icon className="h-5 w-5" aria-hidden="true" />
+        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-md shadow-sm shadow-black/40 sm:h-10 sm:w-10 ${toneClass}`}>
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
         </div>
       </div>
     </div>
