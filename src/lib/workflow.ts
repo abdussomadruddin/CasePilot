@@ -72,9 +72,14 @@ export function canUpdateToStatus(role: Role, status: CaseStatus) {
   return roleStatusPermissions[role].includes(status);
 }
 
+function isCallerDocumentCollectedTask(record: CaseRecord, role: Role) {
+  return role === "caller" && record.status === "documents_collected";
+}
+
 export function canEditCase(role: Role, record: CaseRecord) {
   if (role === "admin") return true;
   if (role === "customer_service" && canCreateCase(role)) return true;
+  if (isCallerDocumentCollectedTask(record, role)) return true;
   return getAssignedRoles(record.status).includes(role);
 }
 
@@ -137,6 +142,7 @@ export function needsAttentionForRole(
 export function isMyTask(record: CaseRecord, role: Role) {
   if (role === "admin") return true;
   if (isTerminalStatus(record.status)) return false;
+  if (isCallerDocumentCollectedTask(record, role)) return true;
   return getAssignedRoles(record.status).includes(role);
 }
 
@@ -145,6 +151,7 @@ export function getVisibleCases(records: CaseRecord[], role: Role) {
 
   return records.filter((record) => {
     if (record.createdBy === role || record.updatedBy === role) return true;
+    if (isCallerDocumentCollectedTask(record, role)) return true;
     return getAssignedRoles(record.status).includes(role);
   });
 }
