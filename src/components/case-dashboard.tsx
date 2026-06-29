@@ -1535,7 +1535,7 @@ function WhatsAppComposer({
     const documentLines = await Promise.all(
       selectedDocuments.map(async (document) => {
         const shortUrl = await shortenDocumentUrl(getAbsoluteDocumentDownloadUrl(document));
-        return `- ${documentTypeLabels[document.documentType]}: ${document.name}\n${shortUrl}`;
+        return `${documentTypeLabels[document.documentType]} : ${shortUrl}`;
       }),
     );
 
