@@ -126,10 +126,6 @@ const initialLogin = {
   password: "",
 };
 
-const documentDisplayTypes: DocumentType[] = [
-  ...documentTypes,
-];
-
 function downloadDocuments(documents: Array<{ name: string; url: string }>) {
   documents.filter((doc) => doc.url && doc.url !== "#").forEach((doc, index) => {
     window.setTimeout(() => {
@@ -142,6 +138,11 @@ function downloadDocuments(documents: Array<{ name: string; url: string }>) {
       link.remove();
     }, index * 150);
   });
+}
+
+function getDocumentTypeLabel(documentType?: DocumentType) {
+  if (!documentType) return documentTypeLabels.other;
+  return documentTypeLabels[documentType] || documentTypeLabels.other;
 }
 
 function formatDateTime(value: string) {
@@ -691,14 +692,6 @@ function CaseCard({
   const activeTeamMembers = teamMembers.filter((member) => member.phone?.trim());
   const latestUpdate = formatShort(getLatestUpdateTime(record));
   const compactNextFollowUp = formatShort(nextFollowUp);
-  const uploadedDocumentTypes = [
-    ...documentDisplayTypes,
-    ...(record.documents.some((doc) => doc.documentType === "other")
-      ? (["other"] as DocumentType[])
-      : []),
-  ].filter((documentType) =>
-    record.documents.some((doc) => doc.documentType === documentType),
-  );
 
   return (
     <article
@@ -849,80 +842,53 @@ function CaseCard({
             </div>
 
             <div className="grid content-start gap-3">
-                <Panel title="Document files" icon={FileText}>
-                  {record.documents.length ? (
-                    <div className="grid gap-2">
+                <Panel
+                  title="Document files"
+                  icon={FileText}
+                  action={
+                    record.documents.length ? (
                       <button
                         type="button"
-                        className="secondary-button min-h-10 w-full"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-white px-2.5 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50"
                         onClick={() => downloadDocuments(record.documents)}
                       >
-                        <Download className="h-4 w-4" aria-hidden="true" />
-                        Download all documents
+                        <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                        All
                       </button>
-
-                      <div className="grid gap-2">
-                        {uploadedDocumentTypes.map((documentType) => {
-                          const documents = record.documents.filter(
-                            (doc) => doc.documentType === documentType,
-                          );
-
-                          return (
-                            <div
-                              key={documentType}
-                              className="rounded-md bg-white p-2.5 ring-1 ring-line/80"
-                            >
-                              <div className="mb-1.5 flex items-center justify-between gap-2">
-                                <p className="text-sm font-semibold text-ink">
-                                  {documentTypeLabels[documentType]}
-                                </p>
-                                {documents.length ? (
-                                  <button
-                                    type="button"
-                                    className="inline-flex items-center gap-1.5 rounded-md border border-line bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-ink transition hover:bg-white"
-                                    onClick={() => downloadDocuments(documents)}
-                                  >
-                                    <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                                    Download
-                                  </button>
-                                ) : null}
-                              </div>
-
-                              {documents.length ? (
-                                <ul className="grid gap-2">
-                                  {documents.map((doc) => (
-                                    <li
-                                      key={doc.id}
-                                      className="flex items-center justify-between gap-3 rounded-md bg-slate-50 px-2.5 py-2 text-sm"
-                                    >
-                                      <div className="min-w-0">
-                                        <p className="truncate font-medium text-ink">{doc.name}</p>
-                                        <p className="text-xs text-muted">
-                                          {roleLabels[doc.uploadedBy]} · {formatShort(doc.uploadedAt)}
-                                          {doc.expiresAt
-                                            ? ` · Auto delete ${formatShort(doc.expiresAt)}`
-                                            : ""}
-                                        </p>
-                                      </div>
-                                      <a
-                                        className="icon-button h-9 w-9"
-                                        href={doc.url}
-                                        download={doc.name}
-                                        aria-label={`Download ${doc.name}`}
-                                      >
-                                        <Download className="h-4 w-4" aria-hidden="true" />
-                                      </a>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <p className="text-sm text-muted">No file uploaded</p>
-                              )}
+                    ) : null
+                  }
+                >
+                  {record.documents.length ? (
+                    <ul className="grid gap-1.5">
+                      {record.documents.map((doc) => (
+                        <li
+                          key={doc.id}
+                          className="flex items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5 text-sm ring-1 ring-line/80"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="shrink-0 rounded border border-line bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-muted">
+                                {getDocumentTypeLabel(doc.documentType)}
+                              </span>
+                              <p className="truncate font-semibold leading-5 text-ink">
+                                {doc.name}
+                              </p>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                            <p className="truncate text-xs leading-5 text-muted">
+                              {roleLabels[doc.uploadedBy]} · {formatShort(doc.uploadedAt)}
+                            </p>
+                          </div>
+                          <a
+                            className="icon-button h-8 w-8"
+                            href={doc.url}
+                            download={doc.name}
+                            aria-label={`Download ${doc.name}`}
+                          >
+                            <Download className="h-4 w-4" aria-hidden="true" />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
                     <p className="text-sm text-muted">No files uploaded</p>
                   )}
@@ -1205,17 +1171,22 @@ function WhatsAppComposer({
 function Panel({
   title,
   icon: Icon,
+  action,
   children,
 }: {
   title: string;
   icon: LucideIcon;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-md bg-slate-50 p-2.5 ring-1 ring-line/80">
-      <div className="mb-2 flex items-center gap-2">
-        <Icon className="h-4 w-4 text-muted" aria-hidden="true" />
-        <h3 className="text-sm font-semibold text-ink">{title}</h3>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+          <h3 className="truncate text-sm font-semibold text-ink">{title}</h3>
+        </div>
+        {action}
       </div>
       {children}
     </section>
