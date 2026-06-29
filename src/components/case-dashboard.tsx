@@ -1543,7 +1543,7 @@ function WhatsAppComposer({
       trimmed,
       "",
       "Documents:",
-      ...documentLines,
+      documentLines.join("\n\n"),
     ].join("\n");
   }
 

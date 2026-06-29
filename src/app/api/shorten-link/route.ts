@@ -2,8 +2,8 @@ import { NextRequest } from "next/server";
 
 const casePilotSupabaseHost = "kfyqyxiycvdknlcpjmts.supabase.co";
 const shortenerEndpoints = [
-  (url: string) => `https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`,
   (url: string) => `https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`,
+  (url: string) => `https://v.gd/create.php?format=simple&url=${encodeURIComponent(url)}`,
 ];
 
 function isLocalHost(hostname: string) {
