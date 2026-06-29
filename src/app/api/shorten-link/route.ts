@@ -2,8 +2,8 @@ import { NextRequest } from "next/server";
 
 const casePilotSupabaseHost = "kfyqyxiycvdknlcpjmts.supabase.co";
 const shortenerEndpoints = [
-  (url: string) => `https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`,
-  (url: string) => `https://v.gd/create.php?format=simple&url=${encodeURIComponent(url)}`,
+  (url: string) => `https://is.gd/create.php?format=json&url=${encodeURIComponent(url)}`,
+  (url: string) => `https://v.gd/create.php?format=json&url=${encodeURIComponent(url)}`,
 ];
 
 function isLocalHost(hostname: string) {
@@ -36,16 +36,51 @@ function isUsableShortUrl(value: string) {
 }
 
 async function createShortUrl(url: string) {
+  try {
+    const response = await fetch("https://cleanuri.com/api/v1/shorten", {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/x-www-form-urlencoded",
+        "user-agent": "CasePilot/1.0 (https://case-pilot-alpha.vercel.app)",
+      },
+      body: new URLSearchParams({ url }).toString(),
+    });
+
+    if (response.ok) {
+      const result = (await response.json()) as { result_url?: unknown };
+      if (typeof result.result_url === "string" && isUsableShortUrl(result.result_url)) {
+        return result.result_url;
+      }
+    }
+  } catch {
+    // Continue to fallback shorteners.
+  }
+
   for (const endpoint of shortenerEndpoints) {
     try {
       const response = await fetch(endpoint(url), {
         cache: "no-store",
-        headers: { accept: "text/plain" },
+        headers: {
+          accept: "application/json,text/plain",
+          "user-agent": "CasePilot/1.0 (https://case-pilot-alpha.vercel.app)",
+        },
       });
 
       if (!response.ok) continue;
 
-      const shortUrl = (await response.text()).trim();
+      const body = (await response.text()).trim();
+      let shortUrl = body;
+
+      try {
+        const json = JSON.parse(body) as { shorturl?: unknown; shortUrl?: unknown };
+        if (typeof json.shorturl === "string") shortUrl = json.shorturl;
+        if (typeof json.shortUrl === "string") shortUrl = json.shortUrl;
+      } catch {
+        shortUrl = body;
+      }
+
       if (isUsableShortUrl(shortUrl)) return shortUrl;
     } catch {
       continue;

@@ -153,11 +153,6 @@ function getDocumentDownloadUrl(doc: { name: string; url: string }) {
   return `/api/download-document?${params.toString()}`;
 }
 
-function getAbsoluteDocumentDownloadUrl(doc: { name: string; url: string }) {
-  if (typeof window === "undefined") return getDocumentDownloadUrl(doc);
-  return new URL(getDocumentDownloadUrl(doc), window.location.origin).toString();
-}
-
 async function shortenDocumentUrl(url: string) {
   try {
     const response = await fetch("/api/shorten-link", {
@@ -1534,7 +1529,7 @@ function WhatsAppComposer({
 
     const documentLines = await Promise.all(
       selectedDocuments.map(async (document) => {
-        const shortUrl = await shortenDocumentUrl(getAbsoluteDocumentDownloadUrl(document));
+        const shortUrl = await shortenDocumentUrl(document.url);
         return `${documentTypeLabels[document.documentType]} : ${shortUrl}`;
       }),
     );
@@ -1543,6 +1538,7 @@ function WhatsAppComposer({
       trimmed,
       "",
       "Documents:",
+      "",
       documentLines.join("\n\n"),
     ].join("\n");
   }
