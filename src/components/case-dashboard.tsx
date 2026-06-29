@@ -605,7 +605,7 @@ export function CaseDashboard() {
           </div>
         </section>
 
-        <section className="grid gap-4">
+        <section className="grid gap-3">
           {loading ? (
             <div className="surface-card p-8 text-center text-sm text-muted">
               Loading cases
@@ -698,42 +698,88 @@ function CaseCard({
   const [whatsAppRecipient, setWhatsAppRecipient] =
     useState<WhatsAppRecipient | null>(null);
   const activeTeamMembers = teamMembers.filter((member) => member.phone?.trim());
+  const latestUpdate = formatShort(getLatestUpdateTime(record));
+  const compactNextFollowUp = formatShort(nextFollowUp);
 
   return (
     <article
-      className={`surface-card overflow-hidden border-l-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-lift ${statusAccent[record.status]}`}
+      className={`surface-card overflow-hidden border-l-4 transition duration-200 hover:shadow-lift ${statusAccent[record.status]}`}
     >
       <button
         type="button"
-        className="flex w-full flex-col gap-3 p-4 text-left transition hover:bg-slate-50/80 sm:p-5 md:flex-row md:items-center md:justify-between"
+        className="grid w-full gap-3 p-3 text-left transition hover:bg-slate-50/80 sm:p-4 lg:grid-cols-[minmax(190px,1.25fr)_minmax(170px,1fr)_minmax(160px,0.9fr)_minmax(190px,1fr)_auto] lg:items-center"
         aria-expanded={isExpanded}
         onClick={() => setIsExpanded((current) => !current)}
       >
-        <div className="grid min-w-0 gap-1">
-          <h2 className="truncate text-base font-semibold text-ink sm:text-lg">
+        <div className="min-w-0">
+          <h2 className="truncate text-base font-semibold leading-tight text-ink">
             {record.customerName || "Unnamed customer"}
           </h2>
-          <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-sm text-muted">
-            <span className="truncate">{record.carModel}</span>
-            <span className="text-slate-300" aria-hidden="true">
-              /
-            </span>
-            <span className="truncate">{record.carVariant}</span>
-          </div>
+          <p className="mt-1 truncate text-xs font-medium text-muted">
+            {record.customerPhone || "No phone"}
+          </p>
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 md:justify-end">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-ink">
+            {record.carModel} {record.carVariant}
+          </p>
+          <p className="mt-1 truncate text-xs text-muted">{record.carColor || "No color"}</p>
+        </div>
+
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span
-            className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[record.status]}`}
+            className={`rounded-full border px-2.5 py-1 text-xs font-semibold leading-none ${statusTone[record.status]}`}
           >
             {formatStatus(record.status)}
           </span>
-          <span className="grid h-9 w-9 place-items-center rounded-md border border-line bg-white text-muted shadow-sm">
+          {needsAttention ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold leading-none text-amber-800">
+              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+              Attention
+            </span>
+          ) : null}
+          {followUpDue ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2 py-1 text-xs font-semibold leading-none text-cyan-800">
+              <CalendarClock className="h-3 w-3" aria-hidden="true" />
+              Follow up
+            </span>
+          ) : null}
+        </div>
+
+        <div className="grid min-w-0 gap-1 rounded-md bg-slate-50 px-3 py-2 ring-1 ring-line/70 lg:bg-transparent lg:px-0 lg:py-0 lg:ring-0">
+          <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
+            <span className="text-muted">Team</span>
+            <span className="truncate font-semibold text-ink">
+              {describeAssignedTeam(record.status)}
+            </span>
+          </div>
+          <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
+            <span className="text-muted">Updated</span>
+            <span className="truncate font-medium text-slate-700">{latestUpdate}</span>
+          </div>
+          <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
+            <span className="text-muted">Next</span>
+            <span className="truncate font-medium text-slate-700">{compactNextFollowUp}</span>
+          </div>
+        </div>
+
+        <div className="flex min-w-0 items-center justify-between gap-3 lg:justify-end">
+          <p className="line-clamp-2 min-w-0 text-xs leading-5 text-muted lg:hidden">
+            {latestRemark}
+          </p>
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-line bg-white text-muted shadow-sm">
             <ChevronDown
               className={`h-4 w-4 transition ${isExpanded ? "rotate-180" : ""}`}
               aria-hidden="true"
             />
           </span>
+        </div>
+
+        <div className="hidden min-w-0 border-t border-line/70 pt-2 lg:col-span-5 lg:block">
+          <p className="truncate text-xs leading-5 text-muted">
+            <span className="font-semibold text-slate-600">Remark:</span> {latestRemark}
+          </p>
         </div>
       </button>
 
