@@ -700,6 +700,14 @@ function CaseCard({
   const activeTeamMembers = teamMembers.filter((member) => member.phone?.trim());
   const latestUpdate = formatShort(getLatestUpdateTime(record));
   const compactNextFollowUp = formatShort(nextFollowUp);
+  const uploadedDocumentTypes = [
+    ...documentDisplayTypes,
+    ...(record.documents.some((doc) => doc.documentType === "other")
+      ? (["other"] as DocumentType[])
+      : []),
+  ].filter((documentType) =>
+    record.documents.some((doc) => doc.documentType === documentType),
+  );
 
   return (
     <article
@@ -785,8 +793,8 @@ function CaseCard({
 
       {isExpanded ? (
         <>
-          <div className="border-t border-line/80 px-4 py-3 sm:px-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="border-t border-line/80 px-3 py-2.5 sm:px-4">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 {needsAttention ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
@@ -826,31 +834,38 @@ function CaseCard({
             </div>
           </div>
 
-          <div className="grid gap-5 p-4 pt-0 sm:p-5 sm:pt-0 xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="grid gap-4">
+          <div className="grid gap-3 p-3 pt-0 sm:p-4 sm:pt-0 xl:grid-cols-[0.8fr_1fr_0.9fr_0.8fr]">
+            <div className="grid content-start gap-3">
               <WorkflowRail status={record.status} />
 
-              <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <InfoItem label="Assigned team" value={describeAssignedTeam(record.status)} />
-                <InfoItem label="Latest update" value={formatShort(getLatestUpdateTime(record))} />
-                <InfoItem label="Next follow up" value={formatShort(nextFollowUp)} />
-                <InfoItem label="Customer phone" value={record.customerPhone} />
+              <dl className="grid gap-1.5 rounded-md bg-white p-3 ring-1 ring-line/80">
+                <CompactInfoItem
+                  label="Team"
+                  value={describeAssignedTeam(record.status)}
+                />
+                <CompactInfoItem
+                  label="Updated"
+                  value={formatShort(getLatestUpdateTime(record))}
+                />
+                <CompactInfoItem label="Next" value={formatShort(nextFollowUp)} />
+                <CompactInfoItem label="Phone" value={record.customerPhone} />
               </dl>
 
-              <div className="rounded-md bg-slate-50 p-4 ring-1 ring-line/80">
+              <div className="rounded-md bg-slate-50 p-3 ring-1 ring-line/80">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-normal text-muted">
                   Latest remark
                 </p>
-                <p className="text-sm leading-6 text-ink">{latestRemark}</p>
+                <p className="line-clamp-3 text-sm leading-6 text-ink">{latestRemark}</p>
               </div>
+            </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid content-start gap-3">
                 <Panel title="Document files" icon={FileText}>
                   {record.documents.length ? (
-                    <div className="grid gap-3">
+                    <div className="grid gap-2">
                       <button
                         type="button"
-                        className="secondary-button w-full"
+                        className="secondary-button min-h-10 w-full"
                         onClick={() => downloadDocuments(record.documents)}
                       >
                         <Download className="h-4 w-4" aria-hidden="true" />
@@ -858,14 +873,7 @@ function CaseCard({
                       </button>
 
                       <div className="grid gap-2">
-                        {[
-                          ...documentDisplayTypes,
-                          ...(record.documents.some(
-                            (doc) => doc.documentType === "other",
-                          )
-                            ? (["other"] as DocumentType[])
-                            : []),
-                        ].map((documentType) => {
+                        {uploadedDocumentTypes.map((documentType) => {
                           const documents = record.documents.filter(
                             (doc) => doc.documentType === documentType,
                           );
@@ -873,9 +881,9 @@ function CaseCard({
                           return (
                             <div
                               key={documentType}
-                              className="rounded-md bg-white p-3 ring-1 ring-line/80"
+                              className="rounded-md bg-white p-2.5 ring-1 ring-line/80"
                             >
-                              <div className="mb-2 flex items-center justify-between gap-2">
+                              <div className="mb-1.5 flex items-center justify-between gap-2">
                                 <p className="text-sm font-semibold text-ink">
                                   {documentTypeLabels[documentType]}
                                 </p>
@@ -896,7 +904,7 @@ function CaseCard({
                                   {documents.map((doc) => (
                                     <li
                                       key={doc.id}
-                                      className="flex items-center justify-between gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm"
+                                      className="flex items-center justify-between gap-3 rounded-md bg-slate-50 px-2.5 py-2 text-sm"
                                     >
                                       <div className="min-w-0">
                                         <p className="truncate font-medium text-ink">{doc.name}</p>
@@ -908,7 +916,7 @@ function CaseCard({
                                         </p>
                                       </div>
                                       <a
-                                        className="icon-button"
+                                        className="icon-button h-9 w-9"
                                         href={doc.url}
                                         download={doc.name}
                                         aria-label={`Download ${doc.name}`}
@@ -930,97 +938,108 @@ function CaseCard({
                     <p className="text-sm text-muted">No files uploaded</p>
                   )}
                 </Panel>
+            </div>
 
+            <div className="grid content-start gap-3">
                 <Panel title="Bank list" icon={Banknote}>
-                  {record.banks.length ? (
-                    <ul className="grid gap-2">
-                      {record.banks.map((bank) => (
-                        <li
-                          key={bank.id}
-                          className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80"
-                        >
-                          <div className="min-w-0">
-                            <p className="font-medium text-ink">{bank.bankName}</p>
-                            <p className="text-slate-600">{bank.bankerName}</p>
-                            <p className="text-muted">{bank.bankerPhone}</p>
-                          </div>
-                          {bank.bankerPhone.trim() ? (
-                            <button
-                              type="button"
-                              className="icon-button text-emerald-700"
-                              onClick={() =>
-                                setWhatsAppRecipient({
-                                  id: bank.id,
-                                  name: bank.bankerName || bank.bankName,
-                                  phone: bank.bankerPhone,
-                                  subtitle: bank.bankName,
-                                })
-                              }
-                              aria-label={`WhatsApp ${bank.bankerName || bank.bankName}`}
-                            >
-                              <MessageCircle className="h-4 w-4" aria-hidden="true" />
-                            </button>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-muted">No bank added</p>
-                  )}
-                </Panel>
-
-                <Panel title="Team WhatsApp" icon={MessageCircle}>
-                  {activeTeamMembers.length ? (
-                    <ul className="grid gap-2">
-                      {activeTeamMembers.map((member) => (
-                        <li
-                          key={member.id}
-                          className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-medium text-ink">
-                              {member.fullName}
-                            </p>
-                            <p className="text-muted">
-                              {roleLabels[member.role]} · {member.phone}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            className="icon-button text-emerald-700"
-                            onClick={() =>
-                              setWhatsAppRecipient({
-                                id: member.id,
-                                name: member.fullName,
-                                phone: member.phone || "",
-                                subtitle: roleLabels[member.role],
-                              })
-                            }
-                            aria-label={`WhatsApp ${member.fullName}`}
+                  <div className="grid gap-2">
+                    {record.banks.length ? (
+                      <ul className="grid gap-1.5">
+                        {record.banks.map((bank) => (
+                          <li
+                            key={bank.id}
+                            className="flex items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5 text-sm ring-1 ring-line/80"
                           >
-                            <MessageCircle className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-muted">No team phone added</p>
-                  )}
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold leading-5 text-ink">
+                                {bank.bankName}
+                              </p>
+                              <p className="truncate text-xs leading-5 text-slate-600">
+                                {bank.bankerName} · {bank.bankerPhone}
+                              </p>
+                            </div>
+                            {bank.bankerPhone.trim() ? (
+                              <button
+                                type="button"
+                                className="icon-button h-8 w-8 text-emerald-700"
+                                onClick={() =>
+                                  setWhatsAppRecipient({
+                                    id: bank.id,
+                                    name: bank.bankerName || bank.bankName,
+                                    phone: bank.bankerPhone,
+                                    subtitle: bank.bankName,
+                                  })
+                                }
+                                aria-label={`WhatsApp ${bank.bankerName || bank.bankName}`}
+                              >
+                                <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted">No bank added</p>
+                    )}
+
+                    <div className="border-t border-line/80 pt-2">
+                      <p className="mb-1.5 text-xs font-semibold uppercase tracking-normal text-muted">
+                        Team WhatsApp
+                      </p>
+                      {activeTeamMembers.length ? (
+                        <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-1">
+                          {activeTeamMembers.map((member) => (
+                            <li
+                              key={member.id}
+                              className="flex items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5 text-sm ring-1 ring-line/80"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold leading-5 text-ink">
+                                  {member.fullName}
+                                </p>
+                                <p className="truncate text-xs leading-5 text-muted">
+                                  {roleLabels[member.role]} · {member.phone}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className="icon-button h-8 w-8 text-emerald-700"
+                                onClick={() =>
+                                  setWhatsAppRecipient({
+                                    id: member.id,
+                                    name: member.fullName,
+                                    phone: member.phone || "",
+                                    subtitle: roleLabels[member.role],
+                                  })
+                                }
+                                aria-label={`WhatsApp ${member.fullName}`}
+                              >
+                                <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-muted">No team phone added</p>
+                      )}
+                    </div>
+                  </div>
                 </Panel>
-              </div>
             </div>
 
             <Panel title="Activity timeline" icon={Clock3}>
-              <ol className="relative grid gap-3 before:absolute before:bottom-2 before:left-3 before:top-2 before:w-px before:bg-line">
+              <ol className="relative grid max-h-80 gap-2 overflow-y-auto pr-1 before:absolute before:bottom-2 before:left-3 before:top-2 before:w-px before:bg-line">
                 {[...record.activities]
                   .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
                   .map((activity) => (
-                    <li key={activity.id} className="flex gap-3">
+                    <li key={activity.id} className="flex gap-2">
                       <span className="relative z-10 mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-muted ring-1 ring-line">
                         <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-ink">{activity.message}</p>
+                        <p className="line-clamp-2 text-sm font-medium text-ink">
+                          {activity.message}
+                        </p>
                         <p className="text-xs text-muted">
                           {activity.actorName} · {formatDateTime(activity.createdAt)}
                         </p>
@@ -1051,13 +1070,13 @@ function CaseCard({
   );
 }
 
-function InfoItem({ label, value }: { label: string; value: string }) {
+function CompactInfoItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-white p-3 ring-1 ring-line/80">
-      <dt className="text-xs font-semibold uppercase tracking-normal text-muted">
+    <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
+      <dt className="shrink-0 font-semibold uppercase tracking-normal text-muted">
         {label}
       </dt>
-      <dd className="mt-1 break-words text-sm font-medium text-ink">{value || "None"}</dd>
+      <dd className="truncate text-right font-semibold text-ink">{value || "None"}</dd>
     </div>
   );
 }
@@ -1248,8 +1267,8 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-md bg-slate-50 p-3 ring-1 ring-line/80">
-      <div className="mb-3 flex items-center gap-2">
+    <section className="rounded-md bg-slate-50 p-2.5 ring-1 ring-line/80">
+      <div className="mb-2 flex items-center gap-2">
         <Icon className="h-4 w-4 text-muted" aria-hidden="true" />
         <h3 className="text-sm font-semibold text-ink">{title}</h3>
       </div>
