@@ -130,6 +130,16 @@ function mapDocument(row: DocumentRow): CaseDocument {
   };
 }
 
+function sanitizeStorageFileName(name: string) {
+  const cleaned = name
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return cleaned || "document";
+}
+
 function mapActivity(row: ActivityRow): ActivityEvent {
   return {
     id: row.id,
@@ -354,7 +364,7 @@ export async function uploadDocuments(
 
   for (const { file, documentType } of documents) {
     const uploadedAt = new Date().toISOString();
-    const storagePath = `${caseId}/${documentType}/${Date.now()}-${file.name}`;
+    const storagePath = `${caseId}/${documentType}/${Date.now()}-${crypto.randomUUID()}-${sanitizeStorageFileName(file.name)}`;
     const { error: uploadError } = await supabase.storage
       .from("case-documents")
       .upload(storagePath, file, { upsert: false });

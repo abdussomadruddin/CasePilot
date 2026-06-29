@@ -131,11 +131,16 @@ const initialLogin = {
   password: "",
 };
 
+function getDocumentDownloadUrl(doc: { name: string; url: string }) {
+  const params = new URLSearchParams({ url: doc.url, name: doc.name });
+  return `/api/download-document?${params.toString()}`;
+}
+
 function downloadDocuments(documents: Array<{ name: string; url: string }>) {
   documents.filter((doc) => doc.url && doc.url !== "#").forEach((doc, index) => {
     window.setTimeout(() => {
       const link = window.document.createElement("a");
-      link.href = doc.url;
+      link.href = getDocumentDownloadUrl(doc);
       link.download = doc.name;
       link.rel = "noopener";
       window.document.body.appendChild(link);
@@ -914,7 +919,7 @@ function CaseCard({
                           </div>
                           <a
                             className="icon-button h-8 w-8"
-                            href={doc.url}
+                            href={getDocumentDownloadUrl(doc)}
                             download={doc.name}
                             aria-label={`Download ${doc.name}`}
                           >
