@@ -88,11 +88,17 @@ create table if not exists public.case_documents (
   case_id uuid not null references public.cases(id) on delete cascade,
   file_name text not null,
   file_url text not null,
+  document_type text not null default 'other'
+    check (document_type in ('ic', 'license', 'pay_slip', 'bank_statement', 'other')),
   storage_path text,
   uploaded_by uuid references public.profiles(id),
   uploaded_by_role public.app_role not null default 'customer_service',
   uploaded_at timestamptz not null default now()
 );
+
+alter table public.case_documents
+add column if not exists document_type text not null default 'other'
+check (document_type in ('ic', 'license', 'pay_slip', 'bank_statement', 'other'));
 
 create table if not exists public.case_activities (
   id uuid primary key default gen_random_uuid(),

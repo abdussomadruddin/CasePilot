@@ -37,6 +37,8 @@ import {
 } from "@/lib/case-store";
 import {
   caseStatuses,
+  documentTypeLabels,
+  documentTypes,
   roleLabels,
   roles,
   statusLabels,
@@ -45,8 +47,10 @@ import {
   type CaseRecord,
   type CaseStatus,
   type DashboardTab,
+  type DocumentType,
   type Profile,
   type Role,
+  type UploadDocumentInput,
 } from "@/lib/types";
 import {
   canCreateCase,
@@ -121,6 +125,25 @@ const workflowSteps: CaseStatus[] = [
   "car_registered",
   "car_delivered",
 ];
+
+const documentDisplayTypes: DocumentType[] = [
+  ...documentTypes,
+  "other",
+];
+
+function downloadDocuments(documents: Array<{ name: string; url: string }>) {
+  documents.forEach((doc, index) => {
+    window.setTimeout(() => {
+      const link = window.document.createElement("a");
+      link.href = doc.url;
+      link.download = doc.name;
+      link.rel = "noopener";
+      window.document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }, index * 150);
+  });
+}
 
 function formatDateTime(value: string) {
   if (!value) return "Not required";
@@ -298,7 +321,7 @@ export function CaseDashboard() {
     setIsFormOpen(true);
   }
 
-  async function handleSave(values: CaseFormValues, files: File[]) {
+  async function handleSave(values: CaseFormValues, documents: UploadDocumentInput[]) {
     const base = editingCase || createEmptyCase();
     const now = new Date().toISOString();
     const record: CaseRecord = {
@@ -324,8 +347,8 @@ export function CaseDashboard() {
       const nextCases = await saveCase(record, role, editingCase || undefined);
       setCases(nextCases);
 
-      if (files.length) {
-        const withDocs = await uploadDocuments(record.id, files, role);
+      if (documents.length) {
+        const withDocs = await uploadDocuments(record.id, documents, role);
         setCases(withDocs);
       }
 
@@ -346,21 +369,6 @@ export function CaseDashboard() {
       setCases(next);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to delete case.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleQuickUpload(record: CaseRecord, files: FileList | null) {
-    if (!files?.length) return;
-
-    try {
-      setSaving(true);
-      setError("");
-      const next = await uploadDocuments(record.id, Array.from(files), role);
-      setCases(next);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to upload documents.");
     } finally {
       setSaving(false);
     }
@@ -565,7 +573,6 @@ export function CaseDashboard() {
                 saving={saving}
                 onEdit={openEditForm}
                 onDelete={handleDelete}
-                onQuickUpload={handleQuickUpload}
               />
             ))
           ) : (
@@ -624,21 +631,18 @@ function CaseCard({
   saving,
   onEdit,
   onDelete,
-  onQuickUpload,
 }: {
   record: CaseRecord;
   role: Role;
   saving: boolean;
   onEdit: (record: CaseRecord) => void;
   onDelete: (record: CaseRecord) => void;
-  onQuickUpload: (record: CaseRecord, files: FileList | null) => void;
 }) {
   const assignedRoles = getAssignedRoles(record.status);
   const latestRemark = getLatestRemark(record);
   const nextFollowUp = getNextFollowUpTime(record);
   const needsAttention = needsAttentionForRole(record, role);
   const followUpDue = isFollowUpDue(record);
-  const allowUpload = canUploadDocuments(role);
   const allowEdit = canEditCase(role, record);
   const allowDelete = canDeleteCase(role);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -704,23 +708,10 @@ function CaseCard({
               </div>
 
               <div className="flex flex-wrap gap-2 lg:justify-end">
-                {allowUpload ? (
-                  <label className="secondary-button cursor-pointer">
-                    <Upload className="h-4 w-4" aria-hidden="true" />
-                    Upload
-                    <input
-                      className="sr-only"
-                      type="file"
-                      multiple
-                      onChange={(event) => onQuickUpload(record, event.target.files)}
-                      disabled={saving}
-                    />
-                  </label>
-                ) : null}
                 {allowEdit ? (
                   <button className="secondary-button" onClick={() => onEdit(record)}>
                     <Pencil className="h-4 w-4" aria-hidden="true" />
-                    Edit
+                    Edit / Upload
                   </button>
                 ) : null}
                 {allowDelete ? (
@@ -758,29 +749,75 @@ function CaseCard({
               <div className="grid gap-4 md:grid-cols-2">
                 <Panel title="Document files" icon={FileText}>
                   {record.documents.length ? (
-                    <ul className="grid gap-2">
-                      {record.documents.map((doc) => (
-                        <li
-                          key={doc.id}
-                          className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm ring-1 ring-line/80"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-medium text-ink">{doc.name}</p>
-                            <p className="text-xs text-muted">
-                              {roleLabels[doc.uploadedBy]} · {formatShort(doc.uploadedAt)}
-                            </p>
-                          </div>
-                          <a
-                            className="icon-button"
-                            href={doc.url}
-                            download={doc.name}
-                            aria-label={`Download ${doc.name}`}
-                          >
-                            <Download className="h-4 w-4" aria-hidden="true" />
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="grid gap-3">
+                      <button
+                        type="button"
+                        className="secondary-button w-full"
+                        onClick={() => downloadDocuments(record.documents)}
+                      >
+                        <Download className="h-4 w-4" aria-hidden="true" />
+                        Download all documents
+                      </button>
+
+                      <div className="grid gap-2">
+                        {documentDisplayTypes.map((documentType) => {
+                          const documents = record.documents.filter(
+                            (doc) => doc.documentType === documentType,
+                          );
+
+                          return (
+                            <div
+                              key={documentType}
+                              className="rounded-md bg-white p-3 ring-1 ring-line/80"
+                            >
+                              <div className="mb-2 flex items-center justify-between gap-2">
+                                <p className="text-sm font-semibold text-ink">
+                                  {documentTypeLabels[documentType]}
+                                </p>
+                                {documents.length ? (
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center gap-1.5 rounded-md border border-line bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-ink transition hover:bg-white"
+                                    onClick={() => downloadDocuments(documents)}
+                                  >
+                                    <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                                    Download
+                                  </button>
+                                ) : null}
+                              </div>
+
+                              {documents.length ? (
+                                <ul className="grid gap-2">
+                                  {documents.map((doc) => (
+                                    <li
+                                      key={doc.id}
+                                      className="flex items-center justify-between gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="truncate font-medium text-ink">{doc.name}</p>
+                                        <p className="text-xs text-muted">
+                                          {roleLabels[doc.uploadedBy]} · {formatShort(doc.uploadedAt)}
+                                        </p>
+                                      </div>
+                                      <a
+                                        className="icon-button"
+                                        href={doc.url}
+                                        download={doc.name}
+                                        aria-label={`Download ${doc.name}`}
+                                      >
+                                        <Download className="h-4 w-4" aria-hidden="true" />
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-sm text-muted">No file uploaded</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   ) : (
                     <p className="text-sm text-muted">No files uploaded</p>
                   )}
@@ -930,6 +967,38 @@ function Field({
   );
 }
 
+function DocumentUploadField({
+  documentType,
+  files,
+  onChange,
+}: {
+  documentType: (typeof documentTypes)[number];
+  files: File[];
+  onChange: (files: File[]) => void;
+}) {
+  return (
+    <label className="flex min-h-32 cursor-pointer flex-col justify-between gap-3 rounded-md border border-dashed border-slate-300 bg-white p-3 text-sm text-muted transition hover:border-honda hover:bg-red-50/30">
+      <span className="flex items-center gap-2 font-semibold text-ink">
+        <Upload className="h-4 w-4 text-muted" aria-hidden="true" />
+        {documentTypeLabels[documentType]}
+      </span>
+      <span className="text-xs leading-5">
+        {files.length
+          ? files.map((file) => file.name).join(", ")
+          : `Upload ${documentTypeLabels[documentType]}`}
+      </span>
+      <input
+        className="sr-only"
+        type="file"
+        multiple
+        onChange={(event) =>
+          onChange(event.target.files ? Array.from(event.target.files) : [])
+        }
+      />
+    </label>
+  );
+}
+
 function CaseForm({
   role,
   record,
@@ -941,7 +1010,7 @@ function CaseForm({
   record: CaseRecord | null;
   saving: boolean;
   onClose: () => void;
-  onSave: (values: CaseFormValues, files: File[]) => Promise<void>;
+  onSave: (values: CaseFormValues, documents: UploadDocumentInput[]) => Promise<void>;
 }) {
   const isNew = !record;
   const empty = createEmptyCase();
@@ -956,7 +1025,9 @@ function CaseForm({
     remark: source.remark,
     banks: source.banks.length ? source.banks : [emptyBank()],
   });
-  const [files, setFiles] = useState<File[]>([]);
+  const [documentFiles, setDocumentFiles] = useState<Record<DocumentType, File[]>>(
+    emptyDocumentFiles,
+  );
   const canManageBanks = isNew || canEditBanks(role);
   const canAttachDocuments = canUploadDocuments(role);
   const allowedStatuses = caseStatuses.filter((status) => canUpdateToStatus(role, status));
@@ -1004,7 +1075,9 @@ function CaseForm({
             bank.bankName.trim() || bank.bankerName.trim() || bank.bankerPhone.trim(),
         ),
       },
-      files,
+      documentTypes.flatMap((documentType) =>
+        documentFiles[documentType].map((file) => ({ file, documentType })),
+      ),
     );
   }
 
@@ -1162,20 +1235,21 @@ function CaseForm({
                 <FileText className="h-4 w-4 text-muted" aria-hidden="true" />
                 <h3 className="text-sm font-semibold text-ink">Document upload</h3>
               </div>
-              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-muted transition hover:border-honda hover:bg-red-50/30">
-                <Upload className="h-5 w-5" aria-hidden="true" />
-                {files.length
-                  ? files.map((file) => file.name).join(", ")
-                  : "Select files"}
-                <input
-                  className="sr-only"
-                  type="file"
-                  multiple
-                  onChange={(event) =>
-                    setFiles(event.target.files ? Array.from(event.target.files) : [])
-                  }
-                />
-              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {documentTypes.map((documentType) => (
+                  <DocumentUploadField
+                    key={documentType}
+                    documentType={documentType}
+                    files={documentFiles[documentType]}
+                    onChange={(files) =>
+                      setDocumentFiles((current) => ({
+                        ...current,
+                        [documentType]: files,
+                      }))
+                    }
+                  />
+                ))}
+              </div>
             </section>
           ) : null}
 
@@ -1200,5 +1274,15 @@ function emptyBank(): BankDetail {
     bankName: "",
     bankerName: "",
     bankerPhone: "",
+  };
+}
+
+function emptyDocumentFiles(): Record<DocumentType, File[]> {
+  return {
+    ic: [],
+    license: [],
+    pay_slip: [],
+    bank_statement: [],
+    other: [],
   };
 }

@@ -58,13 +58,36 @@ export type BankDetail = {
   bankerPhone: string;
 };
 
+export const documentTypes = [
+  "ic",
+  "license",
+  "pay_slip",
+  "bank_statement",
+] as const;
+
+export type DocumentType = (typeof documentTypes)[number] | "other";
+
+export const documentTypeLabels: Record<DocumentType, string> = {
+  ic: "IC",
+  license: "License",
+  pay_slip: "Pay Slip",
+  bank_statement: "Bank Statement",
+  other: "Other Documents",
+};
+
 export type CaseDocument = {
   id: string;
   name: string;
   url: string;
+  documentType: DocumentType;
   storagePath?: string;
   uploadedBy: Role;
   uploadedAt: string;
+};
+
+export type UploadDocumentInput = {
+  file: File;
+  documentType: DocumentType;
 };
 
 export type ActivityEvent = {

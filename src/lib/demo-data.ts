@@ -5,6 +5,7 @@ import {
   type CaseDocument,
   type CaseRecord,
   type CaseStatus,
+  type DocumentType,
   type Role,
 } from "@/lib/types";
 import { nextFollowUpFrom } from "@/lib/workflow";
@@ -52,11 +53,17 @@ function bank(
   };
 }
 
-function document(name: string, uploadedBy: Role, uploadedAt: string): CaseDocument {
+function document(
+  name: string,
+  uploadedBy: Role,
+  uploadedAt: string,
+  documentType: DocumentType = "other",
+): CaseDocument {
   return {
     id: crypto.randomUUID(),
     name,
     url: "#",
+    documentType,
     uploadedBy,
     uploadedAt,
   };
@@ -107,8 +114,10 @@ export function seedCases(): CaseRecord[] {
         bank("CIMB", "Farid", "+60 19-654 7878"),
       ],
       documents: [
-        document("IC front.pdf", "customer_service", daysAgo(3)),
-        document("Salary slip March.pdf", "customer_service", daysAgo(3)),
+        document("IC front.pdf", "customer_service", daysAgo(3), "ic"),
+        document("License.pdf", "customer_service", daysAgo(3), "license"),
+        document("Salary slip March.pdf", "customer_service", daysAgo(3), "pay_slip"),
+        document("Bank statement.pdf", "customer_service", daysAgo(3), "bank_statement"),
       ],
       activities: [
         activity("case", "customer_service", "Case created.", aliCreated),
@@ -143,8 +152,8 @@ export function seedCases(): CaseRecord[] {
       remark: "Need updated EPF statement before resubmission.",
       banks: [bank("Public Bank", "Daniel Tan", "+60 16-445 9012")],
       documents: [
-        document("IC.pdf", "customer_service", daysAgo(4)),
-        document("Bank statement.pdf", "customer_service", daysAgo(4)),
+        document("IC.pdf", "customer_service", daysAgo(4), "ic"),
+        document("Bank statement.pdf", "customer_service", daysAgo(4), "bank_statement"),
       ],
       activities: [
         activity("case", "customer_service", "Case created.", meiCreated),
@@ -174,7 +183,7 @@ export function seedCases(): CaseRecord[] {
       banks: [bank("RHB", "Amira", "+60 14-991 2525")],
       documents: [
         document("LOU RHB.pdf", "finance", daysAgo(1)),
-        document("Loan application.pdf", "customer_service", daysAgo(8)),
+        document("Loan application.pdf", "customer_service", daysAgo(8), "bank_statement"),
       ],
       activities: [
         activity("case", "customer_service", "Case created.", kumarCreated),

@@ -2,12 +2,15 @@ import { seedCases } from "@/lib/demo-data";
 import { getSupabaseClient, hasSupabaseConfig } from "@/lib/supabase";
 import {
   roleLabels,
+  documentTypeLabels,
   type ActivityEvent,
   type BankDetail,
   type CaseDocument,
   type CaseRecord,
   type CaseStatus,
+  type DocumentType,
   type Role,
+  type UploadDocumentInput,
 } from "@/lib/types";
 import { createActivity, nextFollowUpFrom } from "@/lib/workflow";
 
@@ -50,6 +53,7 @@ type DocumentRow = {
   case_id: string;
   file_name: string;
   file_url: string;
+  document_type: DocumentType | null;
   storage_path: string | null;
   uploaded_by_role: Role;
   uploaded_at: string;
@@ -130,6 +134,7 @@ function mapDocument(row: DocumentRow): CaseDocument {
     id: row.id,
     name: row.file_name,
     url: row.file_url,
+    documentType: row.document_type || "other",
     storagePath: row.storage_path || undefined,
     uploadedBy: row.uploaded_by_role,
     uploadedAt: row.uploaded_at,
@@ -312,10 +317,10 @@ export async function removeCase(caseId: string): Promise<CaseRecord[]> {
 
 export async function uploadDocuments(
   caseId: string,
-  files: File[],
+  documents: UploadDocumentInput[],
   actorRole: Role,
 ): Promise<CaseRecord[]> {
-  if (!files.length) return (await loadCases()).cases;
+  if (!documents.length) return (await loadCases()).cases;
 
   const supabase = getSupabaseClient();
 
@@ -324,10 +329,11 @@ export async function uploadDocuments(
     const next = existing.map((record) => {
       if (record.id !== caseId) return record;
 
-      const uploadedDocs = files.map((file) => ({
+      const uploadedDocs = documents.map(({ file, documentType }) => ({
         id: crypto.randomUUID(),
         name: file.name,
         url: URL.createObjectURL(file),
+        documentType,
         uploadedBy: actorRole,
         uploadedAt: new Date().toISOString(),
       }));
@@ -354,8 +360,8 @@ export async function uploadDocuments(
 
   const uploaded: CaseDocument[] = [];
 
-  for (const file of files) {
-    const storagePath = `${caseId}/${Date.now()}-${file.name}`;
+  for (const { file, documentType } of documents) {
+    const storagePath = `${caseId}/${documentType}/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage
       .from("case-documents")
       .upload(storagePath, file, { upsert: false });
@@ -370,6 +376,7 @@ export async function uploadDocuments(
       id: crypto.randomUUID(),
       name: file.name,
       url: publicUrl.publicUrl,
+      documentType,
       storagePath,
       uploadedBy: actorRole,
       uploadedAt: new Date().toISOString(),
@@ -382,6 +389,7 @@ export async function uploadDocuments(
       case_id: caseId,
       file_name: doc.name,
       file_url: doc.url,
+      document_type: doc.documentType,
       storage_path: doc.storagePath,
       uploaded_by_role: doc.uploadedBy,
       uploaded_at: doc.uploadedAt,
@@ -393,7 +401,9 @@ export async function uploadDocuments(
   const activity = createActivity(
     "document",
     actorRole,
-    `Uploaded ${uploaded.map((doc) => doc.name).join(", ")}.`,
+    `Uploaded ${uploaded
+      .map((doc) => `${documentTypeLabels[doc.documentType]}: ${doc.name}`)
+      .join(", ")}.`,
   );
 
   const { error: activityError } = await supabase.from("case_activities").insert({
