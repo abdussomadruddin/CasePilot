@@ -3,7 +3,8 @@ type Role =
   | "customer_service"
   | "finance"
   | "caller"
-  | "operator";
+  | "operator"
+  | "sales_manager";
 
 type PushSubscriptionRow = {
   id: string;

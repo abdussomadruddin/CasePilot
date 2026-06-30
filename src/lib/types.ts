@@ -4,6 +4,7 @@ export const roles = [
   "finance",
   "caller",
   "operator",
+  "sales_manager",
 ] as const;
 
 export type Role = (typeof roles)[number];
@@ -14,6 +15,16 @@ export const roleLabels: Record<Role, string> = {
   finance: "Finance",
   caller: "Caller",
   operator: "Operator",
+  sales_manager: "Sales Manager",
+};
+
+export const caseDealers = ["kah_motor", "other_dealer"] as const;
+
+export type CaseDealer = (typeof caseDealers)[number];
+
+export const caseDealerLabels: Record<CaseDealer, string> = {
+  kah_motor: "KAH MOTOR",
+  other_dealer: "OTHER DEALER",
 };
 
 export const caseStatuses = [
@@ -123,6 +134,7 @@ export type ActivityEvent = {
 
 export type CaseRecord = {
   id: string;
+  dealer: CaseDealer | "";
   customerName: string;
   customerPhone: string;
   carModel: string;
@@ -141,6 +153,7 @@ export type CaseRecord = {
 };
 
 export type CaseFormValues = {
+  dealer: CaseDealer | "";
   customerName: string;
   customerPhone: string;
   carModel: string;

@@ -3,6 +3,7 @@ import {
   roleLabels,
   statusLabels,
   type ActivityEvent,
+  type CaseDealer,
   type CaseRecord,
   type CaseStatus,
   type Role,
@@ -60,6 +61,7 @@ export const roleStatusPermissions: Record<Role, CaseStatus[]> = {
     "cancelled",
   ],
   operator: ["prepare_delivery", "car_delivery", "cancelled"],
+  sales_manager: [],
 };
 
 export function getAssignedRoles(status: CaseStatus): Role[] {
@@ -88,8 +90,16 @@ export function getAssignedRoles(status: CaseStatus): Role[] {
   }
 }
 
-export function getNotificationRoles(status: CaseStatus): Role[] {
-  return ["admin", ...getAssignedRoles(status)];
+export function getMonitoringRoles(dealer?: CaseDealer | ""): Role[] {
+  return dealer === "kah_motor" ? ["sales_manager"] : [];
+}
+
+export function getProgressRoles(status: CaseStatus, dealer?: CaseDealer | ""): Role[] {
+  return [...new Set([...getAssignedRoles(status), ...getMonitoringRoles(dealer)])];
+}
+
+export function getNotificationRoles(status: CaseStatus, dealer?: CaseDealer | ""): Role[] {
+  return ["admin", ...getProgressRoles(status, dealer)];
 }
 
 export function canCreateCase(role: Role) {
@@ -117,6 +127,7 @@ function isCallerDocumentCollectedTask(record: CaseRecord, role: Role) {
 }
 
 export function canEditCase(role: Role, record: CaseRecord) {
+  if (role === "sales_manager") return false;
   if (role === "admin") return true;
   if (role === "customer_service" && canCreateCase(role)) return true;
   if (isCallerDocumentCollectedTask(record, role)) return true;
@@ -158,6 +169,8 @@ export function needsAttentionForRole(
   role: Role,
   now = new Date(),
 ): boolean {
+  if (role === "sales_manager") return false;
+
   if (role === "admin") {
     return getAssignedRoles(record.status).some((assignedRole) =>
       needsAttentionForRole(record, assignedRole, now),
@@ -180,6 +193,7 @@ export function needsAttentionForRole(
 }
 
 export function isMyTask(record: CaseRecord, role: Role) {
+  if (role === "sales_manager") return false;
   if (role === "admin") return true;
   if (isTerminalStatus(record.status)) return false;
   if (isCallerDocumentCollectedTask(record, role)) return true;
@@ -188,6 +202,9 @@ export function isMyTask(record: CaseRecord, role: Role) {
 
 export function getVisibleCases(records: CaseRecord[], role: Role) {
   if (role === "admin") return records;
+  if (role === "sales_manager") {
+    return records.filter((record) => record.dealer === "kah_motor");
+  }
 
   return records.filter((record) => {
     if (record.createdBy === role || record.updatedBy === role) return true;
@@ -225,8 +242,8 @@ export function nextFollowUpFrom(date = new Date()) {
   return new Date(+date + twoDaysMs).toISOString();
 }
 
-export function describeAssignedTeam(status: CaseStatus) {
-  const assignedRoles = getAssignedRoles(status);
+export function describeAssignedTeam(status: CaseStatus, dealer?: CaseDealer | "") {
+  const assignedRoles = getProgressRoles(status, dealer);
   if (!assignedRoles.length) return "Unassigned";
   return assignedRoles.map((role) => roleLabels[role]).join(", ");
 }

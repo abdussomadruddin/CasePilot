@@ -6,7 +6,10 @@ type Role =
   | "customer_service"
   | "finance"
   | "caller"
-  | "operator";
+  | "operator"
+  | "sales_manager";
+
+type CaseDealer = "kah_motor" | "other_dealer";
 
 type CaseStatus =
   | "documents_collected"
@@ -24,6 +27,7 @@ type CaseStatus =
 
 type CaseRow = {
   id: string;
+  dealer: CaseDealer | null;
   status: CaseStatus;
   updated_at: string;
   next_follow_up_at: string | null;
@@ -58,6 +62,11 @@ function assignedRoles(status: CaseStatus): Role[] {
   }
 }
 
+function progressRoles(status: CaseStatus, dealer?: CaseDealer | null): Role[] {
+  const roles = assignedRoles(status);
+  return dealer === "kah_motor" ? [...roles, "sales_manager"] : roles;
+}
+
 Deno.serve(async () => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -71,7 +80,7 @@ Deno.serve(async () => {
 
   const { data: cases, error } = await supabase
     .from("cases")
-    .select("id,status,updated_at,next_follow_up_at")
+    .select("id,dealer,status,updated_at,next_follow_up_at")
     .is("deleted_at", null);
 
   if (error) {
@@ -140,8 +149,9 @@ Deno.serve(async () => {
         : new Date(+new Date(record.updated_at) + twoDaysMs);
 
       if (+nextFollowUp <= +now) {
-        const followUpRoles: Role[] = rolesToNotify.length
-          ? rolesToNotify
+        const progressNotificationRoles = progressRoles(record.status, record.dealer);
+        const followUpRoles: Role[] = progressNotificationRoles.length
+          ? progressNotificationRoles
           : ["customer_service"];
 
         for (const role of followUpRoles) {

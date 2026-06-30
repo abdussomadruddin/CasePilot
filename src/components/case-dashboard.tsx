@@ -53,12 +53,15 @@ import {
 } from "@/lib/team-store";
 import {
   caseStatuses,
+  caseDealerLabels,
+  caseDealers,
   documentTypeLabels,
   documentTypes,
   roles,
   roleLabels,
   statusLabels,
   type BankDetail,
+  type CaseDealer,
   type CaseFormValues,
   type CaseRecord,
   type CaseStatus,
@@ -581,6 +584,7 @@ export function CaseDashboard() {
     const now = new Date().toISOString();
     const record: CaseRecord = {
       ...base,
+      dealer: values.dealer,
       customerName: values.customerName.trim(),
       customerPhone: values.customerPhone.trim(),
       carModel: values.carModel.trim(),
@@ -1370,6 +1374,9 @@ function CaseCard({
           >
             {formatStatus(record.status)}
           </span>
+          <span className="max-w-full rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs font-semibold leading-snug text-zinc-200">
+            {record.dealer ? caseDealerLabels[record.dealer] : "No dealer"}
+          </span>
         </div>
 
         <div
@@ -1468,7 +1475,11 @@ function CaseCard({
               <dl className="grid gap-1.5 rounded-md bg-zinc-950 p-3 ring-1 ring-zinc-800">
                 <CompactInfoItem
                   label="Team"
-                  value={describeAssignedTeam(record.status)}
+                  value={describeAssignedTeam(record.status, record.dealer)}
+                />
+                <CompactInfoItem
+                  label="Dealer"
+                  value={record.dealer ? caseDealerLabels[record.dealer] : "None"}
                 />
                 <CompactInfoItem
                   label="Updated"
@@ -1940,6 +1951,7 @@ function CaseForm({
   const empty = createEmptyCase();
   const source = record || empty;
   const [values, setValues] = useState<CaseFormValues>({
+    dealer: source.dealer,
     customerName: source.customerName,
     customerPhone: source.customerPhone,
     carModel: source.carModel,
@@ -2062,6 +2074,23 @@ function CaseForm({
                 onChange={(event) => updateField("customerPhone", normalizedPhone(event.target.value))}
                 required
               />
+            </Field>
+            <Field label="Dealer">
+              <select
+                className="field"
+                value={values.dealer}
+                onChange={(event) =>
+                  updateField("dealer", event.target.value as CaseDealer | "")
+                }
+                required
+              >
+                <option value="">Select dealer</option>
+                {caseDealers.map((dealer) => (
+                  <option key={dealer} value={dealer}>
+                    {caseDealerLabels[dealer]}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Model">
               <select

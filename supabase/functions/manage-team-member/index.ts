@@ -5,7 +5,8 @@ type Role =
   | "customer_service"
   | "finance"
   | "caller"
-  | "operator";
+  | "operator"
+  | "sales_manager";
 
 type TeamMemberPayload = {
   action?: "create" | "update";
@@ -24,6 +25,7 @@ const roles: Role[] = [
   "finance",
   "caller",
   "operator",
+  "sales_manager",
 ];
 
 const roleLabels: Record<Role, string> = {
@@ -32,6 +34,7 @@ const roleLabels: Record<Role, string> = {
   finance: "Finance",
   caller: "Caller",
   operator: "Operator",
+  sales_manager: "Sales Manager",
 };
 
 const corsHeaders = {

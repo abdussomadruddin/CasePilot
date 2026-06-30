@@ -6,6 +6,7 @@ export function createEmptyCase(): CaseRecord {
 
   return {
     id: crypto.randomUUID(),
+    dealer: "",
     customerName: "",
     customerPhone: "",
     carModel: "Honda City",

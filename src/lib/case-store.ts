@@ -6,6 +6,7 @@ import {
   statusLabels,
   type ActivityEvent,
   type BankDetail,
+  type CaseDealer,
   type CaseDocument,
   type CaseRecord,
   type CaseStatus,
@@ -29,6 +30,7 @@ type StoreResult = {
 
 type CaseRow = {
   id: string;
+  dealer: CaseDealer | null;
   customer_name: string;
   customer_phone: string;
   car_model: string;
@@ -88,9 +90,14 @@ type ProfileRow = {
   active: boolean | null;
 };
 
+function normalizeDealer(dealer?: string | null): CaseDealer {
+  return dealer === "other_dealer" ? "other_dealer" : "kah_motor";
+}
+
 function mapCase(row: CaseRow): CaseRecord {
   return {
     id: row.id,
+    dealer: normalizeDealer(row.dealer),
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
     carModel: row.car_model,
@@ -164,6 +171,7 @@ function sortOldestFirst(a: ActivityEvent, b: ActivityEvent) {
 function toCaseRow(record: CaseRecord) {
   return {
     id: record.id,
+    dealer: record.dealer || "kah_motor",
     customer_name: record.customerName,
     customer_phone: record.customerPhone,
     car_model: record.carModel,
@@ -316,7 +324,7 @@ export async function saveCase(
   }
 
   if (statusChanged || isNew) {
-    const rolesToNotify = getNotificationRoles(savedRecord.status);
+    const rolesToNotify = getNotificationRoles(savedRecord.status, savedRecord.dealer);
     const reason = isNew
       ? `New case created with status ${statusLabels[savedRecord.status]}.`
       : `Case status changed to ${statusLabels[savedRecord.status]}.`;

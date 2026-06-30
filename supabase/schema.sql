@@ -9,11 +9,14 @@ begin
     'customer_service',
     'finance',
     'caller',
-    'operator'
+    'operator',
+    'sales_manager'
   );
 exception
   when duplicate_object then null;
 end $$;
+
+alter type public.app_role add value if not exists 'sales_manager';
 
 do $$
 begin
@@ -72,6 +75,7 @@ create table if not exists public.cases (
   id uuid primary key default gen_random_uuid(),
   customer_name text not null,
   customer_phone text not null,
+  dealer text not null default 'kah_motor',
   car_model text not null,
   car_variant text not null,
   car_color text not null,
@@ -89,6 +93,20 @@ create table if not exists public.cases (
 
 alter table public.profiles
 add column if not exists phone text;
+
+alter table public.cases
+add column if not exists dealer text not null default 'kah_motor';
+
+update public.cases
+set dealer = 'kah_motor'
+where dealer is null or dealer not in ('kah_motor', 'other_dealer');
+
+alter table public.cases
+drop constraint if exists cases_dealer_check;
+
+alter table public.cases
+add constraint cases_dealer_check
+check (dealer in ('kah_motor', 'other_dealer'));
 
 create table if not exists public.case_banks (
   id uuid primary key default gen_random_uuid(),
@@ -191,6 +209,7 @@ create table if not exists public.push_subscriptions (
 
 create index if not exists cases_status_idx on public.cases(status);
 create index if not exists cases_updated_at_idx on public.cases(updated_at desc);
+create index if not exists cases_dealer_idx on public.cases(dealer);
 create index if not exists case_documents_expiry_idx
 on public.case_documents(expires_at)
 where deleted_at is null;
@@ -326,7 +345,13 @@ drop policy if exists "cases read authenticated" on public.cases;
 create policy "cases read authenticated"
 on public.cases for select
 to authenticated
-using (true);
+using (
+  public.current_app_role() is not null
+  and (
+    public.current_app_role()::text <> 'sales_manager'
+    or dealer = 'kah_motor'
+  )
+);
 
 drop policy if exists "cases insert operations" on public.cases;
 create policy "cases insert operations"
@@ -345,7 +370,18 @@ drop policy if exists "case banks read authenticated" on public.case_banks;
 create policy "case banks read authenticated"
 on public.case_banks for select
 to authenticated
-using (true);
+using (
+  public.current_app_role() is not null
+  and (
+    public.current_app_role()::text <> 'sales_manager'
+    or exists (
+      select 1
+      from public.cases
+      where cases.id = case_banks.case_id
+      and cases.dealer = 'kah_motor'
+    )
+  )
+);
 
 drop policy if exists "case banks manage permitted" on public.case_banks;
 create policy "case banks manage permitted"
@@ -358,7 +394,18 @@ drop policy if exists "case documents read authenticated" on public.case_documen
 create policy "case documents read authenticated"
 on public.case_documents for select
 to authenticated
-using (true);
+using (
+  public.current_app_role() is not null
+  and (
+    public.current_app_role()::text <> 'sales_manager'
+    or exists (
+      select 1
+      from public.cases
+      where cases.id = case_documents.case_id
+      and cases.dealer = 'kah_motor'
+    )
+  )
+);
 
 drop policy if exists "case documents insert permitted" on public.case_documents;
 create policy "case documents insert permitted"
@@ -370,13 +417,26 @@ drop policy if exists "case activities read authenticated" on public.case_activi
 create policy "case activities read authenticated"
 on public.case_activities for select
 to authenticated
-using (true);
+using (
+  public.current_app_role() is not null
+  and (
+    public.current_app_role()::text <> 'sales_manager'
+    or exists (
+      select 1
+      from public.cases
+      where cases.id = case_activities.case_id
+      and cases.dealer = 'kah_motor'
+    )
+  )
+);
 
 drop policy if exists "case activities insert authenticated" on public.case_activities;
 create policy "case activities insert authenticated"
 on public.case_activities for insert
 to authenticated
-with check (public.current_app_role() is not null);
+with check (
+  public.current_app_role() in ('admin', 'customer_service', 'finance', 'caller', 'operator')
+);
 
 drop policy if exists "case notifications read role" on public.case_notifications;
 create policy "case notifications read role"
