@@ -105,6 +105,13 @@ type WhatsAppRecipient = {
 
 type PushStatus = "unsupported" | "default" | "denied" | "enabled" | "loading" | "error";
 
+type CarCatalogItem = {
+  model: string;
+  segment: string;
+  variants: string[];
+  colors: string[];
+};
+
 const tabs: TabDefinition[] = [
   { id: "all", label: "All Cases", icon: FolderKanban },
   { id: "tasks", label: "My Tasks", icon: ListChecks },
@@ -112,6 +119,106 @@ const tabs: TabDefinition[] = [
   { id: "followup", label: "Follow Up Due", icon: CalendarClock },
   { id: "completed", label: "Completed", icon: CheckCircle2 },
   { id: "team", label: "Team", icon: Users },
+];
+
+const carCatalog: CarCatalogItem[] = [
+  {
+    model: "Honda City",
+    segment: "Sedan",
+    variants: ["1.5 S", "1.5 E", "1.5 V", "1.5 RS", "1.5 e:HEV RS"],
+    colors: [
+      "Crystal Black Pearl",
+      "Meteoroid Gray Metallic",
+      "Platinum White Pearl",
+      "Lunar Silver Metallic",
+      "Ignite Red Metallic",
+      "Phoenix Orange Pearl",
+    ],
+  },
+  {
+    model: "Honda City Hatchback",
+    segment: "Hatchback",
+    variants: ["1.5 S", "1.5 E", "1.5 V", "1.5 RS", "1.5 e:HEV RS"],
+    colors: [
+      "Crystal Black Pearl",
+      "Meteoroid Gray Metallic",
+      "Platinum White Pearl",
+      "Lunar Silver Metallic",
+      "Ignite Red Metallic",
+      "Phoenix Orange Pearl",
+    ],
+  },
+  {
+    model: "Honda WR-V",
+    segment: "SUV",
+    variants: ["1.5 S", "1.5 E", "1.5 V", "1.5 RS"],
+    colors: [
+      "Platinum White Pearl",
+      "Meteoroid Gray Metallic",
+      "Lunar Silver Metallic",
+      "Crystal Black Pearl",
+      "Ignite Red Metallic",
+    ],
+  },
+  {
+    model: "Honda HR-V",
+    segment: "SUV",
+    variants: ["1.5 S", "1.5 Turbo E", "1.5 Turbo V", "1.5 e:HEV RS"],
+    colors: [
+      "Platinum White Pearl",
+      "Meteoroid Gray Metallic",
+      "Crystal Black Pearl",
+      "Phoenix Orange Pearl",
+      "Stellar Diamond Pearl",
+    ],
+  },
+  {
+    model: "Honda Civic",
+    segment: "Sedan",
+    variants: ["1.5 Turbo E", "1.5 Turbo V", "1.5 Turbo RS", "2.0 e:HEV RS"],
+    colors: [
+      "Platinum White Pearl",
+      "Crystal Black Pearl",
+      "Meteoroid Gray Metallic",
+      "Ignite Red Metallic",
+      "Canyon River Blue Metallic",
+    ],
+  },
+  {
+    model: "Honda CR-V",
+    segment: "SUV",
+    variants: ["2.0 e:HEV E", "1.5 Turbo V", "2.0 e:HEV RS"],
+    colors: [
+      "Platinum White Pearl",
+      "Crystal Black Pearl",
+      "Meteoroid Gray Metallic",
+      "Canyon River Blue Metallic",
+      "Ignite Red Metallic",
+    ],
+  },
+  {
+    model: "Honda e:N1",
+    segment: "SUV / EV",
+    variants: ["e:N1 (EV)"],
+    colors: [
+      "Platinum White Pearl",
+      "Crystal Black Pearl",
+      "Aqua Topaz Metallic",
+      "Urban Gray Pearl",
+    ],
+  },
+  {
+    model: "Honda Prelude",
+    segment: "Sports Coupe",
+    variants: ["e:HEV S+ Shift"],
+    colors: [
+      "Platinum White Pearl",
+      "Crystal Black Pearl",
+      "Flame Red",
+      "Sonic Gray Pearl",
+      "Seabed Blue Pearl (bergantung stok)",
+    ],
+  },
 ];
 
 const statusTone: Record<CaseStatus, string> = {
@@ -148,6 +255,15 @@ const initialLogin = {
   email: "",
   password: "",
 };
+
+function getCarCatalogItem(model: string) {
+  return carCatalog.find((item) => item.model === model);
+}
+
+function optionsWithCurrent(options: readonly string[], current: string) {
+  if (!current || options.includes(current)) return options;
+  return [current, ...options];
+}
 
 function getDocumentDownloadUrl(doc: { name: string; url: string }) {
   const params = new URLSearchParams({ url: doc.url, name: doc.name });
@@ -251,6 +367,7 @@ export function CaseDashboard() {
   const [saving, setSaving] = useState(false);
   const [teamSaving, setTeamSaving] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [login, setLogin] = useState(initialLogin);
   const [authLoading, setAuthLoading] = useState(false);
   const [pushStatus, setPushStatus] = useState<PushStatus>("default");
@@ -513,9 +630,17 @@ export function CaseDashboard() {
     try {
       setTeamSaving(true);
       setError("");
-      await createTeamMember(values);
+      setSuccessMessage("");
+      const passwordRequested = Boolean(values.password.trim());
+      const result = await createTeamMember(values);
       await refreshTeamMembers();
+      setSuccessMessage(
+        result.passwordUpdated || passwordRequested
+          ? "Team member created. Password saved in Supabase Auth."
+          : "Team member created.",
+      );
     } catch (caught) {
+      setSuccessMessage("");
       setError(caught instanceof Error ? caught.message : "Unable to create team member.");
     } finally {
       setTeamSaving(false);
@@ -526,9 +651,17 @@ export function CaseDashboard() {
     try {
       setTeamSaving(true);
       setError("");
-      await updateTeamMember(values);
+      setSuccessMessage("");
+      const passwordRequested = Boolean(values.password.trim());
+      const result = await updateTeamMember(values);
       await refreshTeamMembers();
+      setSuccessMessage(
+        result.passwordUpdated || passwordRequested
+          ? "Team updated. Password changed in Supabase Auth."
+          : "Team updated. Password unchanged.",
+      );
     } catch (caught) {
+      setSuccessMessage("");
       setError(caught instanceof Error ? caught.message : "Unable to update team member.");
     } finally {
       setTeamSaving(false);
@@ -752,6 +885,12 @@ export function CaseDashboard() {
         {error ? (
           <div className="rounded-lg border border-red-900 bg-red-950/70 p-4 text-sm text-red-100">
             {error}
+          </div>
+        ) : null}
+
+        {successMessage ? (
+          <div className="rounded-lg border border-emerald-900 bg-emerald-950/60 p-4 text-sm text-emerald-100">
+            {successMessage}
           </div>
         ) : null}
 
@@ -1819,12 +1958,37 @@ function CaseForm({
   const statusOptions = allowedStatuses.includes(values.status)
     ? allowedStatuses
     : [values.status, ...allowedStatuses];
+  const selectedCar = getCarCatalogItem(values.carModel);
+  const modelOptions = optionsWithCurrent(
+    carCatalog.map((item) => item.model),
+    values.carModel,
+  );
+  const variantOptions = optionsWithCurrent(
+    selectedCar?.variants || [],
+    values.carVariant,
+  );
+  const colorOptions = optionsWithCurrent(selectedCar?.colors || [], values.carColor);
 
   function updateField<K extends keyof CaseFormValues>(
     key: K,
     value: CaseFormValues[K],
   ) {
     setValues((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateCarModel(model: string) {
+    const nextCar = getCarCatalogItem(model);
+
+    setValues((current) => ({
+      ...current,
+      carModel: model,
+      carVariant:
+        nextCar && nextCar.variants.includes(current.carVariant)
+          ? current.carVariant
+          : "",
+      carColor:
+        nextCar && nextCar.colors.includes(current.carColor) ? current.carColor : "",
+    }));
   }
 
   function updateBank(index: number, key: keyof BankDetail, value: string) {
@@ -1899,29 +2063,57 @@ function CaseForm({
                 required
               />
             </Field>
-            <Field label="Car model">
-              <input
+            <Field label="Model">
+              <select
                 className="field"
                 value={values.carModel}
-                onChange={(event) => updateField("carModel", event.target.value)}
+                onChange={(event) => updateCarModel(event.target.value)}
                 required
-              />
+              >
+                <option value="">Select model</option>
+                {modelOptions.map((model) => {
+                  const option = getCarCatalogItem(model);
+
+                  return (
+                    <option key={model} value={model}>
+                      {model}
+                      {option ? ` · ${option.segment}` : ""}
+                    </option>
+                  );
+                })}
+              </select>
             </Field>
-            <Field label="Car variant">
-              <input
+            <Field label="Variant">
+              <select
                 className="field"
                 value={values.carVariant}
                 onChange={(event) => updateField("carVariant", event.target.value)}
+                disabled={!values.carModel}
                 required
-              />
+              >
+                <option value="">Select variant</option>
+                {variantOptions.map((variant) => (
+                  <option key={variant} value={variant}>
+                    {variant}
+                  </option>
+                ))}
+              </select>
             </Field>
-            <Field label="Car color">
-              <input
+            <Field label="Color">
+              <select
                 className="field"
                 value={values.carColor}
                 onChange={(event) => updateField("carColor", event.target.value)}
+                disabled={!values.carModel}
                 required
-              />
+              >
+                <option value="">Select color</option>
+                {colorOptions.map((color) => (
+                  <option key={color} value={color}>
+                    {color}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Status">
               <select

@@ -121,6 +121,13 @@ Deno.serve(async (request) => {
         );
       }
 
+      if (payload.password.length < 6) {
+        return jsonResponse(
+          { ok: false, error: "Password must be at least 6 characters." },
+          400,
+        );
+      }
+
       const { data: created, error: createError } =
         await serviceClient.auth.admin.createUser({
           email: payload.email,
@@ -155,7 +162,7 @@ Deno.serve(async (request) => {
         return jsonResponse({ ok: false, error: profileWriteError.message }, 500);
       }
 
-      return jsonResponse({ ok: true, id: created.user.id });
+      return jsonResponse({ ok: true, id: created.user.id, passwordUpdated: true });
     }
 
     if (payload.action === "update") {
@@ -176,7 +183,16 @@ Deno.serve(async (request) => {
       };
 
       if (payload.email) userUpdate.email = payload.email;
-      if (payload.password) userUpdate.password = payload.password;
+      if (payload.password) {
+        if (payload.password.length < 6) {
+          return jsonResponse(
+            { ok: false, error: "Password must be at least 6 characters." },
+            400,
+          );
+        }
+
+        userUpdate.password = payload.password;
+      }
 
       const { error: authUpdateError } =
         await serviceClient.auth.admin.updateUserById(payload.id, userUpdate);
@@ -200,7 +216,7 @@ Deno.serve(async (request) => {
         return jsonResponse({ ok: false, error: profileUpdateError.message }, 500);
       }
 
-      return jsonResponse({ ok: true });
+      return jsonResponse({ ok: true, passwordUpdated: Boolean(payload.password) });
     }
 
     return jsonResponse({ ok: false, error: "Invalid team action." }, 400);
