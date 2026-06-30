@@ -61,7 +61,6 @@ import {
   roleLabels,
   statusLabels,
   type BankDetail,
-  type CaseDealer,
   type CaseFormValues,
   type CaseRecord,
   type CaseStatus,
@@ -994,6 +993,7 @@ export function CaseDashboard() {
 
       {isFormOpen ? (
         <CaseForm
+          key={editingCase?.id || "new"}
           role={role}
           record={editingCase}
           saving={saving}
@@ -1951,7 +1951,7 @@ function CaseForm({
   const empty = createEmptyCase();
   const source = record || empty;
   const [values, setValues] = useState<CaseFormValues>({
-    dealer: source.dealer,
+    dealer: record?.dealer || "",
     customerName: source.customerName,
     customerPhone: source.customerPhone,
     carModel: source.carModel,
@@ -2074,23 +2074,6 @@ function CaseForm({
                 onChange={(event) => updateField("customerPhone", normalizedPhone(event.target.value))}
                 required
               />
-            </Field>
-            <Field label="Dealer">
-              <select
-                className="field"
-                value={values.dealer}
-                onChange={(event) =>
-                  updateField("dealer", event.target.value as CaseDealer | "")
-                }
-                required
-              >
-                <option value="">Select dealer</option>
-                {caseDealers.map((dealer) => (
-                  <option key={dealer} value={dealer}>
-                    {caseDealerLabels[dealer]}
-                  </option>
-                ))}
-              </select>
             </Field>
             <Field label="Model">
               <select
@@ -2259,11 +2242,36 @@ function CaseForm({
             </section>
           ) : null}
 
+          <section className="grid gap-3 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
+            <p className="text-sm font-semibold text-ink">Case dealer</p>
+            <div className="grid grid-cols-2 gap-2">
+              {caseDealers.map((dealer) => {
+                const selected = values.dealer === dealer;
+
+                return (
+                  <button
+                    key={dealer}
+                    type="button"
+                    className={`h-12 rounded-md border px-3 text-sm font-semibold transition ${
+                      selected
+                        ? "border-red-500 bg-red-600 text-white shadow-[0_0_22px_rgba(229,9,20,0.32)]"
+                        : "border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-zinc-500 hover:text-white"
+                    }`}
+                    onClick={() => updateField("dealer", dealer)}
+                    aria-pressed={selected}
+                  >
+                    {caseDealerLabels[dealer]}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button type="button" className="secondary-button" onClick={onClose}>
               Cancel
             </button>
-            <button className="primary-button" disabled={saving}>
+            <button className="primary-button" disabled={saving || !values.dealer}>
               <Save className="h-4 w-4" aria-hidden="true" />
               {saving ? "Saving" : "Save Case"}
             </button>
