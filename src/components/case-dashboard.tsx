@@ -1317,13 +1317,14 @@ function CaseCard({
   const followUpDue = isFollowUpDue(record);
   const allowEdit = canEditCase(role, record);
   const allowDelete = canDeleteCase(role);
+  const showContactLists = role !== "sales_manager";
   const [isExpanded, setIsExpanded] = useState(false);
   const [whatsAppRecipient, setWhatsAppRecipient] =
     useState<WhatsAppRecipient | null>(null);
   const hasCustomerPhone = Boolean(record.customerPhone.trim());
-  const activeTeamMembers = teamMembers.filter(
-    (member) => member.active !== false && member.phone?.trim(),
-  );
+  const activeTeamMembers = showContactLists
+    ? teamMembers.filter((member) => member.active !== false && member.phone?.trim())
+    : [];
   const customerRecipient: WhatsAppRecipient = {
     id: `${record.id}-customer`,
     name: record.customerName || "Customer",
@@ -1470,7 +1471,13 @@ function CaseCard({
             </div>
           </div>
 
-          <div className="grid gap-3 p-3 pt-0 sm:p-4 sm:pt-0 xl:grid-cols-[0.8fr_1fr_0.9fr_0.8fr]">
+          <div
+            className={`grid gap-3 p-3 pt-0 sm:p-4 sm:pt-0 ${
+              showContactLists
+                ? "xl:grid-cols-[0.8fr_1fr_0.9fr_0.8fr]"
+                : "xl:grid-cols-[0.8fr_1fr_0.9fr]"
+            }`}
+          >
             <div className="grid content-start gap-3">
               <dl className="grid gap-1.5 rounded-md bg-zinc-950 p-3 ring-1 ring-zinc-800">
                 <CompactInfoItem
@@ -1551,7 +1558,8 @@ function CaseCard({
                 </Panel>
             </div>
 
-            <div className="grid content-start gap-3">
+            {showContactLists ? (
+              <div className="grid content-start gap-3">
                 <Panel title="Bank list" icon={Banknote}>
                   <div className="grid gap-2">
                     {record.banks.length ? (
@@ -1636,7 +1644,8 @@ function CaseCard({
                     </div>
                   </div>
                 </Panel>
-            </div>
+              </div>
+            ) : null}
 
             <Panel title="Activity timeline" icon={Clock3}>
               <ol className="relative grid max-h-80 gap-2 overflow-y-auto pr-1 before:absolute before:bottom-2 before:left-3 before:top-2 before:w-px before:bg-zinc-800">
