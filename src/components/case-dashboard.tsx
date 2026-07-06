@@ -129,12 +129,7 @@ const carCatalog: CarCatalogItem[] = [
   {
     model: "Honda City",
     segment: "Sedan",
-    variants: [
-      "1.5 S",
-      "1.5 E",
-      "1.5 V",
-      "1.5 RS e:HEV (bergantung kepada batch pengeluaran)",
-    ],
+    variants: ["1.5L S", "1.5L E", "1.5L V", "1.5L RS", "1.5L e:HEV RS"],
     colors: [
       "Crystal Black Pearl",
       "Meteoroid Gray Metallic",
@@ -148,12 +143,7 @@ const carCatalog: CarCatalogItem[] = [
   {
     model: "Honda City Hatchback",
     segment: "Hatchback",
-    variants: [
-      "1.5 S",
-      "1.5 E",
-      "1.5 V",
-      "1.5 RS e:HEV (bergantung kepada batch pengeluaran)",
-    ],
+    variants: ["1.5L S", "1.5L E", "1.5L V", "1.5L RS", "1.5L e:HEV RS"],
     colors: [
       "Crystal Black Pearl",
       "Meteoroid Gray Metallic",
@@ -167,7 +157,7 @@ const carCatalog: CarCatalogItem[] = [
   {
     model: "Honda WR-V",
     segment: "SUV",
-    variants: ["1.5 E", "1.5 V", "1.5 RS"],
+    variants: ["1.5L S", "1.5L E", "1.5L V", "1.5L RS"],
     colors: [
       "Platinum White Pearl",
       "Meteoroid Gray Metallic",
@@ -180,7 +170,14 @@ const carCatalog: CarCatalogItem[] = [
   {
     model: "Honda HR-V",
     segment: "SUV",
-    variants: ["1.5 S", "1.5 Turbo E", "1.5 Turbo V", "1.5 e:HEV RS"],
+    variants: [
+      "1.5L S",
+      "1.5L Turbocharged E",
+      "1.5L Turbocharged V",
+      "1.5L Turbocharged V with 360° Camera",
+      "1.5L e:HEV RS",
+      "1.5L e:HEV RS with 360° Camera",
+    ],
     colors: [
       "Platinum White Pearl",
       "Meteoroid Gray Metallic",
@@ -192,9 +189,10 @@ const carCatalog: CarCatalogItem[] = [
     model: "Honda Civic",
     segment: "Sedan",
     variants: [
-      "1.5 E (bergantung kepada batch)",
-      "1.5 V (bergantung kepada batch)",
-      "1.5 RS e:HEV (bergantung kepada batch)",
+      "1.5L Turbocharged E",
+      "1.5L Turbocharged V",
+      "1.5L Turbocharged RS",
+      "2.0L e:HEV RS",
     ],
     colors: [
       "Platinum White Pearl",
@@ -208,7 +206,7 @@ const carCatalog: CarCatalogItem[] = [
   {
     model: "Honda CR-V",
     segment: "SUV",
-    variants: ["2.0 e:HEV E", "1.5 Turbo V", "2.0 e:HEV RS"],
+    variants: ["2.0L e:HEV E", "1.5L Turbocharged V", "2.0L e:HEV RS"],
     colors: [
       "Platinum White Pearl",
       "Crystal Black Pearl",
@@ -220,7 +218,7 @@ const carCatalog: CarCatalogItem[] = [
   {
     model: "Honda e:N1",
     segment: "SUV / EV",
-    variants: ["e:N1 (EV)"],
+    variants: ["e:N1"],
     colors: [
       "Platinum White Pearl",
       "Crystal Black Pearl",
@@ -229,9 +227,21 @@ const carCatalog: CarCatalogItem[] = [
     ],
   },
   {
+    model: "Honda Civic Type R",
+    segment: "Sports",
+    variants: ["Type R"],
+    colors: [
+      "Championship White",
+      "Rallye Red",
+      "Crystal Black Pearl",
+      "Sonic Gray Pearl",
+      "Racing Blue Pearl",
+    ],
+  },
+  {
     model: "Honda Prelude",
     segment: "Sports Coupe",
-    variants: ["e:HEV S+ Shift"],
+    variants: ["Prelude e:HEV"],
     colors: [
       "Platinum White Pearl",
       "Crystal Black Pearl",
