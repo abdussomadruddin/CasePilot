@@ -395,13 +395,6 @@ export async function removeCase(caseId: string): Promise<CaseRecord[]> {
   }
 
   const deletedAt = new Date().toISOString();
-  const { error } = await supabase
-    .from("cases")
-    .update({ deleted_at: deletedAt })
-    .eq("id", caseId);
-
-  if (error) throw error;
-
   const { error: documentError } = await supabase
     .from("case_documents")
     .update({
@@ -413,8 +406,15 @@ export async function removeCase(caseId: string): Promise<CaseRecord[]> {
     .is("deleted_at", null);
 
   if (documentError) {
-    console.warn("Unable to mark case documents deleted", documentError.message);
+    throw documentError;
   }
+
+  const { error } = await supabase
+    .from("cases")
+    .update({ deleted_at: deletedAt })
+    .eq("id", caseId);
+
+  if (error) throw error;
 
   return (await loadCases()).cases;
 }
