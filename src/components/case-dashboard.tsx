@@ -1764,9 +1764,7 @@ function WhatsAppComposer({
 
     const documentLines = await Promise.all(
       selectedDocuments.map(async (document, index) => {
-        const documentUrl = isGoogleDriveUrl(document.url)
-          ? document.url
-          : await shortenDocumentUrl(document.url);
+        const documentUrl = await shortenDocumentUrl(document.url);
         return `Document ${index + 1} : ${documentUrl}`;
       }),
     );
