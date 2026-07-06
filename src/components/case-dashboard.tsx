@@ -1845,45 +1845,24 @@ function WhatsAppComposer({
     };
   }, []);
 
-  const availableDocuments = record.documents.filter(
-    (document) => document.url && document.url !== "#",
-  );
+  const caseFolderUrl = getCaseDriveFolderUrl(record.documents);
   const [message, setMessage] = useState(defaultWhatsAppMessage(record));
-  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>(
-    availableDocuments.map((document) => document.id),
-  );
   const [isPreparingWhatsApp, setIsPreparingWhatsApp] = useState(false);
-  const selectedDocuments = availableDocuments.filter((document) =>
-    selectedDocumentIds.includes(document.id),
-  );
   const canSend = whatsappPhone(recipient.phone) && message.trim();
 
-  function toggleDocument(documentId: string) {
-    setSelectedDocumentIds((current) =>
-      current.includes(documentId)
-        ? current.filter((id) => id !== documentId)
-        : [...current, documentId],
-    );
-  }
-
-  async function messageWithDocuments() {
+  async function messageWithCaseFolder() {
     const trimmed = message.trim();
 
-    if (!selectedDocuments.length) return trimmed;
+    if (!caseFolderUrl) return trimmed;
 
-    const documentLines = await Promise.all(
-      selectedDocuments.map(async (document, index) => {
-        const documentUrl = await shortenDocumentUrl(document.url);
-        return `Document ${index + 1} : ${documentUrl}`;
-      }),
-    );
+    const folderUrl = await shortenDocumentUrl(caseFolderUrl);
 
     return [
       trimmed,
       "",
       "Documents:",
       "",
-      documentLines.join("\n\n"),
+      `Case Folder : ${folderUrl}`,
     ].join("\n");
   }
 
@@ -1897,7 +1876,7 @@ function WhatsAppComposer({
 
     try {
       setIsPreparingWhatsApp(true);
-      const whatsAppUrl = buildWhatsAppUrl(recipient.phone, await messageWithDocuments());
+      const whatsAppUrl = buildWhatsAppUrl(recipient.phone, await messageWithCaseFolder());
 
       if (pendingWindow) {
         pendingWindow.location.href = whatsAppUrl;
@@ -1942,35 +1921,27 @@ function WhatsAppComposer({
           <section className="grid gap-2 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-muted" aria-hidden="true" />
-              <h3 className="text-sm font-semibold text-ink">Documents to forward</h3>
+              <h3 className="text-sm font-semibold text-ink">Case folder to forward</h3>
             </div>
 
-            {availableDocuments.length ? (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {availableDocuments.map((document) => (
-                  <label
-                    key={document.id}
-                    className="touch-tile flex min-h-12 cursor-pointer items-center gap-3 rounded-md bg-zinc-950 px-3 py-2 text-sm ring-1 ring-zinc-800 transition hover:bg-zinc-900"
-                  >
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 shrink-0 rounded border-line text-honda focus:ring-honda"
-                      checked={selectedDocumentIds.includes(document.id)}
-                      onChange={() => toggleDocument(document.id)}
-                    />
-                    <span className="min-w-0">
-                      <span className="block line-clamp-2 break-words font-medium text-ink">
-                        {document.name}
-                      </span>
-                      <span className="block text-xs text-muted">
-                        {isGoogleDriveUrl(document.url) ? "Google Drive" : "Saved file"}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
+            {caseFolderUrl ? (
+              <a
+                className="touch-tile flex min-h-12 items-center justify-between gap-3 rounded-md bg-zinc-950 px-3 py-2 text-sm ring-1 ring-zinc-800 transition hover:bg-zinc-900"
+                href={caseFolderUrl}
+                target="_blank"
+                rel="noopener"
+              >
+                <span className="min-w-0">
+                  <span className="block font-medium text-ink">Case folder</span>
+                  <span className="block text-xs text-muted">
+                    Google Drive · {record.documents.length} file
+                    {record.documents.length === 1 ? "" : "s"}
+                  </span>
+                </span>
+                <ExternalLink className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+              </a>
             ) : (
-              <p className="text-sm text-muted">No document link available</p>
+              <p className="text-sm text-muted">No case folder link available</p>
             )}
           </section>
         </div>
