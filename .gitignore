@@ -8,3 +8,5 @@ out
 dist
 .DS_Store
 tsconfig.tsbuildinfo
+.vercel
+.env*
