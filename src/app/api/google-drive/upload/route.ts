@@ -6,6 +6,9 @@ export const runtime = "nodejs";
 const googleDriveParentFolderId =
   process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID ||
   "11RVjbofIY6eUbdTpHEzBFrZHIAeMXf9B";
+const defaultSupabaseUrl = "https://kfyqyxiycvdknlcpjmts.supabase.co";
+const defaultSupabaseKey = "sb_publishable_Fs_FX9W23A3AbS-T8szB1g_pW_pNDui";
+const oldSupabaseUrl = "https://rfqwyhafvfvafiqrcmxa.supabase.co";
 const driveScope = "https://www.googleapis.com/auth/drive";
 const tokenEndpoint = "https://oauth2.googleapis.com/token";
 const allowedUploaderRoles = new Set(["admin", "customer_service"]);
@@ -27,13 +30,14 @@ type ProfileRow = {
 };
 
 async function authenticateUploader(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const configuredSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const useDefaultProject =
+    !configuredSupabaseUrl || configuredSupabaseUrl === oldSupabaseUrl;
+  const supabaseUrl = useDefaultProject ? defaultSupabaseUrl : configuredSupabaseUrl;
+  const supabaseAnonKey = useDefaultProject
+    ? defaultSupabaseKey
+    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || defaultSupabaseKey;
   const authorization = request.headers.get("authorization");
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Supabase is not configured.");
-  }
 
   if (!authorization?.startsWith("Bearer ")) {
     return false;
