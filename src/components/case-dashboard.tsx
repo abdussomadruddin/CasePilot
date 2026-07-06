@@ -129,7 +129,12 @@ const carCatalog: CarCatalogItem[] = [
   {
     model: "Honda City",
     segment: "Sedan",
-    variants: ["1.5 S", "1.5 E", "1.5 V", "1.5 RS", "1.5 e:HEV RS"],
+    variants: [
+      "1.5 S",
+      "1.5 E",
+      "1.5 V",
+      "1.5 RS e:HEV (bergantung kepada batch pengeluaran)",
+    ],
     colors: [
       "Crystal Black Pearl",
       "Meteoroid Gray Metallic",
@@ -137,12 +142,18 @@ const carCatalog: CarCatalogItem[] = [
       "Lunar Silver Metallic",
       "Ignite Red Metallic",
       "Phoenix Orange Pearl",
+      "Stellar Diamond Pearl",
     ],
   },
   {
     model: "Honda City Hatchback",
     segment: "Hatchback",
-    variants: ["1.5 S", "1.5 E", "1.5 V", "1.5 RS", "1.5 e:HEV RS"],
+    variants: [
+      "1.5 S",
+      "1.5 E",
+      "1.5 V",
+      "1.5 RS e:HEV (bergantung kepada batch pengeluaran)",
+    ],
     colors: [
       "Crystal Black Pearl",
       "Meteoroid Gray Metallic",
@@ -150,18 +161,20 @@ const carCatalog: CarCatalogItem[] = [
       "Lunar Silver Metallic",
       "Ignite Red Metallic",
       "Phoenix Orange Pearl",
+      "Stellar Diamond Pearl",
     ],
   },
   {
     model: "Honda WR-V",
     segment: "SUV",
-    variants: ["1.5 S", "1.5 E", "1.5 V", "1.5 RS"],
+    variants: ["1.5 E", "1.5 V", "1.5 RS"],
     colors: [
       "Platinum White Pearl",
       "Meteoroid Gray Metallic",
       "Lunar Silver Metallic",
       "Crystal Black Pearl",
       "Ignite Red Metallic",
+      "Stellar Diamond Pearl",
     ],
   },
   {
@@ -173,19 +186,23 @@ const carCatalog: CarCatalogItem[] = [
       "Meteoroid Gray Metallic",
       "Crystal Black Pearl",
       "Phoenix Orange Pearl",
-      "Stellar Diamond Pearl",
     ],
   },
   {
     model: "Honda Civic",
     segment: "Sedan",
-    variants: ["1.5 Turbo E", "1.5 Turbo V", "1.5 Turbo RS", "2.0 e:HEV RS"],
+    variants: [
+      "1.5 E (bergantung kepada batch)",
+      "1.5 V (bergantung kepada batch)",
+      "1.5 RS e:HEV (bergantung kepada batch)",
+    ],
     colors: [
       "Platinum White Pearl",
       "Crystal Black Pearl",
       "Meteoroid Gray Metallic",
       "Ignite Red Metallic",
       "Canyon River Blue Metallic",
+      "Stellar Diamond Pearl",
     ],
   },
   {
