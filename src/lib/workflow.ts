@@ -20,19 +20,7 @@ export const completedStatuses: CaseStatus[] = ["car_delivery", "cancelled"];
 
 export const roleStatusPermissions: Record<Role, CaseStatus[]> = {
   admin: [...caseStatuses],
-  customer_service: [
-    "more_documents_needed",
-    "submission",
-    "rejected",
-    "lou_received",
-    "hint_submitted",
-    "booking_form_received",
-    "registration_needed",
-    "roadtax_grant_process",
-    "prepare_delivery",
-    "car_delivery",
-    "cancelled",
-  ],
+  customer_service: [...caseStatuses],
   finance: [
     "documents_collected",
     "more_documents_needed",
@@ -111,7 +99,7 @@ export function canDeleteCase(role: Role) {
 }
 
 export function canEditBanks(role: Role) {
-  return role === "admin" || role === "finance";
+  return role === "admin" || role === "customer_service" || role === "finance";
 }
 
 export function canUploadDocuments(role: Role) {
@@ -201,7 +189,7 @@ export function isMyTask(record: CaseRecord, role: Role) {
 }
 
 export function getVisibleCases(records: CaseRecord[], role: Role) {
-  if (role === "admin") return records;
+  if (role === "admin" || role === "customer_service") return records;
   if (role === "sales_manager") {
     return records.filter((record) => record.dealer === "kah_motor");
   }
