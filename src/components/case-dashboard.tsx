@@ -608,16 +608,28 @@ export function CaseDashboard() {
     try {
       setSaving(true);
       setError("");
+      setSuccessMessage("");
       const nextCases = await saveCase(record, role, editingCase || undefined);
       setCases(nextCases);
-
-      if (documents.length) {
-        const withDocs = await uploadDocuments(record, documents, role);
-        setCases(withDocs);
-      }
-
       setIsFormOpen(false);
       setEditingCase(null);
+
+      if (documents.length) {
+        setSuccessMessage("Case saved. Uploading documents.");
+
+        try {
+          const withDocs = await uploadDocuments(record, documents, role);
+          setCases(withDocs);
+          setSuccessMessage("Case saved. Documents uploaded.");
+        } catch (caught) {
+          const message =
+            caught instanceof Error ? caught.message : "Unable to upload documents.";
+          setSuccessMessage("");
+          setError(`Case saved, but document upload failed: ${message}`);
+        }
+      } else {
+        setSuccessMessage("Case saved.");
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to save case.");
     } finally {
