@@ -43,7 +43,7 @@ function driveQueryValue(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
-async function authenticateRole(request: NextRequest) {
+function getSupabaseConfig() {
   const configuredSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const useDefaultProject =
     !configuredSupabaseUrl || configuredSupabaseUrl === oldSupabaseUrl;
@@ -51,6 +51,12 @@ async function authenticateRole(request: NextRequest) {
   const supabaseAnonKey = useDefaultProject
     ? defaultSupabaseKey
     : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || defaultSupabaseKey;
+
+  return { supabaseAnonKey, supabaseUrl };
+}
+
+async function authenticateRole(request: NextRequest) {
+  const { supabaseAnonKey, supabaseUrl } = getSupabaseConfig();
   const authorization = request.headers.get("authorization");
 
   if (!authorization?.startsWith("Bearer ")) return null;
@@ -221,6 +227,44 @@ async function findCaseFolders(accessToken: string, caseId: string) {
   return result.files || [];
 }
 
+async function markCaseDocumentsDeleted(caseId: string, deletedAt: string) {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!serviceRoleKey) {
+    throw new Error("Supabase service role key is not configured.");
+  }
+
+  const { supabaseUrl } = getSupabaseConfig();
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/case_documents?case_id=eq.${encodeURIComponent(
+      caseId,
+    )}&deleted_at=is.null`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: serviceRoleKey,
+        authorization: `Bearer ${serviceRoleKey}`,
+        "content-type": "application/json",
+        prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        deleted_at: deletedAt,
+        delete_reason: "case_deleted",
+        storage_deleted: true,
+      }),
+      cache: "no-store",
+    },
+  );
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(text || "Unable to mark case documents deleted.");
+  }
+
+  const rows = text ? (JSON.parse(text) as unknown[]) : [];
+  return rows.length;
+}
+
 async function listFolderFiles(accessToken: string, folderId: string) {
   const q = [
     `'${driveQueryValue(folderId)}' in parents`,
@@ -302,8 +346,10 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
+    const caseId = payload.caseId.trim();
+    const deletedAt = new Date().toISOString();
     const accessToken = await getAccessToken();
-    const folders = await findCaseFolders(accessToken, payload.caseId.trim());
+    const folders = await findCaseFolders(accessToken, caseId);
 
     await Promise.all(
       folders.map((folder) =>
@@ -314,10 +360,12 @@ export async function DELETE(request: NextRequest) {
         ),
       ),
     );
+    const documentsMarkedDeleted = await markCaseDocumentsDeleted(caseId, deletedAt);
 
     return Response.json({
       deleted: folders.length,
       folderIds: folders.map((folder) => folder.id),
+      documentsMarkedDeleted,
     });
   } catch (caught) {
     const message =
