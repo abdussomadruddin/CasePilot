@@ -289,23 +289,6 @@ function isGoogleDriveUrl(value: string) {
   }
 }
 
-async function shortenDocumentUrl(url: string) {
-  try {
-    const response = await fetch("/api/shorten-link", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url }),
-    });
-
-    if (!response.ok) return url;
-
-    const result = (await response.json()) as { shortUrl?: string };
-    return result.shortUrl || url;
-  } catch {
-    return url;
-  }
-}
-
 function downloadDocuments(documents: Array<{ name: string; url: string }>) {
   documents.filter((doc) => doc.url && doc.url !== "#").forEach((doc, index) => {
     window.setTimeout(() => {
@@ -1855,14 +1838,12 @@ function WhatsAppComposer({
 
     if (!caseFolderUrl) return trimmed;
 
-    const folderUrl = await shortenDocumentUrl(caseFolderUrl);
-
     return [
       trimmed,
       "",
       "Documents:",
       "",
-      `Case Folder : ${folderUrl}`,
+      `Case Folder : ${caseFolderUrl}`,
     ].join("\n");
   }
 
