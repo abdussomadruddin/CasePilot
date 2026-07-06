@@ -47,6 +47,7 @@ import {
   getNotificationPermission,
   isNotificationSupported,
 } from "@/lib/notifications";
+import { getSupabaseClient } from "@/lib/supabase";
 import {
   createTeamMember,
   updateTeamMember,
@@ -96,6 +97,8 @@ type TabDefinition = {
   label: string;
   icon: LucideIcon;
 };
+
+const uploadTimeoutMs = 5 * 60 * 1000;
 
 type WhatsAppRecipient = {
   id: string;
@@ -379,6 +382,7 @@ export function CaseDashboard() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingMessage, setUploadingMessage] = useState("");
   const [teamSaving, setTeamSaving] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -452,6 +456,65 @@ export function CaseDashboard() {
       setPushStatus("default");
       setPushMessage("");
     }
+  }, [profile]);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    const supabase = getSupabaseClient();
+    let refreshTimer: number | null = null;
+    let disposed = false;
+
+    async function refreshFromRealtime() {
+      if (disposed) return;
+
+      try {
+        const result = await loadCases();
+        if (!disposed) setCases(result.cases);
+      } catch (caught) {
+        if (!disposed) {
+          console.warn(
+            "Unable to refresh cases from realtime",
+            caught instanceof Error ? caught.message : caught,
+          );
+        }
+      }
+    }
+
+    function scheduleRefresh() {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(refreshFromRealtime, 250);
+    }
+
+    const channel = supabase
+      .channel("casepilot-dashboard-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cases" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "case_banks" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "case_documents" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "case_activities" },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    return () => {
+      disposed = true;
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
   }, [profile]);
 
   const visibleCases = useMemo(
@@ -581,11 +644,13 @@ export function CaseDashboard() {
   }
 
   function openCreateForm() {
+    setUploadingMessage("");
     setEditingCase(null);
     setIsFormOpen(true);
   }
 
   function openEditForm(record: CaseRecord) {
+    setUploadingMessage("");
     setEditingCase(record);
     setIsFormOpen(true);
   }
@@ -613,33 +678,57 @@ export function CaseDashboard() {
 
     try {
       setSaving(true);
+      setUploadingMessage(documents.length ? "Saving case..." : "");
       setError("");
       setSuccessMessage("");
       const nextCases = await saveCase(record, role, editingCase || undefined);
       setCases(nextCases);
-      setIsFormOpen(false);
-      setEditingCase(null);
 
       if (documents.length) {
-        setSuccessMessage("Case saved. Uploading documents.");
+        setUploadingMessage(`UPLOADING... 0/${documents.length}`);
 
         try {
-          const withDocs = await uploadDocuments(record, documents, role);
+          const withDocs = await uploadDocuments(record, documents, role, {
+            timeoutMs: uploadTimeoutMs,
+            onProgress: (progress) => {
+              if (progress.phase === "syncing") {
+                setUploadingMessage("UPLOADING... syncing Google Drive");
+                return;
+              }
+
+              setUploadingMessage(
+                `UPLOADING... ${progress.completed}/${progress.total}${
+                  progress.fileName ? ` ${progress.fileName}` : ""
+                }`,
+              );
+            },
+          });
           setCases(withDocs);
           setSuccessMessage("Case saved. Documents uploaded.");
+          setIsFormOpen(false);
+          setEditingCase(null);
         } catch (caught) {
           const message =
             caught instanceof Error ? caught.message : "Unable to upload documents.";
+          const fresh = await loadCases();
+          setCases(fresh.cases);
+          setIsFormOpen(false);
+          setEditingCase(null);
           setSuccessMessage("");
-          setError(`Case saved, but document upload failed: ${message}`);
+          setError(
+            `Case saved, but upload did not finish: ${message} Please submit the missing file(s) again.`,
+          );
         }
       } else {
+        setIsFormOpen(false);
+        setEditingCase(null);
         setSuccessMessage("Case saved.");
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to save case.");
     } finally {
       setSaving(false);
+      setUploadingMessage("");
     }
   }
 
@@ -1021,7 +1110,9 @@ export function CaseDashboard() {
           role={role}
           record={editingCase}
           saving={saving}
+          uploadingMessage={uploadingMessage}
           onClose={() => {
+            if (saving) return;
             setIsFormOpen(false);
             setEditingCase(null);
           }}
@@ -1948,12 +2039,14 @@ function CaseForm({
   role,
   record,
   saving,
+  uploadingMessage,
   onClose,
   onSave,
 }: {
   role: Role;
   record: CaseRecord | null;
   saving: boolean;
+  uploadingMessage: string;
   onClose: () => void;
   onSave: (values: CaseFormValues, documents: UploadDocumentInput[]) => Promise<void>;
 }) {
@@ -2070,12 +2163,30 @@ function CaseForm({
             </h2>
             <p className="text-sm text-muted">{roleLabels[role]}</p>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close">
+          <button
+            className="icon-button"
+            onClick={onClose}
+            aria-label="Close"
+            disabled={saving}
+          >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
         <form className="grid gap-5 p-4" onSubmit={submit}>
+          {uploadingMessage ? (
+            <div className="rounded-md border border-red-500/40 bg-red-950/30 p-3 text-sm text-red-50">
+              <div className="flex items-center gap-2 font-semibold">
+                <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+                {uploadingMessage}
+              </div>
+              <p className="mt-1 text-xs leading-5 text-red-100/80">
+                Please wait until every file is saved to Google Drive and synced to the
+                dashboard. Timeout is 5 minutes.
+              </p>
+            </div>
+          ) : null}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Customer name">
               <input
@@ -2326,12 +2437,21 @@ function CaseForm({
           </section>
 
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button type="button" className="secondary-button" onClick={onClose}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onClose}
+              disabled={saving}
+            >
               Cancel
             </button>
             <button className="primary-button" disabled={saving || !values.dealer}>
-              <Save className="h-4 w-4" aria-hidden="true" />
-              {saving ? "Saving" : "Save Case"}
+              {uploadingMessage ? (
+                <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Save className="h-4 w-4" aria-hidden="true" />
+              )}
+              {uploadingMessage ? "UPLOADING..." : saving ? "Saving" : "Save Case"}
             </button>
           </div>
         </form>

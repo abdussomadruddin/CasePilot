@@ -21,10 +21,21 @@ import {
 } from "@/lib/workflow";
 
 const documentRetentionMs = 60 * 24 * 60 * 60 * 1000;
+const defaultUploadTimeoutMs = 5 * 60 * 1000;
 
 type StoreResult = {
   source: "supabase";
   cases: CaseRecord[];
+};
+
+type UploadDocumentsOptions = {
+  timeoutMs?: number;
+  onProgress?: (progress: {
+    phase: "uploading" | "uploaded" | "syncing";
+    completed: number;
+    total: number;
+    fileName?: string;
+  }) => void;
 };
 
 type CaseRow = {
@@ -361,13 +372,49 @@ export async function saveCase(
 
 export async function removeCase(caseId: string): Promise<CaseRecord[]> {
   const supabase = getSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
+  if (!session?.access_token) {
+    throw new Error("Please sign in again before deleting this case.");
+  }
+
+  const driveResponse = await fetch("/api/google-drive/case-folder", {
+    method: "DELETE",
+    headers: {
+      authorization: `Bearer ${session.access_token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ caseId }),
+  });
+  const driveResult = (await driveResponse.json()) as { error?: string };
+
+  if (!driveResponse.ok) {
+    throw new Error(driveResult.error || "Unable to delete Google Drive folder.");
+  }
+
+  const deletedAt = new Date().toISOString();
   const { error } = await supabase
     .from("cases")
-    .update({ deleted_at: new Date().toISOString() })
+    .update({ deleted_at: deletedAt })
     .eq("id", caseId);
 
   if (error) throw error;
+
+  const { error: documentError } = await supabase
+    .from("case_documents")
+    .update({
+      deleted_at: deletedAt,
+      delete_reason: "case_deleted",
+      storage_deleted: true,
+    })
+    .eq("case_id", caseId)
+    .is("deleted_at", null);
+
+  if (documentError) {
+    console.warn("Unable to mark case documents deleted", documentError.message);
+  }
 
   return (await loadCases()).cases;
 }
@@ -376,6 +423,7 @@ async function uploadDocumentToGoogleDrive(
   record: CaseRecord,
   file: File,
   accessToken: string,
+  signal?: AbortSignal,
 ) {
   const formData = new FormData();
   formData.set("file", file);
@@ -390,6 +438,7 @@ async function uploadDocumentToGoogleDrive(
       authorization: `Bearer ${accessToken}`,
     },
     body: formData,
+    signal,
   });
   const result = (await response.json()) as {
     error?: string;
@@ -415,10 +464,90 @@ async function uploadDocumentToGoogleDrive(
   };
 }
 
+function isAbortError(caught: unknown) {
+  return caught instanceof DOMException && caught.name === "AbortError";
+}
+
+type DriveFolderFile = {
+  id: string;
+  name: string;
+  fileUrl: string;
+  createdTime?: string;
+};
+
+async function syncCaseDocumentsFromDrive(
+  record: CaseRecord,
+  actorRole: Role,
+  accessToken: string,
+) {
+  const params = new URLSearchParams({ caseId: record.id });
+  const response = await fetch(`/api/google-drive/case-folder?${params.toString()}`, {
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const result = (await response.json()) as {
+    error?: string;
+    folder?: { id: string; webViewLink?: string } | null;
+    files?: DriveFolderFile[];
+  };
+
+  if (!response.ok) {
+    throw new Error(result.error || "Unable to sync Google Drive folder.");
+  }
+
+  if (!result.folder || !result.files?.length) return 0;
+
+  const supabase = getSupabaseClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("case_documents")
+    .select("storage_path,file_url")
+    .eq("case_id", record.id)
+    .is("deleted_at", null);
+
+  if (existingError) throw existingError;
+
+  const existingKeys = new Set(
+    (existing || []).flatMap((document) => [
+      document.storage_path,
+      document.file_url,
+    ]),
+  );
+  const missingFiles = result.files.filter((file) => {
+    const storagePath = `google-drive:${result.folder?.id}:${file.id}`;
+    return !existingKeys.has(storagePath) && !existingKeys.has(file.fileUrl);
+  });
+
+  if (!missingFiles.length) return 0;
+
+  const { error: insertError } = await supabase.from("case_documents").insert(
+    missingFiles.map((file) => {
+      const uploadedAt = file.createdTime || new Date().toISOString();
+
+      return {
+        id: crypto.randomUUID(),
+        case_id: record.id,
+        file_name: file.name,
+        file_url: file.fileUrl,
+        document_type: "other",
+        storage_path: `google-drive:${result.folder?.id}:${file.id}`,
+        uploaded_by_role: actorRole,
+        uploaded_at: uploadedAt,
+        expires_at: new Date(+new Date(uploadedAt) + documentRetentionMs).toISOString(),
+      };
+    }),
+  );
+
+  if (insertError) throw insertError;
+
+  return missingFiles.length;
+}
+
 export async function uploadDocuments(
   record: CaseRecord,
   documents: UploadDocumentInput[],
   actorRole: Role,
+  options: UploadDocumentsOptions = {},
 ): Promise<CaseRecord[]> {
   if (!documents.length) return (await loadCases()).cases;
 
@@ -433,14 +562,36 @@ export async function uploadDocuments(
 
   const uploaded: CaseDocument[] = [];
   const failed: string[] = [];
+  const total = documents.length;
+  const timeoutMs = options.timeoutMs || defaultUploadTimeoutMs;
+  const startedAt = Date.now();
+  let timedOut = false;
 
   for (const { file, documentType } of documents) {
+    const remainingMs = timeoutMs - (Date.now() - startedAt);
+
+    if (remainingMs <= 0) {
+      timedOut = true;
+      failed.push("Upload timed out after 5 minutes.");
+      break;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), remainingMs);
+
     try {
+      options.onProgress?.({
+        phase: "uploading",
+        completed: uploaded.length,
+        total,
+        fileName: file.name,
+      });
       const uploadedAt = new Date().toISOString();
       const driveFile = await uploadDocumentToGoogleDrive(
         record,
         file,
         session.access_token,
+        controller.signal,
       );
       const document: CaseDocument = {
         id: crypto.randomUUID(),
@@ -469,13 +620,42 @@ export async function uploadDocuments(
       if (docError) throw docError;
 
       uploaded.push(document);
+      options.onProgress?.({
+        phase: "uploaded",
+        completed: uploaded.length,
+        total,
+        fileName: document.name,
+      });
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Upload failed.";
+      const message = isAbortError(caught)
+        ? "Upload timed out after 5 minutes."
+        : caught instanceof Error
+          ? caught.message
+          : "Upload failed.";
+      if (isAbortError(caught)) timedOut = true;
       failed.push(`${file.name}: ${message}`);
+      if (timedOut) break;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }
 
-  if (!uploaded.length) {
+  let synced = 0;
+  if (failed.length) {
+    options.onProgress?.({
+      phase: "syncing",
+      completed: uploaded.length,
+      total,
+    });
+    try {
+      synced = await syncCaseDocumentsFromDrive(record, actorRole, session.access_token);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Sync failed.";
+      failed.push(`Drive sync: ${message}`);
+    }
+  }
+
+  if (!uploaded.length && !synced) {
     throw new Error(failed[0] || "Unable to upload documents.");
   }
 
@@ -484,6 +664,7 @@ export async function uploadDocuments(
     actorRole,
     [
       `Uploaded ${uploaded.map((doc) => doc.name).join(", ")}.`,
+      synced ? `Synced ${synced} Google Drive file(s).` : "",
       failed.length ? `${failed.length} file(s) failed.` : "",
     ]
       .filter(Boolean)
@@ -507,6 +688,14 @@ export async function uploadDocuments(
 
   if (failed.length) {
     console.warn("Some documents failed to upload", failed);
+  }
+
+  if (failed.length && uploaded.length + synced < documents.length) {
+    throw new Error(
+      `${uploaded.length + synced}/${documents.length} file(s) uploaded. ${failed.join(
+        " ",
+      )} Please submit the missing file(s) again.`,
+    );
   }
 
   return (await loadCases()).cases;
