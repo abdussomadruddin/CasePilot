@@ -2125,7 +2125,9 @@ function CaseForm({
   );
   const [isSortingDocuments, setIsSortingDocuments] = useState(false);
   const [documentSortMessage, setDocumentSortMessage] = useState("");
-  const canManageBanks = isNew || canEditBanks(role);
+  const normalizedFormRole = String(role).toLowerCase().replace(/[\s-]+/g, "_");
+  const canManageBanks =
+    isNew || normalizedFormRole === "customer_service" || canEditBanks(role);
   const canAttachDocuments = canUploadDocuments(role);
   const allowedStatuses = caseStatuses.filter((status) => canUpdateToStatus(role, status));
   const statusOptions = allowedStatuses.includes(values.status)
@@ -2389,6 +2391,11 @@ function CaseForm({
               <div className="flex items-center gap-2">
                 <Banknote className="h-4 w-4 text-muted" aria-hidden="true" />
                 <h3 className="text-sm font-semibold text-ink">Bank details</h3>
+                {canManageBanks ? (
+                  <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-emerald-200">
+                    Editable
+                  </span>
+                ) : null}
               </div>
               {canManageBanks && values.banks.length < 5 ? (
                 <button type="button" className="secondary-button" onClick={addBank}>
