@@ -3,6 +3,10 @@ import { NextRequest } from "next/server";
 const casePilotSupabaseHost = "kfyqyxiycvdknlcpjmts.supabase.co";
 
 function isAllowedDocumentUrl(url: URL) {
+  if (url.protocol === "https:" && url.hostname.endsWith("drive.google.com")) {
+    return true;
+  }
+
   return (
     url.protocol === "https:" &&
     url.hostname === casePilotSupabaseHost &&
@@ -52,6 +56,10 @@ export async function GET(request: NextRequest) {
 
   if (!isAllowedDocumentUrl(documentUrl)) {
     return new Response("Document URL is not allowed.", { status: 400 });
+  }
+
+  if (documentUrl.hostname.endsWith("drive.google.com")) {
+    return Response.redirect(documentUrl.toString(), 302);
   }
 
   const upstream = await fetch(documentUrl.toString(), { cache: "no-store" });

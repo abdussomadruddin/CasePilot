@@ -268,8 +268,19 @@ function optionsWithCurrent(options: readonly string[], current: string) {
 }
 
 function getDocumentDownloadUrl(doc: { name: string; url: string }) {
+  if (isGoogleDriveUrl(doc.url)) return doc.url;
+
   const params = new URLSearchParams({ url: doc.url, name: doc.name });
   return `/api/download-document?${params.toString()}`;
+}
+
+function isGoogleDriveUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname.endsWith("drive.google.com");
+  } catch {
+    return false;
+  }
 }
 
 async function shortenDocumentUrl(url: string) {
@@ -296,6 +307,9 @@ function downloadDocuments(documents: Array<{ name: string; url: string }>) {
       link.href = getDocumentDownloadUrl(doc);
       link.download = doc.name;
       link.rel = "noopener";
+      if (isGoogleDriveUrl(doc.url)) {
+        link.target = "_blank";
+      }
       window.document.body.appendChild(link);
       link.click();
       link.remove();
@@ -606,7 +620,7 @@ export function CaseDashboard() {
       setCases(nextCases);
 
       if (documents.length) {
-        const withDocs = await uploadDocuments(record.id, documents, role);
+        const withDocs = await uploadDocuments(record, documents, role);
         setCases(withDocs);
       }
 
@@ -1545,6 +1559,8 @@ function CaseCard({
                             className="icon-button h-8 w-8"
                             href={getDocumentDownloadUrl(doc)}
                             download={doc.name}
+                            target={isGoogleDriveUrl(doc.url) ? "_blank" : undefined}
+                            rel="noopener"
                             aria-label={`Download ${doc.name}`}
                           >
                             <Download className="h-4 w-4" aria-hidden="true" />

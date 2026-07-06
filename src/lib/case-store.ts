@@ -21,7 +21,7 @@ import {
   nextFollowUpFrom,
 } from "@/lib/workflow";
 
-const documentRetentionMs = 45 * 24 * 60 * 60 * 1000;
+const documentRetentionMs = 60 * 24 * 60 * 60 * 1000;
 
 type StoreResult = {
   source: "supabase";
@@ -140,16 +140,6 @@ function mapDocument(row: DocumentRow): CaseDocument {
     deletedAt: row.deleted_at || undefined,
     deleteReason: row.delete_reason || undefined,
   };
-}
-
-function sanitizeStorageFileName(name: string) {
-  const cleaned = name
-    .trim()
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  return cleaned || "document";
 }
 
 function mapActivity(row: ActivityRow): ActivityEvent {
@@ -370,36 +360,77 @@ export async function removeCase(caseId: string): Promise<CaseRecord[]> {
   return (await loadCases()).cases;
 }
 
+async function uploadDocumentToGoogleDrive(
+  record: CaseRecord,
+  file: File,
+  accessToken: string,
+) {
+  const formData = new FormData();
+  formData.set("file", file);
+  formData.set("caseId", record.id);
+  formData.set("customerName", record.customerName);
+  formData.set("carModel", record.carModel);
+  formData.set("carVariant", record.carVariant);
+
+  const response = await fetch("/api/google-drive/upload", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: formData,
+  });
+  const result = (await response.json()) as {
+    error?: string;
+    fileId?: string;
+    fileName?: string;
+    fileUrl?: string;
+    folderId?: string;
+  };
+
+  if (!response.ok || !result.fileId || !result.fileUrl || !result.folderId) {
+    throw new Error(result.error || "Unable to upload document to Google Drive.");
+  }
+
+  return {
+    fileId: result.fileId,
+    fileName: result.fileName || file.name,
+    fileUrl: result.fileUrl,
+    folderId: result.folderId,
+  };
+}
+
 export async function uploadDocuments(
-  caseId: string,
+  record: CaseRecord,
   documents: UploadDocumentInput[],
   actorRole: Role,
 ): Promise<CaseRecord[]> {
   if (!documents.length) return (await loadCases()).cases;
 
   const supabase = getSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error("Please sign in again before uploading documents.");
+  }
 
   const uploaded: CaseDocument[] = [];
 
   for (const { file, documentType } of documents) {
     const uploadedAt = new Date().toISOString();
-    const storagePath = `${caseId}/${documentType}/${Date.now()}-${crypto.randomUUID()}-${sanitizeStorageFileName(file.name)}`;
-    const { error: uploadError } = await supabase.storage
-      .from("case-documents")
-      .upload(storagePath, file, { upsert: false });
-
-    if (uploadError) throw uploadError;
-
-    const { data: publicUrl } = supabase.storage
-      .from("case-documents")
-      .getPublicUrl(storagePath);
+    const driveFile = await uploadDocumentToGoogleDrive(
+      record,
+      file,
+      session.access_token,
+    );
 
     uploaded.push({
       id: crypto.randomUUID(),
-      name: file.name,
-      url: publicUrl.publicUrl,
+      name: driveFile.fileName || file.name,
+      url: driveFile.fileUrl,
       documentType,
-      storagePath,
+      storagePath: `google-drive:${driveFile.folderId}:${driveFile.fileId}`,
       uploadedBy: actorRole,
       uploadedAt,
       expiresAt: new Date(+new Date(uploadedAt) + documentRetentionMs).toISOString(),
@@ -409,7 +440,7 @@ export async function uploadDocuments(
   const { error: docError } = await supabase.from("case_documents").insert(
     uploaded.map((doc) => ({
       id: doc.id,
-      case_id: caseId,
+      case_id: record.id,
       file_name: doc.name,
       file_url: doc.url,
       document_type: doc.documentType,
@@ -432,7 +463,7 @@ export async function uploadDocuments(
 
   const { error: activityError } = await supabase.from("case_activities").insert({
     id: activity.id,
-    case_id: caseId,
+    case_id: record.id,
     type: activity.type,
     actor_role: activity.actorRole,
     actor_name: activity.actorName,

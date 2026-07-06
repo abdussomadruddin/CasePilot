@@ -20,6 +20,10 @@ function isAllowedUrl(url: URL, request: NextRequest) {
     return true;
   }
 
+  if (url.protocol === "https:" && url.hostname.endsWith("drive.google.com")) {
+    return true;
+  }
+
   return (
     url.protocol === "https:" &&
     url.hostname === casePilotSupabaseHost &&

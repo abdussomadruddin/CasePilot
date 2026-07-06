@@ -252,7 +252,7 @@ language plpgsql
 as $$
 begin
   if new.expires_at is null then
-    new.expires_at = new.uploaded_at + interval '45 days';
+    new.expires_at = new.uploaded_at + interval '60 days';
   end if;
 
   return new;
@@ -265,7 +265,7 @@ before insert or update of uploaded_at, expires_at on public.case_documents
 for each row execute function public.set_case_document_expiry();
 
 update public.case_documents
-set expires_at = uploaded_at + interval '45 days'
+set expires_at = uploaded_at + interval '60 days'
 where expires_at is null;
 
 create or replace function public.current_app_role()
