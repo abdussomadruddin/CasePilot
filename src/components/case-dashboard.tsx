@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Clock3,
   Download,
+  ExternalLink,
   FileText,
   FolderKanban,
   ListChecks,
@@ -59,6 +60,7 @@ import {
   roleLabels,
   statusLabels,
   type BankDetail,
+  type CaseDocument,
   type CaseFormValues,
   type CaseRecord,
   type CaseStatus,
@@ -269,6 +271,10 @@ function getDocumentDownloadUrl(doc: { name: string; url: string }) {
 
   const params = new URLSearchParams({ url: doc.url, name: doc.name });
   return `/api/download-document?${params.toString()}`;
+}
+
+function getCaseDriveFolderUrl(documents: CaseDocument[]) {
+  return documents.find((document) => document.folderUrl)?.folderUrl || "";
 }
 
 function isGoogleDriveUrl(value: string) {
@@ -1528,14 +1534,27 @@ function CaseCard({
                   icon={FileText}
                   action={
                     record.documents.length ? (
-                      <button
-                        type="button"
-                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-950 px-2.5 text-xs font-semibold text-zinc-100 shadow-sm transition hover:bg-zinc-900"
-                        onClick={() => downloadDocuments(record.documents)}
-                      >
-                        <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                        All
-                      </button>
+                      getCaseDriveFolderUrl(record.documents) ? (
+                        <a
+                          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-950 px-2.5 text-xs font-semibold text-zinc-100 shadow-sm transition hover:bg-zinc-900"
+                          href={getCaseDriveFolderUrl(record.documents)}
+                          target="_blank"
+                          rel="noopener"
+                          aria-label="Open case Drive folder"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                          Folder
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-950 px-2.5 text-xs font-semibold text-zinc-100 shadow-sm transition hover:bg-zinc-900"
+                          onClick={() => downloadDocuments(record.documents)}
+                        >
+                          <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                          All
+                        </button>
+                      )
                     ) : null
                   }
                 >
@@ -1557,12 +1576,11 @@ function CaseCard({
                           <a
                             className="icon-button h-8 w-8"
                             href={getDocumentDownloadUrl(doc)}
-                            download={doc.name}
                             target={isGoogleDriveUrl(doc.url) ? "_blank" : undefined}
                             rel="noopener"
-                            aria-label={`Download ${doc.name}`}
+                            aria-label={`Open ${doc.name}`}
                           >
-                            <Download className="h-4 w-4" aria-hidden="true" />
+                            <ExternalLink className="h-4 w-4" aria-hidden="true" />
                           </a>
                         </li>
                       ))}

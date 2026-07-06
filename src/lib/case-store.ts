@@ -2,7 +2,6 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { notifyCaseStatusChange } from "@/lib/notifications";
 import {
   roleLabels,
-  documentTypeLabels,
   statusLabels,
   type ActivityEvent,
   type BankDetail,
@@ -128,18 +127,31 @@ function mapBank(row: BankRow): BankDetail {
 }
 
 function mapDocument(row: DocumentRow): CaseDocument {
+  const drivePath = parseGoogleDriveStoragePath(row.storage_path || "");
+
   return {
     id: row.id,
     name: row.file_name,
     url: row.file_url,
     documentType: row.document_type || "other",
     storagePath: row.storage_path || undefined,
+    folderUrl: drivePath
+      ? `https://drive.google.com/drive/folders/${drivePath.folderId}`
+      : undefined,
     uploadedBy: row.uploaded_by_role,
     uploadedAt: row.uploaded_at,
     expiresAt: row.expires_at || undefined,
     deletedAt: row.deleted_at || undefined,
     deleteReason: row.delete_reason || undefined,
   };
+}
+
+function parseGoogleDriveStoragePath(storagePath: string) {
+  const [provider, folderId, fileId] = storagePath.split(":");
+
+  if (provider !== "google-drive" || !folderId || !fileId) return null;
+
+  return { folderId, fileId };
 }
 
 function mapActivity(row: ActivityRow): ActivityEvent {
@@ -385,6 +397,7 @@ async function uploadDocumentToGoogleDrive(
     fileName?: string;
     fileUrl?: string;
     folderId?: string;
+    folderUrl?: string;
   };
 
   if (!response.ok || !result.fileId || !result.fileUrl || !result.folderId) {
@@ -396,6 +409,9 @@ async function uploadDocumentToGoogleDrive(
     fileName: result.fileName || file.name,
     fileUrl: result.fileUrl,
     folderId: result.folderId,
+    folderUrl:
+      result.folderUrl ||
+      `https://drive.google.com/drive/folders/${result.folderId}`,
   };
 }
 
@@ -416,49 +432,62 @@ export async function uploadDocuments(
   }
 
   const uploaded: CaseDocument[] = [];
+  const failed: string[] = [];
 
   for (const { file, documentType } of documents) {
-    const uploadedAt = new Date().toISOString();
-    const driveFile = await uploadDocumentToGoogleDrive(
-      record,
-      file,
-      session.access_token,
-    );
+    try {
+      const uploadedAt = new Date().toISOString();
+      const driveFile = await uploadDocumentToGoogleDrive(
+        record,
+        file,
+        session.access_token,
+      );
+      const document: CaseDocument = {
+        id: crypto.randomUUID(),
+        name: driveFile.fileName || file.name,
+        url: driveFile.fileUrl,
+        documentType,
+        storagePath: `google-drive:${driveFile.folderId}:${driveFile.fileId}`,
+        folderUrl: driveFile.folderUrl,
+        uploadedBy: actorRole,
+        uploadedAt,
+        expiresAt: new Date(+new Date(uploadedAt) + documentRetentionMs).toISOString(),
+      };
 
-    uploaded.push({
-      id: crypto.randomUUID(),
-      name: driveFile.fileName || file.name,
-      url: driveFile.fileUrl,
-      documentType,
-      storagePath: `google-drive:${driveFile.folderId}:${driveFile.fileId}`,
-      uploadedBy: actorRole,
-      uploadedAt,
-      expiresAt: new Date(+new Date(uploadedAt) + documentRetentionMs).toISOString(),
-    });
+      const { error: docError } = await supabase.from("case_documents").insert({
+        id: document.id,
+        case_id: record.id,
+        file_name: document.name,
+        file_url: document.url,
+        document_type: document.documentType,
+        storage_path: document.storagePath,
+        uploaded_by_role: document.uploadedBy,
+        uploaded_at: document.uploadedAt,
+        expires_at: document.expiresAt,
+      });
+
+      if (docError) throw docError;
+
+      uploaded.push(document);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Upload failed.";
+      failed.push(`${file.name}: ${message}`);
+    }
   }
 
-  const { error: docError } = await supabase.from("case_documents").insert(
-    uploaded.map((doc) => ({
-      id: doc.id,
-      case_id: record.id,
-      file_name: doc.name,
-      file_url: doc.url,
-      document_type: doc.documentType,
-      storage_path: doc.storagePath,
-      uploaded_by_role: doc.uploadedBy,
-      uploaded_at: doc.uploadedAt,
-      expires_at: doc.expiresAt,
-    })),
-  );
-
-  if (docError) throw docError;
+  if (!uploaded.length) {
+    throw new Error(failed[0] || "Unable to upload documents.");
+  }
 
   const activity = createActivity(
     "document",
     actorRole,
-    `Uploaded ${uploaded
-      .map((doc) => `${documentTypeLabels[doc.documentType]}: ${doc.name}`)
-      .join(", ")}.`,
+    [
+      `Uploaded ${uploaded.map((doc) => doc.name).join(", ")}.`,
+      failed.length ? `${failed.length} file(s) failed.` : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
   );
 
   const { error: activityError } = await supabase.from("case_activities").insert({
@@ -472,7 +501,13 @@ export async function uploadDocuments(
     created_at: activity.createdAt,
   });
 
-  if (activityError) throw activityError;
+  if (activityError) {
+    console.warn("Unable to create document upload activity", activityError.message);
+  }
+
+  if (failed.length) {
+    console.warn("Some documents failed to upload", failed);
+  }
 
   return (await loadCases()).cases;
 }

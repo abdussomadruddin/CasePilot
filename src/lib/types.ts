@@ -110,6 +110,7 @@ export type CaseDocument = {
   url: string;
   documentType: DocumentType;
   storagePath?: string;
+  folderUrl?: string;
   uploadedBy: Role;
   uploadedAt: string;
   expiresAt?: string;
