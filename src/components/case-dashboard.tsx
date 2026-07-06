@@ -1911,35 +1911,185 @@ function Field({
   );
 }
 
+const uploadDocumentTypes: DocumentType[] = [...documentTypes, "other"];
+
+const documentClassifierRules: Array<{
+  documentType: DocumentType;
+  patterns: RegExp[];
+}> = [
+  {
+    documentType: "roadtax_grant",
+    patterns: [/\broad\s*tax\b/i, /\broadtax\b/i, /\bgrant\b/i, /\bgeran\b/i],
+  },
+  {
+    documentType: "jpj_registration_slip",
+    patterns: [
+      /\bjpj\b/i,
+      /\bregistration\s*slip\b/i,
+      /\bvehicle\s*registration\b/i,
+      /\bpendaftaran\b/i,
+    ],
+  },
+  {
+    documentType: "booking_form",
+    patterns: [/\bbooking\s*form\b/i, /\bbooking\b/i, /\btempahan\b/i],
+  },
+  {
+    documentType: "lou",
+    patterns: [/\blou\b/i, /\bletter\s*of\s*undertaking\b/i, /\bundertaking\b/i],
+  },
+  {
+    documentType: "vso",
+    patterns: [/\bvso\b/i, /\bvehicle\s*sales\s*order\b/i, /\bsales\s*order\b/i],
+  },
+  {
+    documentType: "offer_letter",
+    patterns: [/\boffer\s*letter\b/i, /\bletter\s*of\s*offer\b/i, /\bsurat\s*tawaran\b/i],
+  },
+  {
+    documentType: "bank_statement",
+    patterns: [
+      /\bbank\s*statement\b/i,
+      /\baccount\s*statement\b/i,
+      /\bpenyata\s*bank\b/i,
+      /\btransaction\s*history\b/i,
+    ],
+  },
+  {
+    documentType: "pay_slip",
+    patterns: [
+      /\bpay\s*slip\b/i,
+      /\bpayslip\b/i,
+      /\bsalary\s*slip\b/i,
+      /\bslip\s*gaji\b/i,
+      /\bpayroll\b/i,
+    ],
+  },
+  {
+    documentType: "license",
+    patterns: [/\blicen[cs]e\b/i, /\blesen\b/i, /\bdriving\s*licen[cs]e\b/i],
+  },
+  {
+    documentType: "ic",
+    patterns: [/\bic\b/i, /\bmykad\b/i, /\bnric\b/i, /\bkad\s*pengenalan\b/i, /\bidentity\s*card\b/i],
+  },
+];
+
+function normalizeSearchText(text: string) {
+  return text
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectDocumentTypeFromText(text: string): DocumentType {
+  const searchableText = normalizeSearchText(text);
+
+  for (const rule of documentClassifierRules) {
+    if (rule.patterns.some((pattern) => pattern.test(searchableText))) {
+      return rule.documentType;
+    }
+  }
+
+  return "other";
+}
+
+async function readSearchableFileText(file: File) {
+  const readableByType =
+    file.type === "application/pdf" ||
+    file.type.startsWith("text/") ||
+    file.type.includes("csv") ||
+    file.type.includes("json");
+  const readableByName = /\.(pdf|txt|csv|json|xml|html?)$/i.test(file.name);
+
+  if (!readableByType && !readableByName) return "";
+
+  try {
+    return await file.slice(0, 1_000_000).text();
+  } catch {
+    return "";
+  }
+}
+
+async function detectDocumentType(file: File): Promise<DocumentType> {
+  const fileText = await readSearchableFileText(file);
+  return detectDocumentTypeFromText(`${file.name} ${fileText}`);
+}
+
 function DocumentUploadField({
   documentType,
   files,
   onChange,
+  onMoveFile,
+  onRemoveFile,
 }: {
-  documentType: (typeof documentTypes)[number];
+  documentType: DocumentType;
   files: File[];
   onChange: (files: File[]) => void;
+  onMoveFile: (fileIndex: number, documentType: DocumentType) => void;
+  onRemoveFile: (fileIndex: number) => void;
 }) {
   return (
-    <label className="touch-tile flex min-h-32 cursor-pointer flex-col justify-between gap-3 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-3 text-sm text-muted transition hover:border-honda hover:bg-red-950/30">
-      <span className="flex items-center gap-2 font-semibold text-ink">
-        <Upload className="h-4 w-4 text-muted" aria-hidden="true" />
-        {documentTypeLabels[documentType]}
-      </span>
-      <span className="text-xs leading-5">
-        {files.length
-          ? files.map((file) => file.name).join(", ")
-          : `Upload ${documentTypeLabels[documentType]}`}
-      </span>
-      <input
-        className="sr-only"
-        type="file"
-        multiple
-        onChange={(event) =>
-          onChange(event.target.files ? Array.from(event.target.files) : [])
-        }
-      />
-    </label>
+    <div className="grid gap-2 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-3 text-sm text-muted">
+      <label className="touch-tile flex cursor-pointer items-center justify-between gap-3 rounded-md text-sm transition hover:text-white">
+        <span className="flex items-center gap-2 font-semibold text-ink">
+          <Upload className="h-4 w-4 text-muted" aria-hidden="true" />
+          {documentTypeLabels[documentType]}
+        </span>
+        <span className="text-xs font-semibold text-zinc-500">
+          {files.length ? `${files.length} file` : "Upload"}
+        </span>
+        <input
+          className="sr-only"
+          type="file"
+          multiple
+          onChange={(event) => {
+            onChange(event.target.files ? Array.from(event.target.files) : []);
+            event.currentTarget.value = "";
+          }}
+        />
+      </label>
+
+      {files.length ? (
+        <ul className="grid gap-1.5">
+          {files.map((file, index) => (
+            <li
+              key={`${file.name}-${file.lastModified}-${index}`}
+              className="grid gap-2 rounded-md bg-black/30 p-2 ring-1 ring-zinc-800"
+            >
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <p className="min-w-0 truncate text-xs font-semibold text-zinc-200">
+                  {file.name}
+                </p>
+                <button
+                  type="button"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-zinc-700 text-zinc-400 transition hover:border-red-500 hover:text-red-200"
+                  onClick={() => onRemoveFile(index)}
+                  aria-label={`Remove ${file.name}`}
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+              <select
+                className="field h-9 text-xs"
+                value={documentType}
+                onChange={(event) =>
+                  onMoveFile(index, event.target.value as DocumentType)
+                }
+              >
+                {uploadDocumentTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {documentTypeLabels[type]}
+                  </option>
+                ))}
+              </select>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -1973,6 +2123,8 @@ function CaseForm({
   const [documentFiles, setDocumentFiles] = useState<Record<DocumentType, File[]>>(
     emptyDocumentFiles,
   );
+  const [isSortingDocuments, setIsSortingDocuments] = useState(false);
+  const [documentSortMessage, setDocumentSortMessage] = useState("");
   const canManageBanks = isNew || canEditBanks(role);
   const canAttachDocuments = canUploadDocuments(role);
   const allowedStatuses = caseStatuses.filter((status) => canUpdateToStatus(role, status));
@@ -2035,6 +2187,76 @@ function CaseForm({
     }));
   }
 
+  async function addBulkDocuments(files: File[]) {
+    if (!files.length) return;
+
+    setIsSortingDocuments(true);
+    setDocumentSortMessage("Sorting documents");
+
+    const sortedDocuments = await Promise.all(
+      files.map(async (file) => ({
+        file,
+        documentType: await detectDocumentType(file),
+      })),
+    );
+
+    setDocumentFiles((current) => {
+      const next = { ...current };
+
+      for (const { file, documentType } of sortedDocuments) {
+        next[documentType] = [...next[documentType], file];
+      }
+
+      return next;
+    });
+
+    const reviewCount = sortedDocuments.filter(
+      (document) => document.documentType === "other",
+    ).length;
+
+    setDocumentSortMessage(
+      reviewCount
+        ? `${files.length} files sorted · ${reviewCount} need review`
+        : `${files.length} files sorted`,
+    );
+    setIsSortingDocuments(false);
+  }
+
+  function addDocumentsToType(documentType: DocumentType, files: File[]) {
+    if (!files.length) return;
+
+    setDocumentFiles((current) => ({
+      ...current,
+      [documentType]: [...current[documentType], ...files],
+    }));
+  }
+
+  function moveDocumentFile(
+    fromType: DocumentType,
+    fileIndex: number,
+    toType: DocumentType,
+  ) {
+    if (fromType === toType) return;
+
+    setDocumentFiles((current) => {
+      const file = current[fromType][fileIndex];
+      if (!file) return current;
+
+      return {
+        ...current,
+        [fromType]: current[fromType].filter((_, index) => index !== fileIndex),
+        [toType]: [...current[toType], file],
+      };
+    });
+  }
+
+  function removeDocumentFile(documentType: DocumentType, fileIndex: number) {
+    setDocumentFiles((current) => ({
+      ...current,
+      [documentType]: current[documentType].filter((_, index) => index !== fileIndex),
+    }));
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await onSave(
@@ -2045,7 +2267,7 @@ function CaseForm({
             bank.bankName.trim() || bank.bankerName.trim() || bank.bankerPhone.trim(),
         ),
       },
-      documentTypes.flatMap((documentType) =>
+      uploadDocumentTypes.flatMap((documentType) =>
         documentFiles[documentType].map((file) => ({ file, documentType })),
       ),
     );
@@ -2233,17 +2455,46 @@ function CaseForm({
                 <FileText className="h-4 w-4 text-muted" aria-hidden="true" />
                 <h3 className="text-sm font-semibold text-ink">Document upload</h3>
               </div>
+
+              <label className="touch-tile flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-md border border-zinc-700 bg-zinc-950 p-3 text-sm transition hover:border-honda hover:bg-red-950/30">
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2 font-semibold text-ink">
+                    <Upload className="h-4 w-4 text-muted" aria-hidden="true" />
+                    Bulk upload
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-muted">
+                    {documentSortMessage || "Auto sort by filename and readable PDF text"}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs font-semibold text-zinc-200">
+                  {isSortingDocuments ? "Sorting" : "Choose files"}
+                </span>
+                <input
+                  className="sr-only"
+                  type="file"
+                  multiple
+                  disabled={isSortingDocuments}
+                  onChange={(event) => {
+                    void addBulkDocuments(
+                      event.target.files ? Array.from(event.target.files) : [],
+                    );
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+
               <div className="grid gap-3 sm:grid-cols-2">
-                {documentTypes.map((documentType) => (
+                {uploadDocumentTypes.map((documentType) => (
                   <DocumentUploadField
                     key={documentType}
                     documentType={documentType}
                     files={documentFiles[documentType]}
-                    onChange={(files) =>
-                      setDocumentFiles((current) => ({
-                        ...current,
-                        [documentType]: files,
-                      }))
+                    onChange={(files) => addDocumentsToType(documentType, files)}
+                    onMoveFile={(fileIndex, toType) =>
+                      moveDocumentFile(documentType, fileIndex, toType)
+                    }
+                    onRemoveFile={(fileIndex) =>
+                      removeDocumentFile(documentType, fileIndex)
                     }
                   />
                 ))}
