@@ -180,7 +180,9 @@ Deno.serve(async () => {
 
   for (const record of (cases || []) as CaseRow[]) {
     const isTerminal =
-      record.status === "car_delivery" || record.status === "cancelled";
+      record.status === "rejected" ||
+      record.status === "car_delivery" ||
+      record.status === "cancelled";
 
     if (isTerminal) continue;
 

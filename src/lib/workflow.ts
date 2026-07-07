@@ -13,10 +13,10 @@ const sixHoursMs = 6 * 60 * 60 * 1000;
 const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
 
 export const activeStatuses = caseStatuses.filter(
-  (status) => status !== "car_delivery" && status !== "cancelled",
+  (status) => !["rejected", "car_delivery", "cancelled"].includes(status),
 );
 
-export const completedStatuses: CaseStatus[] = ["car_delivery", "cancelled"];
+export const completedStatuses: CaseStatus[] = ["rejected", "car_delivery", "cancelled"];
 
 export const roleStatusPermissions: Record<Role, CaseStatus[]> = {
   admin: [...caseStatuses],

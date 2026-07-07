@@ -292,7 +292,9 @@ export async function saveCase(
     updatedAt: now,
     createdAt: previousRecord?.createdAt || record.createdAt || now,
     nextFollowUpAt:
-      record.status === "car_delivery" || record.status === "cancelled"
+      record.status === "rejected" ||
+      record.status === "car_delivery" ||
+      record.status === "cancelled"
         ? ""
         : record.nextFollowUpAt || nextFollowUpFrom(),
     activities: [...record.activities, ...activities].sort(sortOldestFirst),
