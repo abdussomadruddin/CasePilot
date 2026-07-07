@@ -198,6 +198,41 @@ function toCaseRow(record: CaseRecord) {
   };
 }
 
+function normalizedBankList(banks: BankDetail[]) {
+  return banks
+    .map((bank) => ({
+      id: bank.id,
+      bankName: bank.bankName.trim(),
+      bankerName: bank.bankerName.trim(),
+      bankerPhone: bank.bankerPhone.trim(),
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function caseDetailsChanged(record: CaseRecord, previousRecord?: CaseRecord) {
+  if (!previousRecord) return false;
+
+  const comparableFields: Array<keyof CaseRecord> = [
+    "dealer",
+    "customerName",
+    "customerPhone",
+    "carModel",
+    "carVariant",
+    "carColor",
+  ];
+  const scalarChanged = comparableFields.some((field) => {
+    const currentValue = String(record[field] || "").trim();
+    const previousValue = String(previousRecord[field] || "").trim();
+
+    return currentValue !== previousValue;
+  });
+  const banksChanged =
+    JSON.stringify(normalizedBankList(record.banks)) !==
+    JSON.stringify(normalizedBankList(previousRecord.banks));
+
+  return scalarChanged || banksChanged;
+}
+
 function mapProfile(row: ProfileRow): Profile {
   return {
     id: row.id,
@@ -264,6 +299,7 @@ export async function saveCase(
   const remarkChanged =
     record.remark.trim() &&
     (!previousRecord || previousRecord.remark.trim() !== record.remark.trim());
+  const detailsChanged = caseDetailsChanged(record, previousRecord);
 
   const activities: ActivityEvent[] = [];
 
@@ -284,6 +320,10 @@ export async function saveCase(
 
   if (remarkChanged) {
     activities.push(createActivity("remark", actorRole, record.remark));
+  }
+
+  if (!isNew && detailsChanged) {
+    activities.push(createActivity("case", actorRole, "Case details updated."));
   }
 
   const savedRecord: CaseRecord = {

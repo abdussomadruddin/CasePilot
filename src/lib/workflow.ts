@@ -9,7 +9,6 @@ import {
   type Role,
 } from "@/lib/types";
 
-const sixHoursMs = 6 * 60 * 60 * 1000;
 const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
 
 export const activeStatuses = caseStatuses.filter(
@@ -152,32 +151,43 @@ export function isFollowUpDue(record: CaseRecord, now = new Date()) {
   return +new Date(record.nextFollowUpAt) <= +now;
 }
 
-export function needsAttentionForRole(
-  record: CaseRecord,
-  role: Role,
-  now = new Date(),
-): boolean {
+const attentionActivityTypes: ActivityEvent["type"][] = [
+  "case",
+  "status",
+  "remark",
+  "document",
+  "bank",
+];
+
+export function needsAttentionForRole(record: CaseRecord, role: Role): boolean {
   if (role === "sales_manager") return false;
 
   if (role === "admin") {
     return getAssignedRoles(record.status).some((assignedRole) =>
-      needsAttentionForRole(record, assignedRole, now),
+      needsAttentionForRole(record, assignedRole),
     );
   }
 
   if (isTerminalStatus(record.status)) return false;
   if (!getAssignedRoles(record.status).includes(role)) return false;
 
+  const meaningfulActivities = [...record.activities]
+    .filter((activity) => attentionActivityTypes.includes(activity.type))
+    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))[0];
+
+  if (!meaningfulActivities) return false;
+
+  const latestActivityTime = +new Date(meaningfulActivities.createdAt);
   const roleActivity = [...record.activities]
     .filter(
       (activity) =>
         activity.actorRole === role &&
-        (activity.type === "remark" || activity.type === "status"),
+        attentionActivityTypes.includes(activity.type) &&
+        +new Date(activity.createdAt) >= latestActivityTime,
     )
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))[0];
 
-  const lastActionTime = roleActivity?.createdAt || record.updatedAt;
-  return +now - +new Date(lastActionTime) >= sixHoursMs;
+  return !roleActivity;
 }
 
 export function isMyTask(record: CaseRecord, role: Role) {
