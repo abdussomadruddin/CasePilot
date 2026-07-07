@@ -60,6 +60,7 @@ import {
   roles,
   roleLabels,
   statusLabels,
+  type ActivityEvent,
   type BankDetail,
   type CaseDocument,
   type CaseFormValues,
@@ -353,6 +354,10 @@ function formatShort(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function isVisibleTimelineActivity(activity: ActivityEvent) {
+  return activity.type !== "notification" && activity.type !== "follow_up";
 }
 
 function normalizedPhone(phone: string) {
@@ -1452,6 +1457,9 @@ function CaseCard({
   const activeTeamMembers = showContactLists
     ? teamMembers.filter((member) => member.active !== false && member.phone?.trim())
     : [];
+  const visibleTimelineActivities = record.activities
+    .filter(isVisibleTimelineActivity)
+    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   const customerRecipient: WhatsAppRecipient = {
     id: `${record.id}-customer`,
     name: record.customerName || "Customer",
@@ -1784,10 +1792,9 @@ function CaseCard({
             ) : null}
 
             <Panel title="Activity timeline" icon={Clock3}>
-              <ol className="relative grid max-h-80 gap-2 overflow-y-auto pr-1 before:absolute before:bottom-2 before:left-3 before:top-2 before:w-px before:bg-zinc-800">
-                {[...record.activities]
-                  .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
-                  .map((activity) => (
+              {visibleTimelineActivities.length ? (
+                <ol className="relative grid max-h-80 gap-2 overflow-y-auto pr-1 before:absolute before:bottom-2 before:left-3 before:top-2 before:w-px before:bg-zinc-800">
+                  {visibleTimelineActivities.map((activity) => (
                     <li key={activity.id} className="flex gap-2">
                       <span className="relative z-10 mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-zinc-950 text-muted ring-1 ring-zinc-800">
                         <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1802,14 +1809,17 @@ function CaseCard({
                       </div>
                     </li>
                   ))}
-              </ol>
+                </ol>
+              ) : (
+                <p className="text-sm text-muted">No activity yet</p>
+              )}
             </Panel>
           </div>
 
           {assignedRoles.includes(role) && !isTerminalStatus(record.status) ? (
             <div className="border-t border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-400 sm:px-5">
-              <span className="font-medium text-ink">{roleLabels[role]}</span> should add a
-              remark or update the case status before the reminder window closes.
+              <span className="font-medium text-ink">{roleLabels[role]}</span> should review
+              this case and update the remark or status when needed.
             </div>
           ) : null}
         </>
