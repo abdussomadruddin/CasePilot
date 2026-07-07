@@ -168,6 +168,7 @@ export function needsAttentionForRole(record: CaseRecord, role: Role): boolean {
     );
   }
 
+  if (role === "finance" && record.status !== "documents_collected") return false;
   if (isTerminalStatus(record.status)) return false;
   if (!getAssignedRoles(record.status).includes(role)) return false;
 
