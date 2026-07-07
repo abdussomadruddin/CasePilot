@@ -94,9 +94,10 @@ import {
 } from "@/lib/workflow";
 
 type TabDefinition = {
-  id: DashboardTab;
+  id: Exclude<DashboardTab, "team">;
   label: string;
   icon: LucideIcon;
+  toneClass: string;
 };
 
 const uploadTimeoutMs = 5 * 60 * 1000;
@@ -117,13 +118,12 @@ type CarCatalogItem = {
   colors: string[];
 };
 
-const tabs: TabDefinition[] = [
-  { id: "all", label: "All Cases", icon: FolderKanban },
-  { id: "tasks", label: "My Tasks", icon: ListChecks },
-  { id: "attention", label: "Need Attention", icon: Bell },
-  { id: "followup", label: "Follow Up Due", icon: CalendarClock },
-  { id: "completed", label: "Completed", icon: CheckCircle2 },
-  { id: "team", label: "Team", icon: Users },
+const metricTabs: TabDefinition[] = [
+  { id: "all", label: "All Cases", icon: FolderKanban, toneClass: "bg-honda text-white" },
+  { id: "tasks", label: "My Tasks", icon: ListChecks, toneClass: "bg-blue-600 text-white" },
+  { id: "attention", label: "Need Attention", icon: Bell, toneClass: "bg-amber-500 text-white" },
+  { id: "followup", label: "Follow Up Due", icon: CalendarClock, toneClass: "bg-cyan-600 text-white" },
+  { id: "completed", label: "Completed", icon: CheckCircle2, toneClass: "bg-emerald-600 text-white" },
 ];
 
 const carCatalog: CarCatalogItem[] = [
@@ -538,11 +538,6 @@ export function CaseDashboard() {
   const visibleCases = useMemo(
     () => getVisibleCases(cases, role),
     [cases, role],
-  );
-
-  const visibleTabs = useMemo(
-    () => tabs.filter((tab) => role === "admin" || tab.id !== "team"),
-    [role],
   );
 
   const tabCases = useMemo(() => {
@@ -985,6 +980,21 @@ export function CaseDashboard() {
                         </button>
                       ) : null}
 
+                      {profile && role === "admin" ? (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-zinc-100 transition hover:bg-zinc-900"
+                          onClick={() => {
+                            setActiveTab("team");
+                            setIsHeaderMenuOpen(false);
+                          }}
+                          role="menuitem"
+                        >
+                          <Users className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span className="truncate">Team</span>
+                        </button>
+                      ) : null}
+
                       {profile ? (
                         <button
                           type="button"
@@ -1029,61 +1039,18 @@ export function CaseDashboard() {
         ) : null}
 
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
-          <MetricCard
-            label="All Cases"
-            value={metrics.all}
-            icon={FolderKanban}
-            toneClass="bg-honda text-white"
-            className="col-span-2 sm:col-span-1"
-          />
-          <MetricCard
-            label="My Tasks"
-            value={metrics.tasks}
-            icon={ListChecks}
-            toneClass="bg-blue-600 text-white"
-          />
-          <MetricCard
-            label="Need Attention"
-            value={metrics.attention}
-            icon={Bell}
-            toneClass="bg-amber-500 text-white"
-          />
-          <MetricCard
-            label="Follow Up Due"
-            value={metrics.followup}
-            icon={CalendarClock}
-            toneClass="bg-cyan-600 text-white"
-          />
-          <MetricCard
-            label="Completed"
-            value={metrics.completed}
-            icon={CheckCircle2}
-            toneClass="bg-emerald-600 text-white"
-          />
-        </section>
-
-        <section className="surface-card overflow-hidden p-1.5">
-          <div className="grid grid-cols-2 gap-1 sm:flex sm:flex-wrap">
-            {visibleTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-
-              return (
-                <button
-                  key={tab.id}
-                  className={`flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-md px-2.5 py-2.5 text-center text-xs font-semibold leading-tight transition sm:gap-2 sm:px-3.5 sm:text-sm ${
-                    isActive
-                      ? "bg-honda text-white shadow-sm shadow-red-950/60"
-                      : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                  }`}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden="true" />
-                  <span className="min-w-0 break-words">{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
+          {metricTabs.map((tab) => (
+            <MetricCard
+              key={tab.id}
+              label={tab.label}
+              value={metrics[tab.id]}
+              icon={tab.icon}
+              toneClass={tab.toneClass}
+              active={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={tab.id === "all" ? "col-span-2 sm:col-span-3 xl:col-span-1" : ""}
+            />
+          ))}
         </section>
 
         <section className="grid gap-3">
@@ -1146,19 +1113,34 @@ function MetricCard({
   value,
   icon: Icon,
   toneClass,
+  active,
+  onClick,
   className = "",
 }: {
   label: string;
   value: number;
   icon: LucideIcon;
   toneClass: string;
+  active: boolean;
+  onClick: () => void;
   className?: string;
 }) {
   return (
-    <div className={`surface-card touch-tile group p-2.5 transition duration-200 hover:border-zinc-600 hover:shadow-lift sm:p-3 ${className}`}>
+    <button
+      type="button"
+      className={`surface-card touch-tile group min-w-0 p-2.5 text-left transition duration-200 hover:border-zinc-600 hover:shadow-lift focus:outline-none focus:ring-2 focus:ring-honda/70 sm:p-3 ${
+        active
+          ? "border-honda bg-honda/10 shadow-lift shadow-red-950/30"
+          : ""
+      } ${className}`}
+      onClick={onClick}
+      aria-pressed={active}
+    >
       <div className="flex min-h-[64px] items-center justify-between gap-2 sm:min-h-[70px]">
         <div className="min-w-0">
-          <p className="text-xs font-semibold leading-tight text-zinc-400 sm:text-sm">
+          <p className={`text-xs font-semibold leading-tight sm:text-sm ${
+            active ? "text-white" : "text-zinc-400"
+          }`}>
             {label}
           </p>
           <p className="mt-1 text-xl font-bold leading-none text-white sm:text-2xl">
@@ -1169,7 +1151,7 @@ function MetricCard({
           <Icon className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
