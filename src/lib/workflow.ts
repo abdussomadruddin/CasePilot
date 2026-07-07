@@ -206,8 +206,9 @@ export function getVisibleCases(records: CaseRecord[], role: Role) {
   }
 
   return records.filter((record) => {
-    if (role === "operator" && ["rejected", "cancelled"].includes(record.status)) {
-      return false;
+    if (role === "operator") {
+      if (record.dealer !== "kah_motor") return false;
+      if (["rejected", "cancelled"].includes(record.status)) return false;
     }
     if (record.createdBy === role || record.updatedBy === role) return true;
     if (isCallerDocumentCollectedTask(record, role)) return true;
