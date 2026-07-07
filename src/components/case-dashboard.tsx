@@ -184,6 +184,7 @@ const carCatalog: CarCatalogItem[] = [
       "Meteoroid Gray Metallic",
       "Crystal Black Pearl",
       "Phoenix Orange Pearl",
+      "Ignite Red Metallic",
       "Stellar Diamond Pearl",
     ],
   },
