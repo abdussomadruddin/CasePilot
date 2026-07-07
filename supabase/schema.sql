@@ -510,6 +510,18 @@ from cron.job
 where jobname in ('casepilot-case-notifications', 'casepilot-cleanup-case-documents');
 
 select cron.schedule(
+  'casepilot-case-notifications',
+  '0 0 * * *',
+  $$
+  select net.http_post(
+    url := 'https://kfyqyxiycvdknlcpjmts.supabase.co/functions/v1/case-notifications',
+    headers := '{"Content-Type":"application/json"}'::jsonb,
+    body := '{}'::jsonb
+  );
+  $$
+);
+
+select cron.schedule(
   'casepilot-cleanup-case-documents',
   '0 2 * * *',
   $$

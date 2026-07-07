@@ -86,7 +86,12 @@ export function getProgressRoles(status: CaseStatus, dealer?: CaseDealer | ""): 
 }
 
 export function getNotificationRoles(status: CaseStatus, dealer?: CaseDealer | ""): Role[] {
-  return ["admin", ...getProgressRoles(status, dealer)];
+  const financeNotificationStatuses: CaseStatus[] = ["documents_collected", "rejected"];
+  const roles = getProgressRoles(status, dealer).filter(
+    (role) => role !== "finance" || financeNotificationStatuses.includes(status),
+  );
+
+  return ["admin", ...roles];
 }
 
 export function canCreateCase(role: Role) {
