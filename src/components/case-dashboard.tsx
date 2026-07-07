@@ -183,6 +183,7 @@ const carCatalog: CarCatalogItem[] = [
       "Meteoroid Gray Metallic",
       "Crystal Black Pearl",
       "Phoenix Orange Pearl",
+      "Stellar Diamond Pearl",
     ],
   },
   {
@@ -213,6 +214,7 @@ const carCatalog: CarCatalogItem[] = [
       "Meteoroid Gray Metallic",
       "Canyon River Blue Metallic",
       "Ignite Red Metallic",
+      "Stellar Diamond Pearl",
     ],
   },
   {
