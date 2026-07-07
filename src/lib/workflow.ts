@@ -181,9 +181,9 @@ export function needsAttentionForRole(
 }
 
 export function isMyTask(record: CaseRecord, role: Role) {
+  if (isTerminalStatus(record.status)) return false;
   if (role === "sales_manager") return false;
   if (role === "admin") return true;
-  if (isTerminalStatus(record.status)) return false;
   if (isCallerDocumentCollectedTask(record, role)) return true;
   return getAssignedRoles(record.status).includes(role);
 }
