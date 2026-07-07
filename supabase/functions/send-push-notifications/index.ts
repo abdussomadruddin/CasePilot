@@ -30,6 +30,12 @@ type RequestBody = {
   reason: string;
 };
 
+type CaseRow = {
+  customer_name: string | null;
+  car_model: string | null;
+  car_variant: string | null;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -39,6 +45,48 @@ const corsHeaders = {
 
 function jsonResponse(body: unknown, status = 200) {
   return Response.json(body, { status, headers: corsHeaders });
+}
+
+const roleLabels: Record<Role, string> = {
+  admin: "Admin",
+  customer_service: "Customer Service",
+  finance: "Finance",
+  caller: "Caller",
+  operator: "Operator",
+  sales_manager: "Sales Manager",
+};
+
+const statusLabels: Record<CaseStatus, string> = {
+  documents_collected: "Documents Collected",
+  more_documents_needed: "More Documents Needed",
+  submission: "Submission",
+  rejected: "Rejected",
+  lou_received: "LOU Received",
+  hint_submitted: "HINT Submitted",
+  booking_form_received: "Booking Form Received",
+  registration_needed: "Registration Needed",
+  roadtax_grant_process: "Roadtax & Grant Process",
+  prepare_delivery: "Prepare Delivery",
+  car_delivery: "Car Delivery",
+  cancelled: "Cancelled",
+};
+
+function buildStatusTriggerBody(
+  role: Role,
+  status: CaseStatus,
+  reason: string,
+  record?: CaseRow | null,
+) {
+  const customer = record?.customer_name?.trim() || "Case";
+  const car = [record?.car_model, record?.car_variant].filter(Boolean).join(" ");
+  const caseLine = car ? `${customer} • ${car}` : customer;
+
+  return [
+    `Trigger: ${statusLabels[status]} → ${roleLabels[role]}.`,
+    caseLine,
+    reason,
+    "Action: add remark or update status.",
+  ].join("\n");
 }
 
 Deno.serve(async (request) => {
@@ -76,6 +124,11 @@ Deno.serve(async (request) => {
 
   const serviceClient = createClient(supabaseUrl, serviceRoleKey);
   const now = new Date().toISOString();
+  const { data: record } = await serviceClient
+    .from("cases")
+    .select("customer_name,car_model,car_variant")
+    .eq("id", body.caseId)
+    .maybeSingle<CaseRow>();
   const notificationRows = roles.map((role) => ({
     case_id: body.caseId,
     role,
@@ -92,7 +145,25 @@ Deno.serve(async (request) => {
     return jsonResponse({ ok: false, error: insertError.message }, 500);
   }
 
-  const push = await sendPushesForRoles(serviceClient, roles);
+  const push = await sendPushesForRoles(
+    serviceClient,
+    roles,
+    Object.fromEntries(
+      roles.map((role) => [
+        role,
+        {
+          title: `CasePilot • ${statusLabels[body.status]}`,
+          body: buildStatusTriggerBody(
+            role,
+            body.status,
+            body.reason || "Case update requires attention.",
+            record,
+          ),
+          url: "/",
+        },
+      ]),
+    ),
+  );
 
   return jsonResponse({
     ok: true,

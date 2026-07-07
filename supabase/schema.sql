@@ -511,7 +511,7 @@ where jobname in ('casepilot-case-notifications', 'casepilot-cleanup-case-docume
 
 select cron.schedule(
   'casepilot-case-notifications',
-  '*/15 * * * *',
+  '0 0 * * *',
   $$
   select net.http_post(
     url := 'https://kfyqyxiycvdknlcpjmts.supabase.co/functions/v1/case-notifications',
