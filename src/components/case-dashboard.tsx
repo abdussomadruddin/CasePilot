@@ -11,6 +11,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  Filter,
   FolderKanban,
   ListChecks,
   LogIn,
@@ -110,6 +111,8 @@ type WhatsAppRecipient = {
 };
 
 type PushStatus = "unsupported" | "default" | "denied" | "enabled" | "loading" | "error";
+
+type StatusFilter = "all" | CaseStatus;
 
 type CarCatalogItem = {
   model: string;
@@ -396,6 +399,7 @@ export function CaseDashboard() {
   const [role, setRole] = useState<Role>("admin");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeTab, setActiveTab] = useState<DashboardTab>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [editingCase, setEditingCase] = useState<CaseRecord | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -555,6 +559,14 @@ export function CaseDashboard() {
         return visibleCases;
     }
   }, [activeTab, role, visibleCases]);
+
+  const filteredCases = useMemo(
+    () =>
+      statusFilter === "all"
+        ? tabCases
+        : tabCases.filter((record) => record.status === statusFilter),
+    [statusFilter, tabCases],
+  );
 
   const metrics = useMemo(
     () => ({
@@ -1063,12 +1075,53 @@ export function CaseDashboard() {
             />
           ) : (
             <>
+              <div className="surface-card flex min-w-0 flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Filter className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">Filter by Case Status</p>
+                    <p className="text-xs text-zinc-500">
+                      Showing {filteredCases.length} of {tabCases.length} cases
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex min-w-0 items-center gap-2 sm:w-auto">
+                  <select
+                    className="field min-w-0 flex-1 sm:w-72 sm:flex-none"
+                    value={statusFilter}
+                    onChange={(event) =>
+                      setStatusFilter(event.target.value as StatusFilter)
+                    }
+                    aria-label="Filter cases by status"
+                  >
+                    <option value="all">All Statuses</option>
+                    {caseStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {statusLabels[status]}
+                      </option>
+                    ))}
+                  </select>
+                  {statusFilter !== "all" ? (
+                    <button
+                      type="button"
+                      className="secondary-button shrink-0 px-3"
+                      onClick={() => setStatusFilter("all")}
+                      aria-label="Clear case status filter"
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                      <span className="hidden sm:inline">Clear</span>
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
               {loading ? (
                 <div className="surface-card p-8 text-center text-sm text-muted">
                   Loading cases
                 </div>
-              ) : tabCases.length ? (
-                tabCases.map((record) => (
+              ) : filteredCases.length ? (
+                filteredCases.map((record) => (
                   <CaseCard
                     key={record.id}
                     record={record}
@@ -1081,7 +1134,9 @@ export function CaseDashboard() {
                 ))
               ) : (
                 <div className="surface-card p-8 text-center text-sm text-muted">
-                  No cases in this tab
+                  {statusFilter === "all"
+                    ? "No cases in this tab"
+                    : `No ${statusLabels[statusFilter]} cases in this tab`}
                 </div>
               )}
             </>
