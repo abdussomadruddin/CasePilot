@@ -63,6 +63,7 @@ import {
   statusLabels,
   type ActivityEvent,
   type BankDetail,
+  type CaseDealer,
   type CaseDocument,
   type CaseFormValues,
   type CaseRecord,
@@ -113,6 +114,7 @@ type WhatsAppRecipient = {
 type PushStatus = "unsupported" | "default" | "denied" | "enabled" | "loading" | "error";
 
 type StatusFilter = "all" | CaseStatus;
+type DealerFilter = "all" | CaseDealer;
 
 type CarCatalogItem = {
   model: string;
@@ -400,6 +402,7 @@ export function CaseDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeTab, setActiveTab] = useState<DashboardTab>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [dealerFilter, setDealerFilter] = useState<DealerFilter>("all");
   const [editingCase, setEditingCase] = useState<CaseRecord | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -455,6 +458,10 @@ export function CaseDashboard() {
   useEffect(() => {
     if (role !== "admin" && activeTab === "team") {
       setActiveTab("all");
+    }
+
+    if (role === "sales_manager") {
+      setDealerFilter("all");
     }
   }, [activeTab, role]);
 
@@ -560,12 +567,17 @@ export function CaseDashboard() {
     }
   }, [activeTab, role, visibleCases]);
 
+  const dealerFilterActive = role !== "sales_manager" && dealerFilter !== "all";
+  const filtersActive = statusFilter !== "all" || dealerFilterActive;
+
   const filteredCases = useMemo(
     () =>
-      statusFilter === "all"
-        ? tabCases
-        : tabCases.filter((record) => record.status === statusFilter),
-    [statusFilter, tabCases],
+      tabCases.filter(
+        (record) =>
+          (statusFilter === "all" || record.status === statusFilter) &&
+          (!dealerFilterActive || record.dealer === dealerFilter),
+      ),
+    [dealerFilter, dealerFilterActive, statusFilter, tabCases],
   );
 
   const metrics = useMemo(
@@ -1079,16 +1091,39 @@ export function CaseDashboard() {
                 <div className="flex min-w-0 items-center gap-2">
                   <Filter className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white">Filter by Case Status</p>
+                    <p className="text-sm font-semibold text-white">Filter Cases</p>
                     <p className="text-xs text-zinc-500">
                       Showing {filteredCases.length} of {tabCases.length} cases
                     </p>
                   </div>
                 </div>
 
-                <div className="flex min-w-0 items-center gap-2 sm:w-auto">
+                <div
+                  className={`grid min-w-0 gap-2 sm:w-auto ${
+                    role === "sales_manager"
+                      ? "grid-cols-[minmax(0,1fr)_auto]"
+                      : "grid-cols-1 sm:grid-cols-[14rem_18rem_auto]"
+                  }`}
+                >
+                  {role !== "sales_manager" ? (
+                    <select
+                      className="field min-w-0"
+                      value={dealerFilter}
+                      onChange={(event) =>
+                        setDealerFilter(event.target.value as DealerFilter)
+                      }
+                      aria-label="Filter cases by dealer"
+                    >
+                      <option value="all">All Dealers</option>
+                      {caseDealers.map((dealer) => (
+                        <option key={dealer} value={dealer}>
+                          {caseDealerLabels[dealer]}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
                   <select
-                    className="field min-w-0 flex-1 sm:w-72 sm:flex-none"
+                    className="field min-w-0"
                     value={statusFilter}
                     onChange={(event) =>
                       setStatusFilter(event.target.value as StatusFilter)
@@ -1102,12 +1137,15 @@ export function CaseDashboard() {
                       </option>
                     ))}
                   </select>
-                  {statusFilter !== "all" ? (
+                  {filtersActive ? (
                     <button
                       type="button"
                       className="secondary-button shrink-0 px-3"
-                      onClick={() => setStatusFilter("all")}
-                      aria-label="Clear case status filter"
+                      onClick={() => {
+                        setStatusFilter("all");
+                        setDealerFilter("all");
+                      }}
+                      aria-label="Clear case filters"
                     >
                       <X className="h-4 w-4" aria-hidden="true" />
                       <span className="hidden sm:inline">Clear</span>
@@ -1134,9 +1172,9 @@ export function CaseDashboard() {
                 ))
               ) : (
                 <div className="surface-card p-8 text-center text-sm text-muted">
-                  {statusFilter === "all"
-                    ? "No cases in this tab"
-                    : `No ${statusLabels[statusFilter]} cases in this tab`}
+                  {filtersActive
+                    ? "No cases match the selected filters"
+                    : "No cases in this tab"}
                 </div>
               )}
             </>
