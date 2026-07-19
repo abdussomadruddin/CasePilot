@@ -4,12 +4,14 @@ import { getValidAccessToken } from "@/lib/auth";
 import {
   roleLabels,
   statusLabels,
+  normalizeCaseStatus,
   type ActivityEvent,
   type BankDetail,
   type CaseDealer,
   type CaseDocument,
   type CaseRecord,
   type CaseStatus,
+  type DatabaseCaseStatus,
   type DocumentType,
   type Profile,
   type Role,
@@ -47,7 +49,7 @@ type CaseRow = {
   car_model: string;
   car_variant: string;
   car_color: string;
-  status: CaseStatus;
+  status: DatabaseCaseStatus;
   remark: string | null;
   created_by_role: Role;
   updated_by_role: Role;
@@ -88,7 +90,7 @@ type ActivityRow = {
   actor_role: Role;
   actor_name: string | null;
   message: string;
-  status: CaseStatus | null;
+  status: DatabaseCaseStatus | null;
   created_at: string;
 };
 
@@ -114,7 +116,7 @@ function mapCase(row: CaseRow): CaseRecord {
     carModel: row.car_model,
     carVariant: row.car_variant,
     carColor: row.car_color,
-    status: row.status,
+    status: normalizeCaseStatus(row.status),
     remark: row.remark || "",
     banks: (row.case_banks || []).map(mapBank),
     documents: (row.case_documents || [])
@@ -173,7 +175,7 @@ function mapActivity(row: ActivityRow): ActivityEvent {
     actorRole: row.actor_role,
     actorName: row.actor_name || roleLabels[row.actor_role],
     message: row.message,
-    status: row.status || undefined,
+    status: row.status ? normalizeCaseStatus(row.status) : undefined,
     createdAt: row.created_at,
   };
 }
@@ -313,7 +315,7 @@ export async function saveCase(
       createActivity(
         "status",
         actorRole,
-        `Status changed to ${record.status.replaceAll("_", " ")}.`,
+        `Status changed to ${statusLabels[record.status]}.`,
         record.status,
       ),
     );

@@ -26,10 +26,11 @@ begin
     'submission',
     'rejected',
     'lou_received',
-    'hint_submitted',
-    'booking_form_received',
-    'registration_needed',
-    'roadtax_grant_process',
+    'pending_sign_agreement',
+    'pending_allocation',
+    'waiting_ehakmilik',
+    'registered',
+    'grant_roadtax_collected',
     'prepare_delivery',
     'car_delivery',
     'cancelled'
@@ -38,10 +39,11 @@ exception
   when duplicate_object then null;
 end $$;
 
-alter type public.case_status add value if not exists 'hint_submitted';
-alter type public.case_status add value if not exists 'booking_form_received';
-alter type public.case_status add value if not exists 'registration_needed';
-alter type public.case_status add value if not exists 'roadtax_grant_process';
+alter type public.case_status add value if not exists 'pending_sign_agreement';
+alter type public.case_status add value if not exists 'pending_allocation';
+alter type public.case_status add value if not exists 'waiting_ehakmilik';
+alter type public.case_status add value if not exists 'registered';
+alter type public.case_status add value if not exists 'grant_roadtax_collected';
 alter type public.case_status add value if not exists 'prepare_delivery';
 alter type public.case_status add value if not exists 'car_delivery';
 

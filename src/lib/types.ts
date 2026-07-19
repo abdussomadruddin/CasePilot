@@ -33,10 +33,11 @@ export const caseStatuses = [
   "submission",
   "rejected",
   "lou_received",
-  "hint_submitted",
-  "booking_form_received",
-  "registration_needed",
-  "roadtax_grant_process",
+  "pending_sign_agreement",
+  "pending_allocation",
+  "waiting_ehakmilik",
+  "registered",
+  "grant_roadtax_collected",
   "prepare_delivery",
   "car_delivery",
   "cancelled",
@@ -44,20 +45,44 @@ export const caseStatuses = [
 
 export type CaseStatus = (typeof caseStatuses)[number];
 
+export const legacyCaseStatuses = [
+  "hint_submitted",
+  "booking_form_received",
+  "registration_needed",
+  "roadtax_grant_process",
+] as const;
+
+export type LegacyCaseStatus = (typeof legacyCaseStatuses)[number];
+export type DatabaseCaseStatus = CaseStatus | LegacyCaseStatus;
+
 export const statusLabels: Record<CaseStatus, string> = {
-  documents_collected: "Documents Collected",
-  more_documents_needed: "More Documents Needed",
+  documents_collected: "Document collected",
+  more_documents_needed: "More document needed",
   submission: "Submission",
   rejected: "Rejected",
-  lou_received: "LOU Received",
-  hint_submitted: "HINT Submitted",
-  booking_form_received: "Booking Form Received",
-  registration_needed: "Registration Needed",
-  roadtax_grant_process: "Roadtax & Grant Process",
-  prepare_delivery: "Prepare Delivery",
-  car_delivery: "Car Delivery",
+  lou_received: "LOU received",
+  pending_sign_agreement: "Pending sign agreement",
+  pending_allocation: "Pending allocation",
+  waiting_ehakmilik: "Waiting ehakmilik",
+  registered: "Registered",
+  grant_roadtax_collected: "Grant & roadtax collected",
+  prepare_delivery: "Prepare delivery",
+  car_delivery: "Delivered",
   cancelled: "Cancelled",
 };
+
+const legacyStatusMap: Record<LegacyCaseStatus, CaseStatus> = {
+  hint_submitted: "pending_allocation",
+  booking_form_received: "waiting_ehakmilik",
+  registration_needed: "registered",
+  roadtax_grant_process: "grant_roadtax_collected",
+};
+
+export function normalizeCaseStatus(status: DatabaseCaseStatus): CaseStatus {
+  return status in legacyStatusMap
+    ? legacyStatusMap[status as LegacyCaseStatus]
+    : (status as CaseStatus);
+}
 
 export type ActivityType =
   | "case"

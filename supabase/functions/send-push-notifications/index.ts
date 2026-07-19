@@ -9,19 +9,28 @@ type Role =
   | "operator"
   | "sales_manager";
 
-type CaseStatus =
+type CurrentCaseStatus =
   | "documents_collected"
   | "more_documents_needed"
   | "submission"
   | "rejected"
   | "lou_received"
-  | "hint_submitted"
-  | "booking_form_received"
-  | "registration_needed"
-  | "roadtax_grant_process"
+  | "pending_sign_agreement"
+  | "pending_allocation"
+  | "waiting_ehakmilik"
+  | "registered"
+  | "grant_roadtax_collected"
   | "prepare_delivery"
   | "car_delivery"
   | "cancelled";
+
+type LegacyCaseStatus =
+  | "hint_submitted"
+  | "booking_form_received"
+  | "registration_needed"
+  | "roadtax_grant_process";
+
+type CaseStatus = CurrentCaseStatus | LegacyCaseStatus;
 
 type RequestBody = {
   caseId: string;
@@ -56,24 +65,40 @@ const roleLabels: Record<Role, string> = {
   sales_manager: "Sales Manager",
 };
 
-const statusLabels: Record<CaseStatus, string> = {
-  documents_collected: "Documents Collected",
-  more_documents_needed: "More Documents Needed",
+const statusLabels: Record<CurrentCaseStatus, string> = {
+  documents_collected: "Document collected",
+  more_documents_needed: "More document needed",
   submission: "Submission",
   rejected: "Rejected",
-  lou_received: "LOU Received",
-  hint_submitted: "HINT Submitted",
-  booking_form_received: "Booking Form Received",
-  registration_needed: "Registration Needed",
-  roadtax_grant_process: "Roadtax & Grant Process",
-  prepare_delivery: "Prepare Delivery",
-  car_delivery: "Car Delivery",
+  lou_received: "LOU received",
+  pending_sign_agreement: "Pending sign agreement",
+  pending_allocation: "Pending allocation",
+  waiting_ehakmilik: "Waiting ehakmilik",
+  registered: "Registered",
+  grant_roadtax_collected: "Grant & roadtax collected",
+  prepare_delivery: "Prepare delivery",
+  car_delivery: "Delivered",
   cancelled: "Cancelled",
 };
 
+function normalizeStatus(status: CaseStatus): CurrentCaseStatus {
+  switch (status) {
+    case "hint_submitted":
+      return "pending_allocation";
+    case "booking_form_received":
+      return "waiting_ehakmilik";
+    case "registration_needed":
+      return "registered";
+    case "roadtax_grant_process":
+      return "grant_roadtax_collected";
+    default:
+      return status;
+  }
+}
+
 function buildStatusTriggerBody(
   role: Role,
-  status: CaseStatus,
+  status: CurrentCaseStatus,
   reason: string,
   record?: CaseRow | null,
 ) {
@@ -122,6 +147,8 @@ Deno.serve(async (request) => {
     return jsonResponse({ ok: false, error: "Invalid notification request" }, 400);
   }
 
+  const status = normalizeStatus(body.status);
+
   const serviceClient = createClient(supabaseUrl, serviceRoleKey);
   const now = new Date().toISOString();
   const { data: record } = await serviceClient
@@ -133,7 +160,7 @@ Deno.serve(async (request) => {
     case_id: body.caseId,
     role,
     reason: body.reason || "Case update requires attention.",
-    status: body.status,
+    status,
     due_at: now,
   }));
 
@@ -152,10 +179,10 @@ Deno.serve(async (request) => {
       roles.map((role) => [
         role,
         {
-          title: `CasePilot • ${statusLabels[body.status]}`,
+          title: `CasePilot • ${statusLabels[status]}`,
           body: buildStatusTriggerBody(
             role,
-            body.status,
+            status,
             body.reason || "Case update requires attention.",
             record,
           ),

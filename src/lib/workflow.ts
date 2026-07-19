@@ -26,10 +26,11 @@ export const roleStatusPermissions: Record<Role, CaseStatus[]> = {
     "submission",
     "rejected",
     "lou_received",
-    "hint_submitted",
-    "booking_form_received",
-    "registration_needed",
-    "roadtax_grant_process",
+    "pending_sign_agreement",
+    "pending_allocation",
+    "waiting_ehakmilik",
+    "registered",
+    "grant_roadtax_collected",
     "prepare_delivery",
     "car_delivery",
     "cancelled",
@@ -39,10 +40,11 @@ export const roleStatusPermissions: Record<Role, CaseStatus[]> = {
     "submission",
     "rejected",
     "lou_received",
-    "hint_submitted",
-    "booking_form_received",
-    "registration_needed",
-    "roadtax_grant_process",
+    "pending_sign_agreement",
+    "pending_allocation",
+    "waiting_ehakmilik",
+    "registered",
+    "grant_roadtax_collected",
     "prepare_delivery",
     "car_delivery",
     "cancelled",
@@ -62,10 +64,11 @@ export function getAssignedRoles(status: CaseStatus): Role[] {
     case "rejected":
       return ["customer_service", "finance", "caller"];
     case "lou_received":
-    case "hint_submitted":
-    case "booking_form_received":
-    case "registration_needed":
-    case "roadtax_grant_process":
+    case "pending_sign_agreement":
+    case "pending_allocation":
+    case "waiting_ehakmilik":
+    case "registered":
+    case "grant_roadtax_collected":
       return ["customer_service", "finance", "caller"];
     case "prepare_delivery":
     case "car_delivery":

@@ -11,19 +11,28 @@ type Role =
 
 type CaseDealer = "kah_motor" | "other_dealer";
 
-type CaseStatus =
+type CurrentCaseStatus =
   | "documents_collected"
   | "more_documents_needed"
   | "submission"
   | "rejected"
   | "lou_received"
-  | "hint_submitted"
-  | "booking_form_received"
-  | "registration_needed"
-  | "roadtax_grant_process"
+  | "pending_sign_agreement"
+  | "pending_allocation"
+  | "waiting_ehakmilik"
+  | "registered"
+  | "grant_roadtax_collected"
   | "prepare_delivery"
   | "car_delivery"
   | "cancelled";
+
+type LegacyCaseStatus =
+  | "hint_submitted"
+  | "booking_form_received"
+  | "registration_needed"
+  | "roadtax_grant_process";
+
+type CaseStatus = CurrentCaseStatus | LegacyCaseStatus;
 
 type CaseRow = {
   id: string;
@@ -48,22 +57,38 @@ const roleLabels: Record<Role, string> = {
   sales_manager: "Sales Manager",
 };
 
-const statusLabels: Record<CaseStatus, string> = {
-  documents_collected: "Documents Collected",
-  more_documents_needed: "More Documents Needed",
+const statusLabels: Record<CurrentCaseStatus, string> = {
+  documents_collected: "Document collected",
+  more_documents_needed: "More document needed",
   submission: "Submission",
   rejected: "Rejected",
-  lou_received: "LOU Received",
-  hint_submitted: "HINT Submitted",
-  booking_form_received: "Booking Form Received",
-  registration_needed: "Registration Needed",
-  roadtax_grant_process: "Roadtax & Grant Process",
-  prepare_delivery: "Prepare Delivery",
-  car_delivery: "Car Delivery",
+  lou_received: "LOU received",
+  pending_sign_agreement: "Pending sign agreement",
+  pending_allocation: "Pending allocation",
+  waiting_ehakmilik: "Waiting ehakmilik",
+  registered: "Registered",
+  grant_roadtax_collected: "Grant & roadtax collected",
+  prepare_delivery: "Prepare delivery",
+  car_delivery: "Delivered",
   cancelled: "Cancelled",
 };
 
-function assignedRoles(status: CaseStatus): Role[] {
+function normalizeStatus(status: CaseStatus): CurrentCaseStatus {
+  switch (status) {
+    case "hint_submitted":
+      return "pending_allocation";
+    case "booking_form_received":
+      return "waiting_ehakmilik";
+    case "registration_needed":
+      return "registered";
+    case "roadtax_grant_process":
+      return "grant_roadtax_collected";
+    default:
+      return status;
+  }
+}
+
+function assignedRoles(status: CurrentCaseStatus): Role[] {
   switch (status) {
     case "documents_collected":
       return ["finance", "caller"];
@@ -74,10 +99,11 @@ function assignedRoles(status: CaseStatus): Role[] {
     case "rejected":
       return ["customer_service", "finance", "caller"];
     case "lou_received":
-    case "hint_submitted":
-    case "booking_form_received":
-    case "registration_needed":
-    case "roadtax_grant_process":
+    case "pending_sign_agreement":
+    case "pending_allocation":
+    case "waiting_ehakmilik":
+    case "registered":
+    case "grant_roadtax_collected":
       return ["customer_service", "finance", "caller"];
     case "prepare_delivery":
     case "car_delivery":
@@ -89,7 +115,7 @@ function assignedRoles(status: CaseStatus): Role[] {
   }
 }
 
-function progressRoles(status: CaseStatus, dealer?: CaseDealer | null): Role[] {
+function progressRoles(status: CurrentCaseStatus, dealer?: CaseDealer | null): Role[] {
   const roles = assignedRoles(status);
   return dealer === "kah_motor" ? [...roles, "sales_manager"] : roles;
 }
@@ -117,7 +143,10 @@ function isKualaLumpurEightAm(now: Date) {
 function groupedPushBodyFor(role: Role, records: CaseRow[]) {
   const preview = records
     .slice(0, 5)
-    .map((record, index) => `${index + 1}. ${caseLine(record)} • ${statusLabels[record.status]}`);
+    .map(
+      (record, index) =>
+        `${index + 1}. ${caseLine(record)} • ${statusLabels[normalizeStatus(record.status)]}`,
+    );
   const extraCount = records.length - preview.length;
 
   return [
@@ -163,7 +192,7 @@ Deno.serve(async () => {
     case_id: string;
     role: Role;
     reason: string;
-    status: CaseStatus;
+    status: CurrentCaseStatus;
     due_at: string;
   }> = [];
 
@@ -173,16 +202,15 @@ Deno.serve(async () => {
     actor_role: Role;
     actor_name: string;
     message: string;
-    status: CaseStatus;
+    status: CurrentCaseStatus;
   }> = [];
   const casesByRole: Partial<Record<Role, CaseRow[]>> = {};
   const notifiedCaseIds = new Set<string>();
 
   for (const record of (cases || []) as CaseRow[]) {
+    const status = normalizeStatus(record.status);
     const isTerminal =
-      record.status === "rejected" ||
-      record.status === "car_delivery" ||
-      record.status === "cancelled";
+      status === "rejected" || status === "car_delivery" || status === "cancelled";
 
     if (isTerminal) continue;
 
@@ -191,7 +219,7 @@ Deno.serve(async () => {
       : new Date(+new Date(record.updated_at) + twoDaysMs);
 
     if (+now - +nextFollowUp > threeDaysMs) {
-      const followUpRoles = progressRoles(record.status, record.dealer);
+      const followUpRoles = progressRoles(status, record.dealer);
       const rolesToNotify: Role[] = followUpRoles.length
         ? followUpRoles
         : ["customer_service"];
@@ -204,7 +232,7 @@ Deno.serve(async () => {
           case_id: record.id,
           role,
           reason: "Follow Up Due has been overdue for more than 3 days.",
-          status: record.status,
+          status,
           due_at: now.toISOString(),
         });
       }
@@ -216,7 +244,7 @@ Deno.serve(async () => {
         actor_role: rolesToNotify[0] || "customer_service",
         actor_name: "System",
         message: "Grouped follow up due notification sent.",
-        status: record.status,
+        status,
       });
     }
   }
