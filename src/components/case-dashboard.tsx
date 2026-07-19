@@ -580,6 +580,22 @@ export function CaseDashboard() {
   const dealerFilterActive = role !== "sales_manager" && dealerFilter !== "all";
   const filtersActive = statusFilter !== "all" || dealerFilterActive;
 
+  const statusFilterCounts = useMemo(() => {
+    const counts = Object.fromEntries(
+      caseStatuses.map((status) => [status, 0]),
+    ) as Record<CaseStatus, number>;
+    let total = 0;
+
+    for (const record of tabCases) {
+      if (dealerFilterActive && record.dealer !== dealerFilter) continue;
+
+      counts[record.status] += 1;
+      total += 1;
+    }
+
+    return { counts, total };
+  }, [dealerFilter, dealerFilterActive, tabCases]);
+
   const filteredCases = useMemo(
     () =>
       tabCases.filter(
@@ -1163,10 +1179,12 @@ export function CaseDashboard() {
                     }
                     aria-label="Filter cases by status"
                   >
-                    <option value="all">All Statuses</option>
+                    <option value="all">
+                      All Statuses ({statusFilterCounts.total})
+                    </option>
                     {caseStatuses.map((status) => (
                       <option key={status} value={status}>
-                        {statusLabels[status]}
+                        {statusLabels[status]} ({statusFilterCounts.counts[status]})
                       </option>
                     ))}
                   </select>
