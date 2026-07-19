@@ -1,6 +1,8 @@
 import { getSupabaseClient } from "@/lib/supabase";
 import type { Profile, Role } from "@/lib/types";
 
+export const sessionExpiredMessage = "Session expired. Please sign in again.";
+
 type ProfileRow = {
   id: string;
   email: string | null;
@@ -10,13 +12,57 @@ type ProfileRow = {
   active: boolean | null;
 };
 
+export function isSessionExpiredError(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error && "message" in error
+        ? String(error.message)
+        : String(error || "");
+  const normalized = message.toLowerCase();
+
+  return [
+    "invalid_grant",
+    "refresh token",
+    "jwt expired",
+    "session expired",
+    "auth session missing",
+  ].some((value) => normalized.includes(value));
+}
+
+export async function clearLocalSession() {
+  const supabase = getSupabaseClient();
+  await supabase.auth.signOut({ scope: "local" });
+}
+
+export async function getValidAccessToken() {
+  const supabase = getSupabaseClient();
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error || !session?.access_token) {
+    await clearLocalSession();
+    throw new Error(sessionExpiredMessage);
+  }
+
+  return session.access_token;
+}
+
 export async function getCurrentProfile(): Promise<Profile | null> {
   const supabase = getSupabaseClient();
   if (!supabase) return null;
 
   const {
     data: { session },
+    error: sessionError,
   } = await supabase.auth.getSession();
+
+  if (sessionError) {
+    await clearLocalSession();
+    throw new Error(sessionExpiredMessage);
+  }
 
   if (!session?.user) return null;
 
@@ -55,5 +101,8 @@ export async function signOut() {
   if (!supabase) return;
 
   const { error } = await supabase.auth.signOut();
-  if (error) throw error;
+  if (!error) return;
+
+  const { error: localError } = await supabase.auth.signOut({ scope: "local" });
+  if (localError) throw error;
 }

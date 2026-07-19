@@ -265,6 +265,44 @@ async function markCaseDocumentsDeleted(caseId: string, deletedAt: string) {
   return rows.length;
 }
 
+async function markCaseDeleted(caseId: string, deletedAt: string) {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!serviceRoleKey) {
+    throw new Error("Supabase service role key is not configured.");
+  }
+
+  const { supabaseUrl } = getSupabaseConfig();
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/cases?id=eq.${encodeURIComponent(
+      caseId,
+    )}&deleted_at=is.null&select=id`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: serviceRoleKey,
+        authorization: `Bearer ${serviceRoleKey}`,
+        "content-type": "application/json",
+        prefer: "return=representation",
+      },
+      body: JSON.stringify({ deleted_at: deletedAt }),
+      cache: "no-store",
+    },
+  );
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(text || "Unable to mark case deleted.");
+  }
+
+  const rows = text ? (JSON.parse(text) as Array<{ id?: string }>) : [];
+  if (!rows.length) {
+    throw new Error("Case was not found or was already deleted.");
+  }
+
+  return rows[0]?.id || caseId;
+}
+
 async function listFolderFiles(accessToken: string, folderId: string) {
   const q = [
     `'${driveQueryValue(folderId)}' in parents`,
@@ -329,8 +367,15 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const role = await authenticateRole(request);
 
+  if (!role) {
+    return Response.json(
+      { error: "Session expired. Please sign in again." },
+      { status: 401 },
+    );
+  }
+
   if (role !== "admin") {
-    return Response.json({ error: "Only admin can delete Drive case folders." }, { status: 403 });
+    return Response.json({ error: "Only admin can delete cases." }, { status: 403 });
   }
 
   let payload: { caseId?: unknown };
@@ -361,15 +406,22 @@ export async function DELETE(request: NextRequest) {
       ),
     );
     const documentsMarkedDeleted = await markCaseDocumentsDeleted(caseId, deletedAt);
+    const deletedCaseId = await markCaseDeleted(caseId, deletedAt);
 
     return Response.json({
       deleted: folders.length,
+      deletedCaseId,
       folderIds: folders.map((folder) => folder.id),
       documentsMarkedDeleted,
     });
   } catch (caught) {
     const message =
       caught instanceof Error ? caught.message : "Unable to delete Google Drive folder.";
+
+    console.error("[case-folder:delete] failed", {
+      caseId: payload.caseId,
+      message,
+    });
 
     return Response.json({ error: message }, { status: 500 });
   }

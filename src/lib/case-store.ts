@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "@/lib/supabase";
 import { notifyCaseStatusChange } from "@/lib/notifications";
+import { getValidAccessToken } from "@/lib/auth";
 import {
   roleLabels,
   statusLabels,
@@ -413,36 +414,34 @@ export async function saveCase(
 }
 
 export async function removeCase(caseId: string): Promise<CaseRecord[]> {
-  const supabase = getSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in again before deleting this case.");
-  }
+  const accessToken = await getValidAccessToken();
 
   const driveResponse = await fetch("/api/google-drive/case-folder", {
     method: "DELETE",
     headers: {
-      authorization: `Bearer ${session.access_token}`,
+      authorization: `Bearer ${accessToken}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({ caseId }),
   });
-  const driveResult = (await driveResponse.json()) as { error?: string };
+  const responseText = await driveResponse.text();
+  let driveResult: { error?: string } = {};
 
-  if (!driveResponse.ok) {
-    throw new Error(driveResult.error || "Unable to delete Google Drive folder.");
+  if (responseText) {
+    try {
+      driveResult = JSON.parse(responseText) as { error?: string };
+    } catch {
+      driveResult = {};
+    }
   }
 
-  const deletedAt = new Date().toISOString();
-  const { error } = await supabase
-    .from("cases")
-    .update({ deleted_at: deletedAt })
-    .eq("id", caseId);
-
-  if (error) throw error;
+  if (!driveResponse.ok) {
+    throw new Error(
+      driveResponse.status === 401
+        ? "Session expired. Please sign in again."
+        : driveResult.error || "Unable to delete case and Google Drive folder.",
+    );
+  }
 
   return (await loadCases()).cases;
 }

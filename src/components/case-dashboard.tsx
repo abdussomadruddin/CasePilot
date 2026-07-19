@@ -34,7 +34,13 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { getCurrentProfile, signInWithPassword, signOut } from "@/lib/auth";
+import {
+  getCurrentProfile,
+  isSessionExpiredError,
+  sessionExpiredMessage,
+  signInWithPassword,
+  signOut,
+} from "@/lib/auth";
 import { createEmptyCase } from "@/lib/case-factory";
 import {
   loadCases,
@@ -825,10 +831,19 @@ export function CaseDashboard() {
     try {
       setSaving(true);
       setError("");
+      setSuccessMessage("");
       const next = await removeCase(record.id);
       setCases(next);
+      setSuccessMessage(`${record.customerName || "Case"} deleted.`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to delete case.");
+      if (isSessionExpiredError(caught)) {
+        setProfile(null);
+        setCases([]);
+        setTeamMembers([]);
+        setError(sessionExpiredMessage);
+      } else {
+        setError(caught instanceof Error ? caught.message : "Unable to delete case.");
+      }
     } finally {
       setSaving(false);
     }
