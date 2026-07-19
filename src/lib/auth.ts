@@ -100,9 +100,6 @@ export async function signOut() {
   const supabase = getSupabaseClient();
   if (!supabase) return;
 
-  const { error } = await supabase.auth.signOut();
-  if (!error) return;
-
-  const { error: localError } = await supabase.auth.signOut({ scope: "local" });
-  if (localError) throw error;
+  const { error } = await supabase.auth.signOut({ scope: "local" });
+  if (error) throw error;
 }
