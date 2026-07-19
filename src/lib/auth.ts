@@ -22,7 +22,6 @@ export function isSessionExpiredError(error: unknown) {
   const normalized = message.toLowerCase();
 
   return [
-    "invalid_grant",
     "refresh token",
     "jwt expired",
     "session expired",

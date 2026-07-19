@@ -128,6 +128,7 @@ async function getAccessToken() {
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  let oauthError = "";
 
   if (refreshToken && clientId && clientSecret) {
     const response = await fetch(tokenEndpoint, {
@@ -142,12 +143,22 @@ async function getAccessToken() {
       cache: "no-store",
     });
 
-    const result = (await response.json()) as { access_token?: string; error?: string };
-    if (!response.ok || !result.access_token) {
-      throw new Error(result.error || "Unable to get Google Drive access token.");
+    const result = (await response.json()) as {
+      access_token?: string;
+      error?: string;
+      error_description?: string;
+    };
+    if (response.ok && result.access_token) {
+      return result.access_token;
     }
 
-    return result.access_token;
+    oauthError =
+      result.error_description ||
+      result.error ||
+      "Unable to get Google Drive OAuth access token.";
+    console.warn("[google-drive] OAuth unavailable; trying service account.", {
+      error: result.error || "token_request_failed",
+    });
   }
 
   const assertion = getServiceAccountAssertion();
@@ -162,13 +173,24 @@ async function getAccessToken() {
       cache: "no-store",
     });
 
-    const result = (await response.json()) as { access_token?: string; error?: string };
+    const result = (await response.json()) as {
+      access_token?: string;
+      error?: string;
+      error_description?: string;
+    };
     if (!response.ok || !result.access_token) {
-      throw new Error(result.error || "Unable to get Google Drive service token.");
+      throw new Error(
+        result.error_description ||
+          result.error ||
+          oauthError ||
+          "Unable to get Google Drive service token.",
+      );
     }
 
     return result.access_token;
   }
+
+  if (oauthError) throw new Error(oauthError);
 
   throw new Error("Google Drive is not configured.");
 }
@@ -393,26 +415,39 @@ export async function DELETE(request: NextRequest) {
   try {
     const caseId = payload.caseId.trim();
     const deletedAt = new Date().toISOString();
-    const accessToken = await getAccessToken();
-    const folders = await findCaseFolders(accessToken, caseId);
-
-    await Promise.all(
-      folders.map((folder) =>
-        driveFetch(
-          accessToken,
-          `https://www.googleapis.com/drive/v3/files/${folder.id}?supportsAllDrives=true`,
-          { method: "DELETE" },
-        ),
-      ),
-    );
     const documentsMarkedDeleted = await markCaseDocumentsDeleted(caseId, deletedAt);
     const deletedCaseId = await markCaseDeleted(caseId, deletedAt);
+    let folders: DriveFile[] = [];
+    let driveCleanupError = "";
+
+    try {
+      const accessToken = await getAccessToken();
+      folders = await findCaseFolders(accessToken, caseId);
+
+      await Promise.all(
+        folders.map((folder) =>
+          driveFetch(
+            accessToken,
+            `https://www.googleapis.com/drive/v3/files/${folder.id}?supportsAllDrives=true`,
+            { method: "DELETE" },
+          ),
+        ),
+      );
+    } catch (caught) {
+      driveCleanupError =
+        caught instanceof Error ? caught.message : "Google Drive cleanup failed.";
+      console.error("[case-folder:delete] Drive cleanup pending", {
+        caseId,
+        message: driveCleanupError,
+      });
+    }
 
     return Response.json({
       deleted: folders.length,
       deletedCaseId,
       folderIds: folders.map((folder) => folder.id),
       documentsMarkedDeleted,
+      driveCleanupPending: Boolean(driveCleanupError),
     });
   } catch (caught) {
     const message =

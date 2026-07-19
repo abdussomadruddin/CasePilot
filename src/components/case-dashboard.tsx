@@ -410,6 +410,8 @@ export function CaseDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dealerFilter, setDealerFilter] = useState<DealerFilter>("all");
   const [editingCase, setEditingCase] = useState<CaseRecord | null>(null);
+  const [caseToDelete, setCaseToDelete] = useState<CaseRecord | null>(null);
+  const [deleteError, setDeleteError] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -827,22 +829,36 @@ export function CaseDashboard() {
     }
   }
 
-  async function handleDelete(record: CaseRecord) {
+  function handleDelete(record: CaseRecord) {
+    setDeleteError("");
+    setCaseToDelete(record);
+  }
+
+  async function confirmDelete() {
+    if (!caseToDelete) return;
+
+    const record = caseToDelete;
+
     try {
       setSaving(true);
       setError("");
+      setDeleteError("");
       setSuccessMessage("");
       const next = await removeCase(record.id);
       setCases(next);
+      setCaseToDelete(null);
       setSuccessMessage(`${record.customerName || "Case"} deleted.`);
     } catch (caught) {
       if (isSessionExpiredError(caught)) {
+        setCaseToDelete(null);
         setProfile(null);
         setCases([]);
         setTeamMembers([]);
         setError(sessionExpiredMessage);
       } else {
-        setError(caught instanceof Error ? caught.message : "Unable to delete case.");
+        setDeleteError(
+          caught instanceof Error ? caught.message : "Unable to delete case.",
+        );
       }
     } finally {
       setSaving(false);
@@ -1212,7 +1228,100 @@ export function CaseDashboard() {
           onSave={handleSave}
         />
       ) : null}
+
+      {caseToDelete ? (
+        <DeleteCaseConfirmation
+          record={caseToDelete}
+          saving={saving}
+          error={deleteError}
+          onCancel={() => {
+            if (saving) return;
+            setCaseToDelete(null);
+            setDeleteError("");
+          }}
+          onConfirm={confirmDelete}
+        />
+      ) : null}
     </main>
+  );
+}
+
+function DeleteCaseConfirmation({
+  record,
+  saving,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  record: CaseRecord;
+  saving: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+      <section
+        className="w-full max-w-md overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-lift"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-case-title"
+        aria-describedby="delete-case-description"
+      >
+        <div className="flex items-start gap-3 border-b border-zinc-800 bg-red-950/35 p-4">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-red-600/20 text-red-300 ring-1 ring-red-500/40">
+            <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <h2 id="delete-case-title" className="text-lg font-semibold text-ink">
+              Delete this case?
+            </h2>
+            <p id="delete-case-description" className="mt-1 text-sm text-muted">
+              This cannot be undone. The case and its Google Drive folder will be
+              removed.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 p-4">
+          <div className="min-w-0 border-b border-zinc-800 pb-3">
+            <p className="break-words font-semibold text-ink">
+              {record.customerName || "Unnamed case"}
+            </p>
+            <p className="mt-1 break-words text-sm text-muted">
+              {record.carModel} {record.carVariant}
+            </p>
+          </div>
+
+          {error ? (
+            <p className="rounded-md border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-100">
+              {error}
+            </p>
+          ) : null}
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className="secondary-button w-full"
+              onClick={onCancel}
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="danger-button w-full"
+              onClick={onConfirm}
+              disabled={saving}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              {saving ? "Deleting..." : "Confirm Delete"}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>,
+    document.body,
   );
 }
 

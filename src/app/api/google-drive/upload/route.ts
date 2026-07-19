@@ -135,6 +135,7 @@ async function getAccessToken() {
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  let oauthError = "";
 
   if (refreshToken && clientId && clientSecret) {
     const response = await fetch(tokenEndpoint, {
@@ -149,12 +150,22 @@ async function getAccessToken() {
       cache: "no-store",
     });
 
-    const result = (await response.json()) as { access_token?: string; error?: string };
-    if (!response.ok || !result.access_token) {
-      throw new Error(result.error || "Unable to get Google Drive access token.");
+    const result = (await response.json()) as {
+      access_token?: string;
+      error?: string;
+      error_description?: string;
+    };
+    if (response.ok && result.access_token) {
+      return result.access_token;
     }
 
-    return result.access_token;
+    oauthError =
+      result.error_description ||
+      result.error ||
+      "Unable to get Google Drive OAuth access token.";
+    console.warn("[google-drive] OAuth unavailable; trying service account.", {
+      error: result.error || "token_request_failed",
+    });
   }
 
   const assertion = getServiceAccountAssertion();
@@ -169,13 +180,24 @@ async function getAccessToken() {
       cache: "no-store",
     });
 
-    const result = (await response.json()) as { access_token?: string; error?: string };
+    const result = (await response.json()) as {
+      access_token?: string;
+      error?: string;
+      error_description?: string;
+    };
     if (!response.ok || !result.access_token) {
-      throw new Error(result.error || "Unable to get Google Drive service token.");
+      throw new Error(
+        result.error_description ||
+          result.error ||
+          oauthError ||
+          "Unable to get Google Drive service token.",
+      );
     }
 
     return result.access_token;
   }
+
+  if (oauthError) throw new Error(oauthError);
 
   throw new Error(
     "Google Drive is not configured. Set OAuth refresh token or service account env vars.",
