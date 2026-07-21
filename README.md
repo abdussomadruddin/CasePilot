@@ -36,7 +36,7 @@ Open `http://localhost:3000`.
 5. Copy `.env.example` to `.env.local` and fill in the project URL, anon key, VAPID public key, and Google Drive credentials.
 6. Set Edge Function secrets: `SUPABASE_SERVICE_ROLE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, and the same Google Drive credentials used by the app.
 7. Deploy `supabase/functions/send-push-notifications` for live status-change alerts.
-8. Deploy `supabase/functions/case-notifications` as a scheduled function for 6-hour reminders and 2-day follow-up alerts.
+8. Deploy `supabase/functions/case-notifications` for grouped day-three follow-up alerts at 8:00 AM Kuala Lumpur time.
 9. Deploy `supabase/functions/cleanup-case-documents` as a daily scheduled function to auto-delete Google Drive case folders after 60 days.
 
 Supabase handles database/auth while Google Drive handles document storage. The included public Supabase project config keeps the app connected for local preview, and `.env.local` can override it for another project.

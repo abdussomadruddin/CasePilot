@@ -46,7 +46,7 @@ type CaseRow = {
 };
 
 const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
-const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+const oneDayMs = 24 * 60 * 60 * 1000;
 
 const roleLabels: Record<Role, string> = {
   admin: "Admin",
@@ -150,7 +150,7 @@ function groupedPushBodyFor(role: Role, records: CaseRow[]) {
   const extraCount = records.length - preview.length;
 
   return [
-    `Trigger: Follow Up Due > 3 days → ${roleLabels[role]}.`,
+    `Trigger: No case update for 3 days → ${roleLabels[role]}.`,
     `${records.length} case${records.length > 1 ? "s" : ""} need follow up.`,
     ...preview,
     extraCount > 0 ? `+${extraCount} more cases.` : "",
@@ -218,7 +218,9 @@ Deno.serve(async () => {
       ? new Date(record.next_follow_up_at)
       : new Date(+new Date(record.updated_at) + twoDaysMs);
 
-    if (+now - +nextFollowUp > threeDaysMs) {
+    const notificationDueAt = +nextFollowUp + oneDayMs;
+
+    if (+now >= notificationDueAt) {
       const followUpRoles = progressRoles(status, record.dealer);
       const rolesToNotify: Role[] = followUpRoles.length
         ? followUpRoles
@@ -231,7 +233,7 @@ Deno.serve(async () => {
         notificationRows.push({
           case_id: record.id,
           role,
-          reason: "Follow Up Due has been overdue for more than 3 days.",
+          reason: "Follow up reminder cycle reached 3 days.",
           status,
           due_at: now.toISOString(),
         });

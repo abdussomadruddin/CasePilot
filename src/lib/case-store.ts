@@ -20,6 +20,7 @@ import {
 import {
   createActivity,
   getNotificationRoles,
+  isTerminalStatus,
   nextFollowUpFrom,
 } from "@/lib/workflow";
 
@@ -303,6 +304,7 @@ export async function saveCase(
     record.remark.trim() &&
     (!previousRecord || previousRecord.remark.trim() !== record.remark.trim());
   const detailsChanged = caseDetailsChanged(record, previousRecord);
+  const shouldResetFollowUp = isNew || Boolean(statusChanged) || Boolean(remarkChanged);
 
   const activities: ActivityEvent[] = [];
 
@@ -334,12 +336,11 @@ export async function saveCase(
     updatedBy: actorRole,
     updatedAt: now,
     createdAt: previousRecord?.createdAt || record.createdAt || now,
-    nextFollowUpAt:
-      record.status === "rejected" ||
-      record.status === "car_delivery" ||
-      record.status === "cancelled"
-        ? ""
-        : record.nextFollowUpAt || nextFollowUpFrom(),
+    nextFollowUpAt: isTerminalStatus(record.status)
+      ? ""
+      : shouldResetFollowUp
+        ? nextFollowUpFrom(new Date(now))
+        : record.nextFollowUpAt || nextFollowUpFrom(new Date(now)),
     activities: [...record.activities, ...activities].sort(sortOldestFirst),
   };
 
