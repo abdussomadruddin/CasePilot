@@ -122,6 +122,12 @@ type PushStatus = "unsupported" | "default" | "denied" | "enabled" | "loading" |
 type StatusFilter = "all" | CaseStatus;
 type DealerFilter = "all" | CaseDealer;
 
+const caseMonthFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kuala_Lumpur",
+  year: "numeric",
+  month: "2-digit",
+});
+
 type CarCatalogItem = {
   model: string;
   segment: string;
@@ -393,6 +399,17 @@ function buildTelUrl(phone: string) {
   return cleanPhone ? `tel:${cleanPhone}` : "#";
 }
 
+function caseMonthKey(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(+date)) return "";
+
+  const parts = caseMonthFormatter.formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+
+  return year && month ? `${year}-${month}` : "";
+}
+
 function defaultWhatsAppMessage(record: CaseRecord) {
   return [
     `Hi, sharing case update for ${record.customerName}.`,
@@ -411,6 +428,7 @@ export function CaseDashboard() {
   const [activeTab, setActiveTab] = useState<DashboardTab>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dealerFilter, setDealerFilter] = useState<DealerFilter>("all");
+  const [monthFilter, setMonthFilter] = useState("");
   const [editingCase, setEditingCase] = useState<CaseRecord | null>(null);
   const [caseToDelete, setCaseToDelete] = useState<CaseRecord | null>(null);
   const [deleteError, setDeleteError] = useState("");
@@ -578,7 +596,9 @@ export function CaseDashboard() {
   }, [activeTab, role, visibleCases]);
 
   const dealerFilterActive = role !== "sales_manager" && dealerFilter !== "all";
-  const filtersActive = statusFilter !== "all" || dealerFilterActive;
+  const monthFilterActive = monthFilter !== "";
+  const filtersActive =
+    statusFilter !== "all" || dealerFilterActive || monthFilterActive;
 
   const statusFilterCounts = useMemo(() => {
     const counts = Object.fromEntries(
@@ -588,22 +608,39 @@ export function CaseDashboard() {
 
     for (const record of tabCases) {
       if (dealerFilterActive && record.dealer !== dealerFilter) continue;
+      if (monthFilterActive && caseMonthKey(record.createdAt) !== monthFilter) {
+        continue;
+      }
 
       counts[record.status] += 1;
       total += 1;
     }
 
     return { counts, total };
-  }, [dealerFilter, dealerFilterActive, tabCases]);
+  }, [
+    dealerFilter,
+    dealerFilterActive,
+    monthFilter,
+    monthFilterActive,
+    tabCases,
+  ]);
 
   const filteredCases = useMemo(
     () =>
       tabCases.filter(
         (record) =>
           (statusFilter === "all" || record.status === statusFilter) &&
-          (!dealerFilterActive || record.dealer === dealerFilter),
+          (!dealerFilterActive || record.dealer === dealerFilter) &&
+          (!monthFilterActive || caseMonthKey(record.createdAt) === monthFilter),
       ),
-    [dealerFilter, dealerFilterActive, statusFilter, tabCases],
+    [
+      dealerFilter,
+      dealerFilterActive,
+      monthFilter,
+      monthFilterActive,
+      statusFilter,
+      tabCases,
+    ],
   );
 
   const metrics = useMemo(
@@ -1136,7 +1173,7 @@ export function CaseDashboard() {
             />
           ) : (
             <>
-              <div className="surface-card flex min-w-0 flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="surface-card flex min-w-0 flex-col gap-3 p-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 items-center gap-2">
                   <Filter className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
                   <div className="min-w-0">
@@ -1148,10 +1185,10 @@ export function CaseDashboard() {
                 </div>
 
                 <div
-                  className={`grid min-w-0 gap-2 sm:w-auto ${
+                  className={`grid min-w-0 gap-2 sm:grid-cols-2 lg:w-auto ${
                     role === "sales_manager"
-                      ? "grid-cols-[minmax(0,1fr)_auto]"
-                      : "grid-cols-1 sm:grid-cols-[14rem_18rem_auto]"
+                      ? "xl:grid-cols-[18rem_12rem_auto]"
+                      : "xl:grid-cols-[14rem_18rem_12rem_auto]"
                   }`}
                 >
                   {role !== "sales_manager" ? (
@@ -1188,6 +1225,13 @@ export function CaseDashboard() {
                       </option>
                     ))}
                   </select>
+                  <input
+                    type="month"
+                    className="field min-w-0"
+                    value={monthFilter}
+                    onChange={(event) => setMonthFilter(event.target.value)}
+                    aria-label="Filter cases by month and year"
+                  />
                   {filtersActive ? (
                     <button
                       type="button"
@@ -1195,6 +1239,7 @@ export function CaseDashboard() {
                       onClick={() => {
                         setStatusFilter("all");
                         setDealerFilter("all");
+                        setMonthFilter("");
                       }}
                       aria-label="Clear case filters"
                     >
