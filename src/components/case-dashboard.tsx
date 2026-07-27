@@ -128,6 +128,12 @@ const caseMonthFormatter = new Intl.DateTimeFormat("en-CA", {
   month: "2-digit",
 });
 
+const caseMonthLabelFormatter = new Intl.DateTimeFormat("en-MY", {
+  timeZone: "UTC",
+  year: "numeric",
+  month: "long",
+});
+
 type CarCatalogItem = {
   model: string;
   segment: string;
@@ -410,6 +416,13 @@ function caseMonthKey(value: string) {
   return year && month ? `${year}-${month}` : "";
 }
 
+function caseMonthLabel(value: string) {
+  const [year, month] = value.split("-").map(Number);
+  if (!year || !month || month < 1 || month > 12) return value;
+
+  return caseMonthLabelFormatter.format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
 function defaultWhatsAppMessage(record: CaseRecord) {
   return [
     `Hi, sharing case update for ${record.customerName}.`,
@@ -622,6 +635,40 @@ export function CaseDashboard() {
     dealerFilterActive,
     monthFilter,
     monthFilterActive,
+    tabCases,
+  ]);
+
+  const monthFilterCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    let total = 0;
+
+    for (const record of tabCases) {
+      if (dealerFilterActive && record.dealer !== dealerFilter) continue;
+      if (statusFilter !== "all" && record.status !== statusFilter) continue;
+
+      const month = caseMonthKey(record.createdAt);
+      if (!month) continue;
+
+      counts.set(month, (counts.get(month) ?? 0) + 1);
+      total += 1;
+    }
+
+    if (monthFilter && !counts.has(monthFilter)) {
+      counts.set(monthFilter, 0);
+    }
+
+    const months = Array.from(counts, ([value, count]) => ({
+      value,
+      count,
+      label: caseMonthLabel(value),
+    })).sort((left, right) => right.value.localeCompare(left.value));
+
+    return { months, total };
+  }, [
+    dealerFilter,
+    dealerFilterActive,
+    monthFilter,
+    statusFilter,
     tabCases,
   ]);
 
@@ -1225,13 +1272,19 @@ export function CaseDashboard() {
                       </option>
                     ))}
                   </select>
-                  <input
-                    type="month"
+                  <select
                     className="field min-w-0"
                     value={monthFilter}
                     onChange={(event) => setMonthFilter(event.target.value)}
                     aria-label="Filter cases by month and year"
-                  />
+                  >
+                    <option value="">All Months ({monthFilterCounts.total})</option>
+                    {monthFilterCounts.months.map((month) => (
+                      <option key={month.value} value={month.value}>
+                        {month.label} ({month.count})
+                      </option>
+                    ))}
+                  </select>
                   {filtersActive ? (
                     <button
                       type="button"
