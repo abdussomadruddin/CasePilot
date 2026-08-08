@@ -194,7 +194,7 @@ export type DashboardTab =
   | "all"
   | "this_month"
   | "tasks"
-  | "attention"
+  | "last_month"
   | "followup"
   | "completed"
   | "team";

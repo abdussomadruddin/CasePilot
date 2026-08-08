@@ -6,6 +6,7 @@ import {
   Bell,
   CalendarDays,
   CalendarClock,
+  CalendarRange,
   CheckCircle2,
   ChevronDown,
   Clock3,
@@ -146,7 +147,7 @@ const metricTabs: TabDefinition[] = [
   { id: "all", label: "All Cases", icon: FolderKanban, toneClass: "bg-honda text-white" },
   { id: "this_month", label: "This Month Cases", icon: CalendarDays, toneClass: "bg-violet-600 text-white" },
   { id: "tasks", label: "My Tasks", icon: ListChecks, toneClass: "bg-blue-600 text-white" },
-  { id: "attention", label: "Need Attention", icon: Bell, toneClass: "bg-amber-500 text-white" },
+  { id: "last_month", label: "Last Month Cases", icon: CalendarRange, toneClass: "bg-amber-500 text-white" },
   { id: "followup", label: "Follow Up Due", icon: CalendarClock, toneClass: "bg-cyan-600 text-white" },
   { id: "completed", label: "Completed", icon: CheckCircle2, toneClass: "bg-emerald-600 text-white" },
 ];
@@ -425,6 +426,15 @@ function caseMonthLabel(value: string) {
   return caseMonthLabelFormatter.format(new Date(Date.UTC(year, month - 1, 1)));
 }
 
+function previousCaseMonth(value: string) {
+  const [year, month] = value.split("-").map(Number);
+  if (!year || !month || month < 1 || month > 12) return "";
+
+  const previousYear = month === 1 ? year - 1 : year;
+  const previousMonth = month === 1 ? 12 : month - 1;
+  return `${previousYear}-${String(previousMonth).padStart(2, "0")}`;
+}
+
 function defaultWhatsAppMessage(record: CaseRecord) {
   return [
     `Hi, sharing case update for ${record.customerName}.`,
@@ -437,6 +447,7 @@ function defaultWhatsAppMessage(record: CaseRecord) {
 
 export function CaseDashboard() {
   const currentMonth = caseMonthKey(new Date().toISOString());
+  const lastMonth = previousCaseMonth(currentMonth);
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [teamMembers, setTeamMembers] = useState<Profile[]>([]);
   const [role, setRole] = useState<Role>("admin");
@@ -601,10 +612,12 @@ export function CaseDashboard() {
         return visibleCases.filter(
           (record) => caseMonthKey(record.createdAt) === currentMonth,
         );
+      case "last_month":
+        return visibleCases.filter(
+          (record) => caseMonthKey(record.createdAt) === lastMonth,
+        );
       case "tasks":
         return visibleCases.filter((record) => isMyTask(record, role));
-      case "attention":
-        return visibleCases.filter((record) => needsAttentionForRole(record, role));
       case "followup":
         return visibleCases.filter((record) => isFollowUpDue(record));
       case "completed":
@@ -613,7 +626,7 @@ export function CaseDashboard() {
       default:
         return visibleCases;
     }
-  }, [activeTab, currentMonth, role, visibleCases]);
+  }, [activeTab, currentMonth, lastMonth, role, visibleCases]);
 
   const dealerFilterActive = role !== "sales_manager" && dealerFilter !== "all";
   const monthFilterActive = monthFilter !== "";
@@ -713,14 +726,15 @@ export function CaseDashboard() {
       this_month: visibleCases.filter(
         (record) => caseMonthKey(record.createdAt) === currentMonth,
       ).length,
+      last_month: visibleCases.filter(
+        (record) => caseMonthKey(record.createdAt) === lastMonth,
+      ).length,
       tasks: metricCases.filter((record) => isMyTask(record, role)).length,
-      attention: metricCases.filter((record) => needsAttentionForRole(record, role))
-        .length,
       followup: metricCases.filter((record) => isFollowUpDue(record)).length,
       completed: metricCases.filter((record) => isTerminalStatus(record.status))
         .length,
     }),
-    [currentMonth, metricCases, role, visibleCases],
+    [currentMonth, lastMonth, metricCases, role, visibleCases],
   );
 
   async function refreshCases() {
@@ -1227,6 +1241,7 @@ export function CaseDashboard() {
               onClick={() => {
                 setActiveTab(tab.id);
                 if (tab.id === "this_month") setMonthFilter(currentMonth);
+                if (tab.id === "last_month") setMonthFilter(lastMonth);
                 if (tab.id === "all") setMonthFilter("");
               }}
             />
@@ -1301,7 +1316,10 @@ export function CaseDashboard() {
                     onChange={(event) => {
                       const nextMonth = event.target.value;
                       setMonthFilter(nextMonth);
-                      if (activeTab === "this_month" && nextMonth !== currentMonth) {
+                      if (
+                        (activeTab === "this_month" && nextMonth !== currentMonth) ||
+                        (activeTab === "last_month" && nextMonth !== lastMonth)
+                      ) {
                         setActiveTab("all");
                       }
                     }}
@@ -1322,7 +1340,12 @@ export function CaseDashboard() {
                         setStatusFilter("all");
                         setDealerFilter("all");
                         setMonthFilter("");
-                        if (activeTab === "this_month") setActiveTab("all");
+                        if (
+                          activeTab === "this_month" ||
+                          activeTab === "last_month"
+                        ) {
+                          setActiveTab("all");
+                        }
                       }}
                       aria-label="Clear case filters"
                     >
