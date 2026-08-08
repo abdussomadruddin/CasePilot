@@ -452,10 +452,10 @@ export function CaseDashboard() {
   const [teamMembers, setTeamMembers] = useState<Profile[]>([]);
   const [role, setRole] = useState<Role>("admin");
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [activeTab, setActiveTab] = useState<DashboardTab>("this_month");
+  const [activeTab, setActiveTab] = useState<DashboardTab>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dealerFilter, setDealerFilter] = useState<DealerFilter>("all");
-  const [monthFilter, setMonthFilter] = useState(currentMonth);
+  const [monthFilter, setMonthFilter] = useState("");
   const [editingCase, setEditingCase] = useState<CaseRecord | null>(null);
   const [caseToDelete, setCaseToDelete] = useState<CaseRecord | null>(null);
   const [deleteError, setDeleteError] = useState("");
