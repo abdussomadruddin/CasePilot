@@ -146,8 +146,8 @@ type CarCatalogItem = {
 const metricTabs: TabDefinition[] = [
   { id: "all", label: "All Cases", icon: FolderKanban, toneClass: "bg-honda text-white" },
   { id: "this_month", label: "This Month Cases", icon: CalendarDays, toneClass: "bg-violet-600 text-white" },
-  { id: "tasks", label: "My Tasks", icon: ListChecks, toneClass: "bg-blue-600 text-white" },
   { id: "last_month", label: "Last Month Cases", icon: CalendarRange, toneClass: "bg-amber-500 text-white" },
+  { id: "tasks", label: "My Tasks", icon: ListChecks, toneClass: "bg-blue-600 text-white" },
   { id: "followup", label: "Follow Up Due", icon: CalendarClock, toneClass: "bg-cyan-600 text-white" },
   { id: "completed", label: "Completed", icon: CheckCircle2, toneClass: "bg-emerald-600 text-white" },
 ];
