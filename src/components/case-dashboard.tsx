@@ -441,7 +441,7 @@ export function CaseDashboard() {
   const [teamMembers, setTeamMembers] = useState<Profile[]>([]);
   const [role, setRole] = useState<Role>("admin");
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [activeTab, setActiveTab] = useState<DashboardTab>("all");
+  const [activeTab, setActiveTab] = useState<DashboardTab>("this_month");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dealerFilter, setDealerFilter] = useState<DealerFilter>("all");
   const [monthFilter, setMonthFilter] = useState(currentMonth);
@@ -697,20 +697,30 @@ export function CaseDashboard() {
     ],
   );
 
+  const metricCases = useMemo(
+    () =>
+      monthFilterActive
+        ? visibleCases.filter(
+            (record) => caseMonthKey(record.createdAt) === monthFilter,
+          )
+        : visibleCases,
+    [monthFilter, monthFilterActive, visibleCases],
+  );
+
   const metrics = useMemo(
     () => ({
-      all: visibleCases.length,
+      all: metricCases.length,
       this_month: visibleCases.filter(
         (record) => caseMonthKey(record.createdAt) === currentMonth,
       ).length,
-      tasks: visibleCases.filter((record) => isMyTask(record, role)).length,
-      attention: visibleCases.filter((record) => needsAttentionForRole(record, role))
+      tasks: metricCases.filter((record) => isMyTask(record, role)).length,
+      attention: metricCases.filter((record) => needsAttentionForRole(record, role))
         .length,
-      followup: visibleCases.filter((record) => isFollowUpDue(record)).length,
-      completed: visibleCases.filter((record) => isTerminalStatus(record.status))
+      followup: metricCases.filter((record) => isFollowUpDue(record)).length,
+      completed: metricCases.filter((record) => isTerminalStatus(record.status))
         .length,
     }),
-    [currentMonth, role, visibleCases],
+    [currentMonth, metricCases, role, visibleCases],
   );
 
   async function refreshCases() {
@@ -1217,6 +1227,7 @@ export function CaseDashboard() {
               onClick={() => {
                 setActiveTab(tab.id);
                 if (tab.id === "this_month") setMonthFilter(currentMonth);
+                if (tab.id === "all") setMonthFilter("");
               }}
             />
           ))}
