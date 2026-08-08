@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Banknote,
   Bell,
+  CalendarDays,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
@@ -143,6 +144,7 @@ type CarCatalogItem = {
 
 const metricTabs: TabDefinition[] = [
   { id: "all", label: "All Cases", icon: FolderKanban, toneClass: "bg-honda text-white" },
+  { id: "this_month", label: "This Month Cases", icon: CalendarDays, toneClass: "bg-violet-600 text-white" },
   { id: "tasks", label: "My Tasks", icon: ListChecks, toneClass: "bg-blue-600 text-white" },
   { id: "attention", label: "Need Attention", icon: Bell, toneClass: "bg-amber-500 text-white" },
   { id: "followup", label: "Follow Up Due", icon: CalendarClock, toneClass: "bg-cyan-600 text-white" },
@@ -434,6 +436,7 @@ function defaultWhatsAppMessage(record: CaseRecord) {
 }
 
 export function CaseDashboard() {
+  const currentMonth = caseMonthKey(new Date().toISOString());
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [teamMembers, setTeamMembers] = useState<Profile[]>([]);
   const [role, setRole] = useState<Role>("admin");
@@ -441,7 +444,7 @@ export function CaseDashboard() {
   const [activeTab, setActiveTab] = useState<DashboardTab>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dealerFilter, setDealerFilter] = useState<DealerFilter>("all");
-  const [monthFilter, setMonthFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState(currentMonth);
   const [editingCase, setEditingCase] = useState<CaseRecord | null>(null);
   const [caseToDelete, setCaseToDelete] = useState<CaseRecord | null>(null);
   const [deleteError, setDeleteError] = useState("");
@@ -594,6 +597,10 @@ export function CaseDashboard() {
 
   const tabCases = useMemo(() => {
     switch (activeTab) {
+      case "this_month":
+        return visibleCases.filter(
+          (record) => caseMonthKey(record.createdAt) === currentMonth,
+        );
       case "tasks":
         return visibleCases.filter((record) => isMyTask(record, role));
       case "attention":
@@ -606,7 +613,7 @@ export function CaseDashboard() {
       default:
         return visibleCases;
     }
-  }, [activeTab, role, visibleCases]);
+  }, [activeTab, currentMonth, role, visibleCases]);
 
   const dealerFilterActive = role !== "sales_manager" && dealerFilter !== "all";
   const monthFilterActive = monthFilter !== "";
@@ -693,6 +700,9 @@ export function CaseDashboard() {
   const metrics = useMemo(
     () => ({
       all: visibleCases.length,
+      this_month: visibleCases.filter(
+        (record) => caseMonthKey(record.createdAt) === currentMonth,
+      ).length,
       tasks: visibleCases.filter((record) => isMyTask(record, role)).length,
       attention: visibleCases.filter((record) => needsAttentionForRole(record, role))
         .length,
@@ -700,7 +710,7 @@ export function CaseDashboard() {
       completed: visibleCases.filter((record) => isTerminalStatus(record.status))
         .length,
     }),
-    [role, visibleCases],
+    [currentMonth, role, visibleCases],
   );
 
   async function refreshCases() {
@@ -1195,7 +1205,7 @@ export function CaseDashboard() {
           </div>
         ) : null}
 
-        <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+        <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {metricTabs.map((tab) => (
             <MetricCard
               key={tab.id}
@@ -1204,8 +1214,10 @@ export function CaseDashboard() {
               icon={tab.icon}
               toneClass={tab.toneClass}
               active={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={tab.id === "all" ? "col-span-2 sm:col-span-3 xl:col-span-1" : ""}
+              onClick={() => {
+                setActiveTab(tab.id);
+                if (tab.id === "this_month") setMonthFilter(currentMonth);
+              }}
             />
           ))}
         </section>
@@ -1275,7 +1287,13 @@ export function CaseDashboard() {
                   <select
                     className="field min-w-0"
                     value={monthFilter}
-                    onChange={(event) => setMonthFilter(event.target.value)}
+                    onChange={(event) => {
+                      const nextMonth = event.target.value;
+                      setMonthFilter(nextMonth);
+                      if (activeTab === "this_month" && nextMonth !== currentMonth) {
+                        setActiveTab("all");
+                      }
+                    }}
                     aria-label="Filter cases by month and year"
                   >
                     <option value="">All Months ({monthFilterCounts.total})</option>
@@ -1293,6 +1311,7 @@ export function CaseDashboard() {
                         setStatusFilter("all");
                         setDealerFilter("all");
                         setMonthFilter("");
+                        if (activeTab === "this_month") setActiveTab("all");
                       }}
                       aria-label="Clear case filters"
                     >

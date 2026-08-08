@@ -192,6 +192,7 @@ export type CaseFormValues = {
 
 export type DashboardTab =
   | "all"
+  | "this_month"
   | "tasks"
   | "attention"
   | "followup"
