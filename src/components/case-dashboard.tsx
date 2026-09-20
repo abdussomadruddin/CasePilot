@@ -1559,7 +1559,7 @@ function RequiredAppSetup({
   return (
     <main className="grid min-h-screen place-items-center px-4 py-6">
       <section
-        className="surface-card w-full max-w-md overflow-hidden"
+        className={`surface-card w-full overflow-hidden ${desktopBlocked ? "max-w-2xl" : "max-w-md"}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="app-setup-title"
@@ -1580,9 +1580,32 @@ function RequiredAppSetup({
 
         <div className="grid gap-4 p-5">
           {desktopBlocked ? (
-            <p className="rounded-md border border-zinc-800 bg-zinc-950 p-4 text-sm leading-6 text-zinc-300">
-              Buka alamat CasePilot menggunakan Safari pada iPhone atau Chrome pada Android.
-            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <InstallGuide
+                title="iPhone / iPad"
+                steps={[
+                  "Buka coshonda.vercel.app menggunakan Safari.",
+                  "Tekan ikon Share di bahagian bawah Safari.",
+                  "Scroll dan pilih Add to Home Screen.",
+                  "Tekan Add di penjuru kanan atas.",
+                  "Buka CasePilot melalui ikon pada Home Screen.",
+                ]}
+              />
+              <InstallGuide
+                title="Android"
+                steps={[
+                  "Buka coshonda.vercel.app menggunakan Chrome.",
+                  "Tekan menu tiga titik di penjuru Chrome.",
+                  "Pilih Install app atau Add to Home screen.",
+                  "Tekan Install atau Add untuk sahkan.",
+                  "Buka CasePilot melalui ikon pada Home Screen.",
+                ]}
+              />
+              <p className="rounded-md border border-red-900/70 bg-red-950/40 p-4 text-sm leading-6 text-red-100 sm:col-span-2">
+                Selepas login, tekan Allow notifications apabila popup keluar. Notification wajib
+                diaktifkan sebelum dashboard boleh digunakan.
+              </p>
+            </div>
           ) : environment.ios ? (
             <ol className="grid gap-3 text-sm text-zinc-200">
               <li className="flex items-center gap-3 rounded-md border border-zinc-800 bg-zinc-950 p-3">
@@ -1624,6 +1647,24 @@ function RequiredAppSetup({
         </div>
       </section>
     </main>
+  );
+}
+
+function InstallGuide({ title, steps }: { title: string; steps: string[] }) {
+  return (
+    <section className="rounded-md border border-zinc-800 bg-zinc-950 p-4">
+      <h2 className="font-semibold text-white">{title}</h2>
+      <ol className="mt-3 grid gap-3">
+        {steps.map((step, index) => (
+          <li key={step} className="flex gap-3 text-sm leading-5 text-zinc-300">
+            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-red-600 text-xs font-bold text-white">
+              {index + 1}
+            </span>
+            <span className="pt-0.5">{step}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
