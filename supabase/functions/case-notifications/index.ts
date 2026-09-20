@@ -131,17 +131,25 @@ function caseLine(record: CaseRow) {
   return car ? `${customer} • ${car}` : customer;
 }
 
-function isKualaLumpurEightAm(now: Date) {
+function getKualaLumpurReminderSlot(now: Date) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Kuala_Lumpur",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   }).formatToParts(now);
+  const year = Number(parts.find((part) => part.type === "year")?.value || "0");
+  const month = Number(parts.find((part) => part.type === "month")?.value || "0");
+  const day = Number(parts.find((part) => part.type === "day")?.value || "0");
   const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
   const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
 
-  return hour === 8 && minute < 15;
+  if (![8, 16].includes(hour) || minute >= 15) return null;
+
+  return new Date(Date.UTC(year, month - 1, day, hour - 8));
 }
 
 function groupedPushBodyFor(role: Role, records: CaseRow[]) {
@@ -154,7 +162,7 @@ function groupedPushBodyFor(role: Role, records: CaseRow[]) {
   const extraCount = records.length - preview.length;
 
   return [
-    `Trigger: No case update for 3 days → ${roleLabels[role]}.`,
+    `Trigger: Follow Up Due with no status or remark update → ${roleLabels[role]}.`,
     `${records.length} case${records.length > 1 ? "s" : ""} need follow up.`,
     ...preview,
     extraCount > 0 ? `+${extraCount} more cases.` : "",
@@ -172,11 +180,12 @@ Deno.serve(async () => {
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
   const now = new Date();
+  const reminderSlot = getKualaLumpurReminderSlot(now);
 
-  if (!isKualaLumpurEightAm(now)) {
+  if (!reminderSlot) {
     return Response.json({
       ok: true,
-      skipped: "scheduled_for_8am_kuala_lumpur",
+      skipped: "scheduled_for_8am_or_4pm_kuala_lumpur",
       notifications: 0,
       activities: 0,
       push: { sent: 0, failed: 0 },
@@ -192,6 +201,21 @@ Deno.serve(async () => {
     return Response.json({ ok: false, error: error.message }, { status: 500 });
   }
 
+  const slotEnd = new Date(+reminderSlot + 15 * 60 * 1000);
+  const { data: existingNotifications, error: existingError } = await supabase
+    .from("case_notifications")
+    .select("case_id")
+    .gte("due_at", reminderSlot.toISOString())
+    .lt("due_at", slotEnd.toISOString());
+
+  if (existingError) {
+    return Response.json({ ok: false, error: existingError.message }, { status: 500 });
+  }
+
+  const alreadyProcessedCaseIds = new Set(
+    (existingNotifications || []).map((notification) => notification.case_id as string),
+  );
+
   const notificationRows: Array<{
     case_id: string;
     role: Role;
@@ -200,17 +224,8 @@ Deno.serve(async () => {
     due_at: string;
   }> = [];
 
-  const activityRows: Array<{
-    case_id: string;
-    type: string;
-    actor_role: Role;
-    actor_name: string;
-    message: string;
-    status: CurrentCaseStatus;
-  }> = [];
   const casesByRole: Partial<Record<Role, CaseRow[]>> = {};
   const casesByUser: Record<string, CaseRow[]> = {};
-  const notifiedCaseIds = new Set<string>();
 
   for (const record of (cases || []) as CaseRow[]) {
     const status = normalizeStatus(record.status);
@@ -225,7 +240,7 @@ Deno.serve(async () => {
 
     const notificationDueAt = +nextFollowUp + oneDayMs;
 
-    if (+now >= notificationDueAt) {
+    if (+now >= notificationDueAt && !alreadyProcessedCaseIds.has(record.id)) {
       const isBrokerCase = record.owner?.role === "broker" && Boolean(record.owner_id);
       const followUpRoles = isBrokerCase
         ? ["finance" satisfies Role]
@@ -246,21 +261,11 @@ Deno.serve(async () => {
         notificationRows.push({
           case_id: record.id,
           role,
-          reason: "Follow up reminder cycle reached 3 days.",
+          reason: "Scheduled Follow Up Due reminder.",
           status,
-          due_at: now.toISOString(),
+          due_at: reminderSlot.toISOString(),
         });
       }
-
-      notifiedCaseIds.add(record.id);
-      activityRows.push({
-        case_id: record.id,
-        type: "follow_up",
-        actor_role: rolesToNotify[0] || "customer_service",
-        actor_name: "System",
-        message: "Grouped follow up due notification sent.",
-        status,
-      });
     }
   }
 
@@ -278,7 +283,12 @@ Deno.serve(async () => {
   let pushResult = { sent: 0, failed: 0 };
 
   if (notificationRows.length) {
-    await supabase.from("case_notifications").insert(notificationRows);
+    const { error: notificationError } = await supabase
+      .from("case_notifications")
+      .insert(notificationRows);
+    if (notificationError) {
+      return Response.json({ ok: false, error: notificationError.message }, { status: 500 });
+    }
     pushResult = await sendPushesForRoles(
       supabase,
       Object.keys(casesByRole) as Role[],
@@ -296,23 +306,10 @@ Deno.serve(async () => {
     pushResult.failed += result.failed;
   }
 
-  if (activityRows.length) {
-    await supabase.from("case_activities").insert(activityRows);
-  }
-
-  if (notifiedCaseIds.size) {
-    await supabase
-      .from("cases")
-      .update({
-        next_follow_up_at: new Date(+now + twoDaysMs).toISOString(),
-      })
-      .in("id", [...notifiedCaseIds]);
-  }
-
   return Response.json({
     ok: true,
     notifications: notificationRows.length,
-    activities: activityRows.length,
+    activities: 0,
     push: pushResult,
   });
 });
