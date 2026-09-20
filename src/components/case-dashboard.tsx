@@ -2046,7 +2046,7 @@ function TeamMemberEditor({
 
   return (
     <form
-      className={`grid gap-3 rounded-md border p-3 lg:grid-cols-[1fr_1fr_1fr_1fr_150px_110px_auto_auto] ${
+      className={`grid gap-3 rounded-md border p-3 lg:grid-cols-[1fr_1fr_1fr_1fr_150px_130px_auto_auto] ${
         values.active
           ? "border-zinc-800 bg-zinc-950"
           : "border-zinc-800 bg-zinc-900/70 opacity-75"
@@ -2113,16 +2113,36 @@ function TeamMemberEditor({
           ))}
         </select>
       </Field>
-      <label className="flex items-end gap-2 pb-2 text-sm font-semibold text-ink">
-        <input
-          type="checkbox"
-          checked={values.active}
-          onChange={(event) =>
-            setValues((current) => ({ ...current, active: event.target.checked }))
+      <div className="flex items-end">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={values.active}
+          aria-label={`${values.active ? "Deactivate" : "Activate"} ${member.fullName || member.email}`}
+          className={`flex h-11 w-full items-center justify-between gap-2 rounded-md border px-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-red-500/70 ${
+            values.active
+              ? "border-emerald-500/40 bg-emerald-950/40 text-emerald-100"
+              : "border-zinc-700 bg-zinc-900 text-zinc-400"
+          }`}
+          onClick={() =>
+            setValues((current) => ({ ...current, active: !current.active }))
           }
-        />
-        Active
-      </label>
+        >
+          <span
+            className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+              values.active ? "bg-emerald-500" : "bg-zinc-700"
+            }`}
+            aria-hidden="true"
+          >
+            <span
+              className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                values.active ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </span>
+          <span>{values.active ? "Active" : "Inactive"}</span>
+        </button>
+      </div>
       <button className="secondary-button self-end" disabled={saving}>
         <Save className="h-4 w-4" aria-hidden="true" />
         Save
