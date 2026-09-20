@@ -1138,17 +1138,6 @@ export function CaseDashboard() {
     );
   }
 
-  if (!appEnvironment.mobile || !appEnvironment.standalone) {
-    return (
-      <RequiredAppSetup
-        environment={appEnvironment}
-        canInstall={Boolean(installPrompt)}
-        installing={installing}
-        onInstall={handleInstallApp}
-      />
-    );
-  }
-
   if (!profile && !loading) {
     return (
       <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
@@ -1205,6 +1194,17 @@ export function CaseDashboard() {
           </form>
         </section>
       </main>
+    );
+  }
+
+  if (role !== "admin" && (!appEnvironment.mobile || !appEnvironment.standalone)) {
+    return (
+      <RequiredAppSetup
+        environment={appEnvironment}
+        canInstall={Boolean(installPrompt)}
+        installing={installing}
+        onInstall={handleInstallApp}
+      />
     );
   }
 
