@@ -1,4 +1,3 @@
-import { getSupabaseClient } from "@/lib/supabase";
 import { getValidAccessToken } from "@/lib/auth";
 import type { Role } from "@/lib/types";
 
@@ -23,28 +22,29 @@ async function invokeManageTeam(
   action: "create" | "update" | "delete",
   values: Pick<TeamMemberFormValues, "id"> | TeamMemberFormValues,
 ) {
-  const supabase = getSupabaseClient();
   const accessToken = await getValidAccessToken();
 
   const password = "password" in values ? values.password.trim() : "";
 
-  const { data, error } = await supabase.functions.invoke<TeamMemberSaveResult>("manage-team-member", {
-    body: {
+  const response = await fetch("/api/manage-team-member", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
       action,
       ...values,
       email: "email" in values ? values.email.trim().toLowerCase() : undefined,
       fullName: "fullName" in values ? values.fullName.trim() : undefined,
       phone: "phone" in values ? values.phone.trim() : undefined,
       password: password || undefined,
-    },
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
+    }),
   });
+  const data = (await response.json().catch(() => null)) as TeamMemberSaveResult | null;
 
-  if (error) throw error;
-  if (data?.ok === false) {
-    throw new Error(data.error || "Unable to save team member.");
+  if (!response.ok || data?.ok === false) {
+    throw new Error(data?.error || "Unable to save team member.");
   }
 
   return data || { ok: true };
