@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.0";
+import { createClient } from "npm:@supabase/supabase-js@2.50.0";
 import { sendPushesForRoles, sendPushesForUsers } from "../_shared/web-push.ts";
 
 type Role =
