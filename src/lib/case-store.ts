@@ -10,7 +10,6 @@ import {
   type CaseDealer,
   type CaseDocument,
   type CaseRecord,
-  type CaseStatus,
   type DatabaseCaseStatus,
   type DocumentType,
   type Profile,

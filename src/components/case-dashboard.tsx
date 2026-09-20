@@ -627,7 +627,7 @@ export function CaseDashboard() {
       default:
         return visibleCases;
     }
-  }, [activeTab, currentMonth, lastMonth, role, visibleCases]);
+  }, [activeTab, currentMonth, lastMonth, profile?.id, role, visibleCases]);
 
   const dealerFilterActive = role !== "sales_manager" && dealerFilter !== "all";
   const monthFilterActive = monthFilter !== "";
