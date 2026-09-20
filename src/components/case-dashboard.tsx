@@ -985,6 +985,14 @@ export function CaseDashboard() {
       return;
     }
 
+    if (
+      !window.confirm(
+        `Final confirmation: permanently delete team member ${member.fullName || member.email}?`,
+      )
+    ) {
+      return;
+    }
+
     try {
       setTeamSaving(true);
       setError("");
@@ -1009,6 +1017,14 @@ export function CaseDashboard() {
     if (!caseToDelete) return;
 
     const record = caseToDelete;
+
+    if (
+      !window.confirm(
+        `Final confirmation: permanently delete case ${record.customerName || "Unnamed case"} and its Google Drive folder?`,
+      )
+    ) {
+      return;
+    }
 
     try {
       setSaving(true);
