@@ -1940,7 +1940,9 @@ function CaseCard({
             {record.customerPhone || "No phone"}
           </p>
           <p className="mt-1 line-clamp-1 text-xs font-semibold text-zinc-300">
-            {record.ownerRole === "broker" ? "Broker" : "Customer Service"}: {record.ownerName}
+            {record.ownerRole === "broker"
+              ? `Broker${record.ownerName ? `: ${record.ownerName}` : ""}`
+              : `Customer Service${record.ownerName ? `: ${record.ownerName}` : ""}`}
           </p>
         </div>
 

@@ -23,7 +23,7 @@ export function createEmptyCase(): CaseRecord {
     updatedAt: now,
     nextFollowUpAt: nextFollowUpFrom(),
     ownerId: "",
-    ownerName: "Customer Service",
+    ownerName: "",
     ownerRole: "customer_service",
   };
 }

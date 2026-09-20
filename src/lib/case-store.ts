@@ -131,7 +131,7 @@ function mapCase(row: CaseRow): CaseRecord {
     updatedAt: row.updated_at,
     nextFollowUpAt: row.next_follow_up_at || nextFollowUpFrom(new Date(row.updated_at)),
     ownerId: row.owner_id || "",
-    ownerName: row.owner?.full_name || "Customer Service",
+    ownerName: row.owner?.full_name || "",
     ownerRole: row.owner?.role === "broker" ? "broker" : "customer_service",
   };
 }
