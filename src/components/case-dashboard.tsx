@@ -59,6 +59,7 @@ import {
 import { getSupabaseClient } from "@/lib/supabase";
 import {
   createTeamMember,
+  deleteTeamMember,
   updateTeamMember,
   type TeamMemberFormValues,
 } from "@/lib/team-store";
@@ -965,6 +966,30 @@ export function CaseDashboard() {
     }
   }
 
+  async function handleDeleteTeamMember(member: Profile) {
+    if (
+      !window.confirm(
+        `Delete ${member.fullName || member.email}? This removes their login permanently and cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setTeamSaving(true);
+      setError("");
+      setSuccessMessage("");
+      await deleteTeamMember(member.id);
+      await refreshTeamMembers();
+      setSuccessMessage("Team member deleted.");
+    } catch (caught) {
+      setSuccessMessage("");
+      setError(caught instanceof Error ? caught.message : "Unable to delete team member.");
+    } finally {
+      setTeamSaving(false);
+    }
+  }
+
   function handleDelete(record: CaseRecord) {
     setDeleteError("");
     setCaseToDelete(record);
@@ -1255,6 +1280,7 @@ export function CaseDashboard() {
               saving={teamSaving}
               onCreate={handleCreateTeamMember}
               onUpdate={handleUpdateTeamMember}
+              onDelete={handleDeleteTeamMember}
             />
           ) : (
             <>
@@ -1548,11 +1574,13 @@ function TeamManagementPanel({
   saving,
   onCreate,
   onUpdate,
+  onDelete,
 }: {
   members: Profile[];
   saving: boolean;
   onCreate: (values: TeamMemberFormValues) => Promise<void>;
   onUpdate: (values: TeamMemberFormValues) => Promise<void>;
+  onDelete: (member: Profile) => Promise<void>;
 }) {
   return (
     <div className="surface-card grid gap-4 p-4">
@@ -1577,6 +1605,7 @@ function TeamManagementPanel({
             member={member}
             saving={saving}
             onUpdate={onUpdate}
+            onDelete={onDelete}
           />
         ))}
       </div>
@@ -1690,10 +1719,12 @@ function TeamMemberEditor({
   member,
   saving,
   onUpdate,
+  onDelete,
 }: {
   member: Profile;
   saving: boolean;
   onUpdate: (values: TeamMemberFormValues) => Promise<void>;
+  onDelete: (member: Profile) => Promise<void>;
 }) {
   const [values, setValues] = useState<TeamMemberFormValues>({
     id: member.id,
@@ -1713,7 +1744,7 @@ function TeamMemberEditor({
 
   return (
     <form
-      className={`grid gap-3 rounded-md border p-3 lg:grid-cols-[1fr_1fr_1fr_1fr_150px_110px_auto] ${
+      className={`grid gap-3 rounded-md border p-3 lg:grid-cols-[1fr_1fr_1fr_1fr_150px_110px_auto_auto] ${
         values.active
           ? "border-zinc-800 bg-zinc-950"
           : "border-zinc-800 bg-zinc-900/70 opacity-75"
@@ -1793,6 +1824,17 @@ function TeamMemberEditor({
       <button className="secondary-button self-end" disabled={saving}>
         <Save className="h-4 w-4" aria-hidden="true" />
         Save
+      </button>
+      <button
+        className="danger-button self-end"
+        type="button"
+        disabled={saving}
+        onClick={() => void onDelete(member)}
+        title={`Delete ${member.fullName || member.email}`}
+        aria-label={`Delete ${member.fullName || member.email}`}
+      >
+        <Trash2 className="h-4 w-4" aria-hidden="true" />
+        Delete
       </button>
     </form>
   );

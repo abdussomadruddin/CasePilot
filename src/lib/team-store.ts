@@ -18,7 +18,10 @@ export type TeamMemberSaveResult = {
   passwordUpdated?: boolean;
 };
 
-async function invokeManageTeam(action: "create" | "update", values: TeamMemberFormValues) {
+async function invokeManageTeam(
+  action: "create" | "update" | "delete",
+  values: Pick<TeamMemberFormValues, "id"> | TeamMemberFormValues,
+) {
   const supabase = getSupabaseClient();
   const {
     data: { session },
@@ -29,15 +32,15 @@ async function invokeManageTeam(action: "create" | "update", values: TeamMemberF
     throw new Error("Admin session expired. Please sign in again.");
   }
 
-  const password = values.password.trim();
+  const password = "password" in values ? values.password.trim() : "";
 
   const { data, error } = await supabase.functions.invoke<TeamMemberSaveResult>("manage-team-member", {
     body: {
       action,
       ...values,
-      email: values.email.trim().toLowerCase(),
-      fullName: values.fullName.trim(),
-      phone: values.phone.trim(),
+      email: "email" in values ? values.email.trim().toLowerCase() : undefined,
+      fullName: "fullName" in values ? values.fullName.trim() : undefined,
+      phone: "phone" in values ? values.phone.trim() : undefined,
       password: password || undefined,
     },
     headers: {
@@ -59,4 +62,8 @@ export async function createTeamMember(values: TeamMemberFormValues) {
 
 export async function updateTeamMember(values: TeamMemberFormValues) {
   return invokeManageTeam("update", values);
+}
+
+export async function deleteTeamMember(id: string) {
+  return invokeManageTeam("delete", { id });
 }

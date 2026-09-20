@@ -9,7 +9,7 @@ type Role =
   | "sales_manager";
 
 type TeamMemberPayload = {
-  action?: "create" | "update";
+  action?: "create" | "update" | "delete";
   id?: string;
   email?: string;
   password?: string;
@@ -220,6 +220,48 @@ Deno.serve(async (request) => {
       }
 
       return jsonResponse({ ok: true, passwordUpdated: Boolean(payload.password) });
+    }
+
+    if (payload.action === "delete") {
+      if (!payload.id) {
+        return jsonResponse({ ok: false, error: "User id is required." }, 400);
+      }
+
+      if (payload.id === user.id) {
+        return jsonResponse(
+          { ok: false, error: "You cannot delete the admin account currently signed in." },
+          400,
+        );
+      }
+
+      const { data: member, error: memberError } = await serviceClient
+        .from("profiles")
+        .select("id")
+        .eq("id", payload.id)
+        .maybeSingle();
+
+      if (memberError || !member) {
+        return jsonResponse({ ok: false, error: "Team member was not found." }, 404);
+      }
+
+      // Preserve case history before deleting the profile row cascades from Auth.
+      const cleanupQueries = await Promise.all([
+        serviceClient.from("cases").update({ created_by: null }).eq("created_by", payload.id),
+        serviceClient.from("cases").update({ updated_by: null }).eq("updated_by", payload.id),
+        serviceClient.from("case_documents").update({ uploaded_by: null }).eq("uploaded_by", payload.id),
+        serviceClient.from("case_activities").update({ actor_id: null }).eq("actor_id", payload.id),
+      ]);
+      const cleanupError = cleanupQueries.find((result) => result.error)?.error;
+      if (cleanupError) {
+        return jsonResponse({ ok: false, error: cleanupError.message }, 500);
+      }
+
+      const { error: deleteError } = await serviceClient.auth.admin.deleteUser(payload.id);
+      if (deleteError) {
+        return jsonResponse({ ok: false, error: deleteError.message }, 400);
+      }
+
+      return jsonResponse({ ok: true });
     }
 
     return jsonResponse({ ok: false, error: "Invalid team action." }, 400);
