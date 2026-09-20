@@ -25,7 +25,9 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Share2,
   Shield,
+  Smartphone,
   Trash2,
   Upload,
   UserPlus,
@@ -121,6 +123,18 @@ type WhatsAppRecipient = {
 };
 
 type PushStatus = "unsupported" | "default" | "denied" | "enabled" | "loading" | "error";
+
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
+type AppEnvironment = {
+  checked: boolean;
+  mobile: boolean;
+  standalone: boolean;
+  ios: boolean;
+};
 
 type StatusFilter = "all" | CaseStatus;
 type DealerFilter = "all" | CaseDealer;
@@ -472,6 +486,45 @@ export function CaseDashboard() {
   const [pushStatus, setPushStatus] = useState<PushStatus>("default");
   const [pushMessage, setPushMessage] = useState("");
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [installing, setInstalling] = useState(false);
+  const [appEnvironment, setAppEnvironment] = useState<AppEnvironment>({
+    checked: false,
+    mobile: false,
+    standalone: false,
+    ios: false,
+  });
+
+  useEffect(() => {
+    function readEnvironment() {
+      const userAgent = navigator.userAgent;
+      const ios = /iPhone|iPad|iPod/i.test(userAgent) ||
+        (/Macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1);
+      const mobile = ios || /Android|Mobile/i.test(userAgent);
+      const standalone = window.matchMedia("(display-mode: standalone)").matches ||
+        Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+
+      setAppEnvironment({ checked: true, mobile, standalone, ios });
+    }
+
+    function captureInstallPrompt(event: Event) {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPromptEvent);
+    }
+
+    readEnvironment();
+    window.addEventListener("beforeinstallprompt", captureInstallPrompt);
+    window.addEventListener("appinstalled", readEnvironment);
+    window.addEventListener("pageshow", readEnvironment);
+    document.addEventListener("visibilitychange", readEnvironment);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", captureInstallPrompt);
+      window.removeEventListener("appinstalled", readEnvironment);
+      window.removeEventListener("pageshow", readEnvironment);
+      document.removeEventListener("visibilitychange", readEnvironment);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -812,7 +865,7 @@ export function CaseDashboard() {
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification("CasePilot alerts enabled", {
           body: "You will receive case reminders on this device.",
-          icon: "/icon-192.svg",
+          icon: "/icon-192.png",
         });
       }
     } catch (caught) {
@@ -822,6 +875,19 @@ export function CaseDashboard() {
         getNotificationPermission() === "denied" ? "denied" : "error",
       );
       setPushMessage(message);
+    }
+  }
+
+  async function handleInstallApp() {
+    if (!installPrompt) return;
+
+    try {
+      setInstalling(true);
+      await installPrompt.prompt();
+      await installPrompt.userChoice;
+      setInstallPrompt(null);
+    } finally {
+      setInstalling(false);
     }
   }
 
@@ -1052,7 +1118,7 @@ export function CaseDashboard() {
     }
   }
 
-  if (!profile && loading) {
+  if (!appEnvironment.checked || (!profile && loading)) {
     return (
       <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
         <section className="surface-card mx-auto max-w-md overflow-hidden p-6">
@@ -1069,6 +1135,17 @@ export function CaseDashboard() {
           </div>
         </section>
       </main>
+    );
+  }
+
+  if (!appEnvironment.mobile || !appEnvironment.standalone) {
+    return (
+      <RequiredAppSetup
+        environment={appEnvironment}
+        canInstall={Boolean(installPrompt)}
+        installing={installing}
+        onInstall={handleInstallApp}
+      />
     );
   }
 
@@ -1128,6 +1205,18 @@ export function CaseDashboard() {
           </form>
         </section>
       </main>
+    );
+  }
+
+  if (pushStatus !== "enabled") {
+    return (
+      <RequiredNotificationSetup
+        status={pushStatus}
+        message={pushMessage}
+        onEnable={handleEnableAlerts}
+        onSignOut={handleSignOut}
+        signingOut={authLoading}
+      />
     );
   }
 
@@ -1194,32 +1283,14 @@ export function CaseDashboard() {
                       role="menu"
                     >
                       {profile ? (
-                        <button
-                          type="button"
-                          className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-60 ${
-                            pushStatus === "enabled"
-                              ? "text-emerald-100"
-                              : "text-zinc-100"
-                          }`}
-                          onClick={handleEnableAlerts}
-                          disabled={
-                            pushStatus === "loading" ||
-                            pushStatus === "unsupported"
-                          }
-                          title={pushMessage || "Enable web, iOS, and Android alerts"}
-                          role="menuitem"
+                        <div
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-emerald-100"
+                          title="Notifications are enabled"
+                          role="status"
                         >
                           <Bell className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          <span className="truncate">
-                            {pushStatus === "loading"
-                              ? "Turning on"
-                              : pushStatus === "enabled"
-                                ? "Alerts on"
-                                : pushStatus === "denied"
-                                  ? "Alerts blocked"
-                                  : "Enable alerts"}
-                          </span>
-                        </button>
+                          <span className="truncate">Alerts on</span>
+                        </div>
                       ) : null}
 
                       {profile && role === "admin" ? (
@@ -1468,6 +1539,167 @@ export function CaseDashboard() {
           onConfirm={confirmDelete}
         />
       ) : null}
+    </main>
+  );
+}
+
+function RequiredAppSetup({
+  environment,
+  canInstall,
+  installing,
+  onInstall,
+}: {
+  environment: AppEnvironment;
+  canInstall: boolean;
+  installing: boolean;
+  onInstall: () => void;
+}) {
+  const desktopBlocked = environment.checked && !environment.mobile;
+
+  return (
+    <main className="grid min-h-screen place-items-center px-4 py-6">
+      <section
+        className="surface-card w-full max-w-md overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="app-setup-title"
+      >
+        <div className="border-b border-zinc-800 bg-gradient-to-r from-red-950/70 to-zinc-950 p-5">
+          <div className="grid h-12 w-12 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
+            <Smartphone className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <h1 id="app-setup-title" className="mt-4 text-xl font-bold text-white">
+            {desktopBlocked ? "Phone required" : "Add CasePilot to Home Screen"}
+          </h1>
+          <p className="mt-1 text-sm leading-6 text-zinc-400">
+            {desktopBlocked
+              ? "CasePilot hanya boleh digunakan melalui telefon selepas dipasang pada Home Screen."
+              : "Pasang CasePilot dahulu untuk teruskan."}
+          </p>
+        </div>
+
+        <div className="grid gap-4 p-5">
+          {desktopBlocked ? (
+            <p className="rounded-md border border-zinc-800 bg-zinc-950 p-4 text-sm leading-6 text-zinc-300">
+              Buka alamat CasePilot menggunakan Safari pada iPhone atau Chrome pada Android.
+            </p>
+          ) : environment.ios ? (
+            <ol className="grid gap-3 text-sm text-zinc-200">
+              <li className="flex items-center gap-3 rounded-md border border-zinc-800 bg-zinc-950 p-3">
+                <Share2 className="h-5 w-5 shrink-0 text-red-300" aria-hidden="true" />
+                <span>Tekan butang Share dalam Safari.</span>
+              </li>
+              <li className="flex items-center gap-3 rounded-md border border-zinc-800 bg-zinc-950 p-3">
+                <Plus className="h-5 w-5 shrink-0 text-red-300" aria-hidden="true" />
+                <span>Pilih Add to Home Screen.</span>
+              </li>
+              <li className="flex items-center gap-3 rounded-md border border-zinc-800 bg-zinc-950 p-3">
+                <Smartphone className="h-5 w-5 shrink-0 text-red-300" aria-hidden="true" />
+                <span>Buka CasePilot daripada ikon Home Screen.</span>
+              </li>
+            </ol>
+          ) : (
+            <>
+              <p className="rounded-md border border-zinc-800 bg-zinc-950 p-4 text-sm leading-6 text-zinc-300">
+                Pasang CasePilot, kemudian buka melalui ikon pada Home Screen.
+              </p>
+              {canInstall ? (
+                <button
+                  type="button"
+                  className="primary-button w-full"
+                  onClick={onInstall}
+                  disabled={installing}
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  {installing ? "Installing" : "Install CasePilot"}
+                </button>
+              ) : (
+                <p className="text-sm leading-6 text-zinc-400">
+                  Dalam menu Chrome, pilih <strong className="text-zinc-200">Add to Home screen</strong>,
+                  kemudian buka CasePilot melalui ikon tersebut.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function RequiredNotificationSetup({
+  status,
+  message,
+  onEnable,
+  onSignOut,
+  signingOut,
+}: {
+  status: PushStatus;
+  message: string;
+  onEnable: () => void;
+  onSignOut: () => void;
+  signingOut: boolean;
+}) {
+  const blocked = status === "denied";
+  const unsupported = status === "unsupported";
+
+  return (
+    <main className="grid min-h-screen place-items-center px-4 py-6">
+      <section
+        className="surface-card w-full max-w-md overflow-hidden"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="notification-setup-title"
+      >
+        <div className="border-b border-zinc-800 bg-gradient-to-r from-red-950/70 to-zinc-950 p-5">
+          <div className="grid h-12 w-12 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
+            <Bell className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <h1 id="notification-setup-title" className="mt-4 text-xl font-bold text-white">
+            Notification required
+          </h1>
+          <p className="mt-1 text-sm leading-6 text-zinc-400">
+            Benarkan notification sebelum menggunakan CasePilot.
+          </p>
+        </div>
+
+        <div className="grid gap-3 p-5">
+          {blocked ? (
+            <p className="rounded-md border border-red-900 bg-red-950/60 p-4 text-sm leading-6 text-red-100">
+              Notification telah disekat. Buka Phone Settings, pilih CasePilot, aktifkan Notifications,
+              kemudian buka semula aplikasi.
+            </p>
+          ) : unsupported ? (
+            <p className="rounded-md border border-amber-800 bg-amber-950/50 p-4 text-sm leading-6 text-amber-100">
+              Peranti atau versi browser ini belum menyokong push notification. Kemas kini sistem dan
+              browser, kemudian buka semula CasePilot dari Home Screen.
+            </p>
+          ) : message && status === "error" ? (
+            <p className="rounded-md border border-red-900 bg-red-950/60 p-4 text-sm leading-6 text-red-100">
+              {message}
+            </p>
+          ) : null}
+
+          <button
+            type="button"
+            className="primary-button w-full"
+            onClick={onEnable}
+            disabled={status === "loading" || blocked || unsupported}
+          >
+            <Bell className="h-4 w-4" aria-hidden="true" />
+            {status === "loading" ? "Turning on notifications" : "Allow notifications"}
+          </button>
+          <button
+            type="button"
+            className="secondary-button w-full"
+            onClick={onSignOut}
+            disabled={signingOut}
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            {signingOut ? "Signing out" : "Sign out"}
+          </button>
+        </div>
+      </section>
     </main>
   );
 }
