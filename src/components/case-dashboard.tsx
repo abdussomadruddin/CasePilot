@@ -2499,7 +2499,7 @@ function CaseForm({
   const source = record || empty;
   const [values, setValues] = useState<CaseFormValues>({
     ownerId: record?.ownerId || (role === "admin" ? "" : profile?.id || ""),
-    dealer: record?.dealer || "",
+    dealer: role === "broker" ? "other_dealer" : record?.dealer || "",
     customerName: source.customerName,
     customerPhone: source.customerPhone,
     carModel: source.carModel,
@@ -2876,30 +2876,32 @@ function CaseForm({
             </section>
           ) : null}
 
-          <section className="grid gap-3 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
-            <p className="text-sm font-semibold text-ink">Case dealer</p>
-            <div className="grid grid-cols-2 gap-2">
-              {caseDealers.map((dealer) => {
-                const selected = values.dealer === dealer;
+          {role !== "broker" ? (
+            <section className="grid gap-3 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
+              <p className="text-sm font-semibold text-ink">Case dealer</p>
+              <div className="grid grid-cols-2 gap-2">
+                {caseDealers.map((dealer) => {
+                  const selected = values.dealer === dealer;
 
-                return (
-                  <button
-                    key={dealer}
-                    type="button"
-                    className={`h-12 rounded-md border px-3 text-sm font-semibold transition ${
-                      selected
-                        ? "border-red-500 bg-red-600 text-white shadow-[0_0_22px_rgba(229,9,20,0.32)]"
-                        : "border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-zinc-500 hover:text-white"
-                    }`}
-                    onClick={() => updateField("dealer", dealer)}
-                    aria-pressed={selected}
-                  >
-                    {caseDealerLabels[dealer]}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+                  return (
+                    <button
+                      key={dealer}
+                      type="button"
+                      className={`h-12 rounded-md border px-3 text-sm font-semibold transition ${
+                        selected
+                          ? "border-red-500 bg-red-600 text-white shadow-[0_0_22px_rgba(229,9,20,0.32)]"
+                          : "border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-zinc-500 hover:text-white"
+                      }`}
+                      onClick={() => updateField("dealer", dealer)}
+                      aria-pressed={selected}
+                    >
+                      {caseDealerLabels[dealer]}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
 
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
