@@ -486,6 +486,21 @@ export function CaseDashboard() {
   const [pushStatus, setPushStatus] = useState<PushStatus>("default");
   const [pushMessage, setPushMessage] = useState("");
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFiltersOpen(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", close);
+    };
+  }, [filtersOpen]);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [installing, setInstalling] = useState(false);
   const [appEnvironment, setAppEnvironment] = useState<AppEnvironment>({
@@ -1221,9 +1236,9 @@ export function CaseDashboard() {
   }
 
   return (
-    <main className="min-h-screen px-3 py-3 sm:px-5 sm:py-5 lg:px-8">
+    <main className="mobile-dashboard min-h-screen px-3 py-3 sm:px-5 sm:py-5 lg:px-8">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-5">
-        <header className="surface-card relative z-20">
+        <header className="dashboard-header surface-card relative z-20">
           <div className="flex flex-col gap-5 rounded-lg bg-gradient-to-r from-red-950/70 via-zinc-950 to-zinc-950 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-4">
               <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
@@ -1351,7 +1366,7 @@ export function CaseDashboard() {
           </div>
         ) : null}
 
-        <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        <section className="dashboard-metrics grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {metricTabs.map((tab) => (
             <MetricCard
               key={tab.id}
@@ -1381,8 +1396,12 @@ export function CaseDashboard() {
             />
           ) : (
             <>
-              <div className="surface-card flex min-w-0 flex-col gap-3 p-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 flex-col gap-3 py-2 lg:flex-row lg:items-center lg:justify-between">
+                <button type="button" className="secondary-button sm:hidden" onClick={() => setFiltersOpen(true)} aria-expanded={filtersOpen}>
+                  <Filter className="h-4 w-4" /> Filters {filtersActive ? "· Active" : ""}
+                  <span className="ml-auto text-zinc-400">{filteredCases.length} cases</span>
+                </button>
+                <div className="hidden min-w-0 items-center gap-2 sm:flex">
                   <Filter className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-white">Filter Cases</p>
@@ -1392,13 +1411,17 @@ export function CaseDashboard() {
                   </div>
                 </div>
 
+                {filtersOpen ? <button className="fixed inset-0 z-40 bg-black/70 sm:hidden" aria-label="Close filters" onClick={() => setFiltersOpen(false)} /> : null}
                 <div
-                  className={`grid min-w-0 gap-2 sm:grid-cols-2 lg:w-auto ${
+                  role={filtersOpen ? "dialog" : undefined}
+                  aria-label="Case filters"
+                  className={`${filtersOpen ? "mobile-filter-sheet grid" : "hidden sm:grid"} min-w-0 gap-3 sm:grid-cols-2 lg:w-auto ${
                     role === "sales_manager"
                       ? "xl:grid-cols-[18rem_12rem_auto]"
                       : "xl:grid-cols-[14rem_18rem_12rem_auto]"
                   }`}
                 >
+                  <div className="flex items-center justify-between sm:hidden"><h2 className="text-lg font-semibold">Filter cases</h2><button type="button" className="icon-button" aria-label="Close filters" onClick={() => setFiltersOpen(false)}><X className="h-5 w-5" /></button></div>
                   {role !== "sales_manager" ? (
                     <select
                       className="field min-w-0"
@@ -1476,6 +1499,7 @@ export function CaseDashboard() {
                       <span className="hidden sm:inline">Clear</span>
                     </button>
                   ) : null}
+                  <button type="button" className="primary-button sm:hidden" onClick={() => setFiltersOpen(false)}>Show {filteredCases.length} cases</button>
                 </div>
               </div>
 
@@ -1507,6 +1531,21 @@ export function CaseDashboard() {
           )}
         </section>
       </div>
+
+      <nav className="mobile-bottom-nav sm:hidden" aria-label="Main navigation">
+        {([
+          { id: "all", label: "Cases", icon: FolderKanban },
+          { id: "tasks", label: "My Tasks", icon: ListChecks },
+          { id: "followup", label: "Follow Up", icon: CalendarClock },
+          { id: "completed", label: "Completed", icon: CheckCircle2 },
+        ] as const).map(({ id, label, icon: Icon }) => (
+          <button key={id} type="button" aria-current={activeTab === id ? "page" : undefined}
+            className={activeTab === id ? "text-red-400" : "text-zinc-400"}
+            onClick={() => { setActiveTab(id); if (id === "all") setMonthFilter(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+            <Icon className="h-5 w-5" /><span>{label}</span>
+          </button>
+        ))}
+      </nav>
 
       {isFormOpen ? (
         <CaseForm
@@ -2210,7 +2249,7 @@ function CaseCard({
 
   return (
     <article
-      className={`surface-card overflow-hidden border-l-4 transition duration-200 hover:border-zinc-600 hover:shadow-lift ${statusAccent[record.status]}`}
+      className={`mobile-case-card surface-card overflow-hidden border-l-4 transition duration-200 hover:border-zinc-600 hover:shadow-lift ${statusAccent[record.status]}`}
     >
       <div
         role="button"
@@ -2895,7 +2934,7 @@ function CaseForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
+    <div className="case-form-overlay fixed inset-0 z-50 overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
       <div className="mx-auto max-w-3xl overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-lift">
         <div className="flex items-center justify-between gap-3 border-b border-zinc-800 bg-gradient-to-r from-red-950/60 via-zinc-950 to-zinc-950 p-4">
           <div>
