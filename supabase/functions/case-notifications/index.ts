@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.0";
-import { sendPushesForRoles } from "../_shared/web-push.ts";
+import { sendPushesForRoles, sendPushesForUsers } from "../_shared/web-push.ts";
 
 type Role =
   | "admin"
@@ -7,7 +7,8 @@ type Role =
   | "finance"
   | "caller"
   | "operator"
-  | "sales_manager";
+  | "sales_manager"
+  | "broker";
 
 type CaseDealer = "kah_motor" | "other_dealer";
 
@@ -43,6 +44,8 @@ type CaseRow = {
   status: CaseStatus;
   updated_at: string;
   next_follow_up_at: string | null;
+  owner_id: string | null;
+  owner?: { role?: Role } | null;
 };
 
 const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
@@ -55,6 +58,7 @@ const roleLabels: Record<Role, string> = {
   caller: "Caller",
   operator: "Operator",
   sales_manager: "Sales Manager",
+  broker: "Broker",
 };
 
 const statusLabels: Record<CurrentCaseStatus, string> = {
@@ -181,7 +185,7 @@ Deno.serve(async () => {
 
   const { data: cases, error } = await supabase
     .from("cases")
-    .select("id,dealer,customer_name,car_model,car_variant,status,updated_at,next_follow_up_at")
+    .select("id,dealer,customer_name,car_model,car_variant,status,updated_at,next_follow_up_at,owner_id,owner:profiles!cases_owner_id_fkey(role)")
     .is("deleted_at", null);
 
   if (error) {
@@ -205,6 +209,7 @@ Deno.serve(async () => {
     status: CurrentCaseStatus;
   }> = [];
   const casesByRole: Partial<Record<Role, CaseRow[]>> = {};
+  const casesByUser: Record<string, CaseRow[]> = {};
   const notifiedCaseIds = new Set<string>();
 
   for (const record of (cases || []) as CaseRow[]) {
@@ -221,10 +226,18 @@ Deno.serve(async () => {
     const notificationDueAt = +nextFollowUp + oneDayMs;
 
     if (+now >= notificationDueAt) {
-      const followUpRoles = progressRoles(status, record.dealer);
+      const isBrokerCase = record.owner?.role === "broker" && Boolean(record.owner_id);
+      const followUpRoles = isBrokerCase
+        ? ["finance" satisfies Role]
+        : progressRoles(status, record.dealer);
       const rolesToNotify: Role[] = followUpRoles.length
         ? followUpRoles
         : ["customer_service"];
+
+      if (isBrokerCase && record.owner_id) {
+        if (!casesByUser[record.owner_id]) casesByUser[record.owner_id] = [];
+        casesByUser[record.owner_id].push(record);
+      }
 
       for (const role of rolesToNotify) {
         if (!casesByRole[role]) casesByRole[role] = [];
@@ -271,6 +284,16 @@ Deno.serve(async () => {
       Object.keys(casesByRole) as Role[],
       payloadsByRole,
     );
+  }
+
+  for (const [userId, records] of Object.entries(casesByUser)) {
+    const result = await sendPushesForUsers(supabase, [userId], {
+      title: `CasePilot • ${records.length} Follow Up Due`,
+      body: groupedPushBodyFor("broker", records),
+      url: "/",
+    });
+    pushResult.sent += result.sent;
+    pushResult.failed += result.failed;
   }
 
   if (activityRows.length) {

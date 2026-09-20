@@ -11,7 +11,7 @@ const defaultSupabaseKey = "sb_publishable_Fs_FX9W23A3AbS-T8szB1g_pW_pNDui";
 const oldSupabaseUrl = "https://rfqwyhafvfvafiqrcmxa.supabase.co";
 const driveScope = "https://www.googleapis.com/auth/drive";
 const tokenEndpoint = "https://oauth2.googleapis.com/token";
-const allowedUploaderRoles = new Set(["admin", "customer_service"]);
+const allowedUploaderRoles = new Set(["admin", "customer_service", "broker"]);
 
 type DriveFile = {
   id: string;

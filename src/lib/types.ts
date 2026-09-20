@@ -5,6 +5,7 @@ export const roles = [
   "caller",
   "operator",
   "sales_manager",
+  "broker",
 ] as const;
 
 export type Role = (typeof roles)[number];
@@ -16,6 +17,7 @@ export const roleLabels: Record<Role, string> = {
   caller: "Caller",
   operator: "Operator",
   sales_manager: "Sales Manager",
+  broker: "Broker",
 };
 
 export const caseDealers = ["kah_motor", "other_dealer"] as const;
@@ -176,9 +178,13 @@ export type CaseRecord = {
   createdAt: string;
   updatedAt: string;
   nextFollowUpAt: string;
+  ownerId: string;
+  ownerName: string;
+  ownerRole: "customer_service" | "broker";
 };
 
 export type CaseFormValues = {
+  ownerId: string;
   dealer: CaseDealer | "";
   customerName: string;
   customerPhone: string;

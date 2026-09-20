@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.0";
-import { sendPushesForRoles } from "../_shared/web-push.ts";
+import { sendPushesForRoles, sendPushesForUsers } from "../_shared/web-push.ts";
 
 type Role =
   | "admin"
@@ -7,7 +7,8 @@ type Role =
   | "finance"
   | "caller"
   | "operator"
-  | "sales_manager";
+  | "sales_manager"
+  | "broker";
 
 type CurrentCaseStatus =
   | "documents_collected"
@@ -37,6 +38,7 @@ type RequestBody = {
   status: CaseStatus;
   roles: Role[];
   reason: string;
+  userIds?: string[];
 };
 
 type CaseRow = {
@@ -63,6 +65,7 @@ const roleLabels: Record<Role, string> = {
   caller: "Caller",
   operator: "Operator",
   sales_manager: "Sales Manager",
+  broker: "Broker",
 };
 
 const statusLabels: Record<CurrentCaseStatus, string> = {
@@ -142,8 +145,9 @@ Deno.serve(async (request) => {
 
   const body = (await request.json()) as Partial<RequestBody>;
   const roles = [...new Set(body.roles || [])];
+  const userIds = [...new Set(body.userIds || [])];
 
-  if (!body.caseId || !body.status || !roles.length) {
+  if (!body.caseId || !body.status || (!roles.length && !userIds.length)) {
     return jsonResponse({ ok: false, error: "Invalid notification request" }, 400);
   }
 
@@ -191,10 +195,16 @@ Deno.serve(async (request) => {
       ]),
     ),
   );
+  const userPush = await sendPushesForUsers(serviceClient, userIds, {
+    title: `CasePilot • ${statusLabels[status]}`,
+    body: buildStatusTriggerBody("broker", status, body.reason || "Case update requires attention.", record),
+    url: "/",
+  });
 
   return jsonResponse({
     ok: true,
     notifications: notificationRows.length,
     push,
+    userPush,
   });
 });

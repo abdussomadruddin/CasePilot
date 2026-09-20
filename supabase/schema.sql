@@ -17,6 +17,7 @@ exception
 end $$;
 
 alter type public.app_role add value if not exists 'sales_manager';
+alter type public.app_role add value if not exists 'broker';
 
 do $$
 begin
@@ -85,6 +86,7 @@ create table if not exists public.cases (
   remark text,
   created_by uuid references public.profiles(id),
   updated_by uuid references public.profiles(id),
+  owner_id uuid references public.profiles(id) on delete set null,
   created_by_role public.app_role not null default 'customer_service',
   updated_by_role public.app_role not null default 'customer_service',
   next_follow_up_at timestamptz,
@@ -212,6 +214,7 @@ create table if not exists public.push_subscriptions (
 create index if not exists cases_status_idx on public.cases(status);
 create index if not exists cases_updated_at_idx on public.cases(updated_at desc);
 create index if not exists cases_dealer_idx on public.cases(dealer);
+create index if not exists cases_owner_id_idx on public.cases(owner_id);
 create index if not exists case_documents_expiry_idx
 on public.case_documents(expires_at)
 where deleted_at is null;

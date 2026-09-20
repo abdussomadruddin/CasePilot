@@ -15,6 +15,7 @@ type StatusNotificationInput = {
   status: CaseStatus;
   roles: Role[];
   reason: string;
+  userIds?: string[];
 };
 
 export function isNotificationSupported() {
@@ -105,7 +106,7 @@ export async function enablePushNotifications(profile: Profile) {
 }
 
 export async function notifyCaseStatusChange(input: StatusNotificationInput) {
-  if (!input.roles.length) return true;
+  if (!input.roles.length && !input.userIds?.length) return true;
 
   try {
     const supabase = getSupabaseClient();

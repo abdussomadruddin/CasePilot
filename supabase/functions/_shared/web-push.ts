@@ -4,10 +4,12 @@ type Role =
   | "finance"
   | "caller"
   | "operator"
-  | "sales_manager";
+  | "sales_manager"
+  | "broker";
 
 type PushSubscriptionRow = {
   id: string;
+  user_id?: string;
   role: Role;
   endpoint: string;
   p256dh: string;
@@ -40,6 +42,36 @@ function base64UrlToBytes(value: string) {
   }
 
   return bytes;
+}
+
+export async function sendPushesForUsers(
+  supabase: any,
+  userIds: string[],
+  payload: PushPayload,
+): Promise<PushResult> {
+  const uniqueUserIds = [...new Set(userIds)];
+  if (!uniqueUserIds.length) return { sent: 0, failed: 0 };
+  if (!Deno.env.get("VAPID_PUBLIC_KEY") || !Deno.env.get("VAPID_PRIVATE_KEY")) {
+    return { sent: 0, failed: 0, skipped: "missing_vapid_secrets" };
+  }
+  const { data, error } = await supabase
+    .from("push_subscriptions")
+    .select("id,user_id,role,endpoint,p256dh,auth")
+    .eq("active", true)
+    .in("user_id", uniqueUserIds);
+  if (error) return { sent: 0, failed: 0, error: error.message };
+  let sent = 0;
+  let failed = 0;
+  for (const subscription of (data || []) as PushSubscriptionRow[]) {
+    try {
+      const response = await sendWebPush(subscription, payload);
+      if (response.ok || response.status === 201 || response.status === 202) sent += 1;
+      else failed += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  return { sent, failed };
 }
 
 function bytesToBase64Url(bytes: ArrayBuffer | Uint8Array) {

@@ -36,13 +36,22 @@ export async function clearLocalSession() {
 
 export async function getValidAccessToken() {
   const supabase = getSupabaseClient();
-  const {
+  let {
     data: { session },
     error,
   } = await supabase.auth.getSession();
 
   if (error || !session?.access_token) {
-    await clearLocalSession();
+    const refreshed = await supabase.auth.refreshSession();
+    session = refreshed.data.session;
+    error = refreshed.error;
+  } else if (session.expires_at && session.expires_at * 1000 <= Date.now() + 30_000) {
+    const refreshed = await supabase.auth.refreshSession();
+    session = refreshed.data.session;
+    error = refreshed.error;
+  }
+
+  if (error || !session?.access_token) {
     throw new Error(sessionExpiredMessage);
   }
 

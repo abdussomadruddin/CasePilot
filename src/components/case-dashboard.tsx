@@ -603,8 +603,8 @@ export function CaseDashboard() {
   }, [profile]);
 
   const visibleCases = useMemo(
-    () => getVisibleCases(cases, role),
-    [cases, role],
+    () => getVisibleCases(cases, role, profile?.id),
+    [cases, profile?.id, role],
   );
 
   const tabCases = useMemo(() => {
@@ -618,7 +618,7 @@ export function CaseDashboard() {
           (record) => caseMonthKey(record.createdAt) === lastMonth,
         );
       case "tasks":
-        return visibleCases.filter((record) => isMyTask(record, role));
+        return visibleCases.filter((record) => isMyTask(record, role, profile?.id));
       case "followup":
         return visibleCases.filter((record) => isFollowUpDue(record));
       case "completed":
@@ -730,12 +730,12 @@ export function CaseDashboard() {
       last_month: visibleCases.filter(
         (record) => caseMonthKey(record.createdAt) === lastMonth,
       ).length,
-      tasks: metricCases.filter((record) => isMyTask(record, role)).length,
+      tasks: metricCases.filter((record) => isMyTask(record, role, profile?.id)).length,
       followup: metricCases.filter((record) => isFollowUpDue(record)).length,
       completed: metricCases.filter((record) => isTerminalStatus(record.status))
         .length,
     }),
-    [currentMonth, lastMonth, metricCases, role, visibleCases],
+    [currentMonth, lastMonth, metricCases, profile?.id, role, visibleCases],
   );
 
   async function refreshCases() {
@@ -838,11 +838,18 @@ export function CaseDashboard() {
   }
 
   async function handleSave(values: CaseFormValues, documents: UploadDocumentInput[]) {
+    if (!profile) return;
     const base = editingCase || createEmptyCase();
     const now = new Date().toISOString();
+    const ownerId = role === "admin" ? values.ownerId : editingCase?.ownerId || profile.id;
+    const owner = teamMembers.find((member) => member.id === ownerId);
+    if (!ownerId || !owner || !["customer_service", "broker"].includes(owner.role)) {
+      setError("Please select a Customer Service or Broker owner.");
+      return;
+    }
     const record: CaseRecord = {
       ...base,
-      dealer: values.dealer,
+      dealer: role === "broker" ? "other_dealer" : values.dealer,
       customerName: values.customerName.trim(),
       customerPhone: values.customerPhone.trim(),
       carModel: values.carModel.trim(),
@@ -856,6 +863,9 @@ export function CaseDashboard() {
       createdAt: editingCase?.createdAt || now,
       updatedAt: now,
       nextFollowUpAt: isTerminalStatus(values.status) ? "" : base.nextFollowUpAt || nextFollowUpFrom(),
+      ownerId,
+      ownerName: owner.fullName,
+      ownerRole: owner.role === "broker" ? "broker" : "customer_service",
     };
 
     try {
@@ -863,7 +873,7 @@ export function CaseDashboard() {
       setUploadingMessage(documents.length ? "Saving case..." : "");
       setError("");
       setSuccessMessage("");
-      const nextCases = await saveCase(record, role, editingCase || undefined);
+      const nextCases = await saveCase(record, role, profile.id, editingCase || undefined);
       setCases(nextCases);
 
       if (documents.length) {
@@ -1392,6 +1402,7 @@ export function CaseDashboard() {
                     key={record.id}
                     record={record}
                     role={role}
+                    userId={profile?.id || ""}
                     saving={saving}
                     teamMembers={teamMembers}
                     onEdit={openEditForm}
@@ -1414,6 +1425,8 @@ export function CaseDashboard() {
         <CaseForm
           key={editingCase?.id || "new"}
           role={role}
+          profile={profile}
+          teamMembers={teamMembers}
           record={editingCase}
           saving={saving}
           uploadingMessage={uploadingMessage}
@@ -1843,6 +1856,7 @@ function TeamMemberEditor({
 function CaseCard({
   record,
   role,
+  userId,
   saving,
   teamMembers,
   onEdit,
@@ -1850,6 +1864,7 @@ function CaseCard({
 }: {
   record: CaseRecord;
   role: Role;
+  userId: string;
   saving: boolean;
   teamMembers: Profile[];
   onEdit: (record: CaseRecord) => void;
@@ -1860,7 +1875,7 @@ function CaseCard({
   const nextFollowUp = getNextFollowUpTime(record);
   const needsAttention = needsAttentionForRole(record, role);
   const followUpDue = isFollowUpDue(record);
-  const allowEdit = canEditCase(role, record);
+  const allowEdit = canEditCase(role, record, userId);
   const allowDelete = canDeleteCase(role);
   const showContactLists = role !== "sales_manager";
   const [isExpanded, setIsExpanded] = useState(false);
@@ -1907,6 +1922,9 @@ function CaseCard({
           </h2>
           <p className="mt-1 break-words text-xs font-medium text-zinc-400">
             {record.customerPhone || "No phone"}
+          </p>
+          <p className="mt-1 line-clamp-1 text-xs font-semibold text-zinc-300">
+            Under: {record.ownerName} · {record.ownerRole === "broker" ? "Broker" : "Customer Service"}
           </p>
         </div>
 
@@ -2441,6 +2459,8 @@ function Field({
 
 function CaseForm({
   role,
+  profile,
+  teamMembers,
   record,
   saving,
   uploadingMessage,
@@ -2448,6 +2468,8 @@ function CaseForm({
   onSave,
 }: {
   role: Role;
+  profile: Profile | null;
+  teamMembers: Profile[];
   record: CaseRecord | null;
   saving: boolean;
   uploadingMessage: string;
@@ -2458,6 +2480,7 @@ function CaseForm({
   const empty = createEmptyCase();
   const source = record || empty;
   const [values, setValues] = useState<CaseFormValues>({
+    ownerId: record?.ownerId || (role === "admin" ? "" : profile?.id || ""),
     dealer: record?.dealer || "",
     customerName: source.customerName,
     customerPhone: source.customerPhone,
@@ -2487,6 +2510,9 @@ function CaseForm({
     values.carVariant,
   );
   const colorOptions = optionsWithCurrent(selectedCar?.colors || [], values.carColor);
+  const ownerOptions = teamMembers.filter(
+    (member) => member.active !== false && ["customer_service", "broker"].includes(member.role),
+  );
 
   function updateField<K extends keyof CaseFormValues>(
     key: K,
@@ -2592,6 +2618,23 @@ function CaseForm({
           ) : null}
 
           <div className="grid gap-4 sm:grid-cols-2">
+            {role === "admin" ? (
+              <Field label="Case owner">
+                <select
+                  className="field"
+                  value={values.ownerId}
+                  onChange={(event) => updateField("ownerId", event.target.value)}
+                  required
+                >
+                  <option value="">Select Customer Service or Broker</option>
+                  {ownerOptions.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.fullName} · {roleLabels[owner.role]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
             <Field label="Customer name">
               <input
                 className="field"
@@ -2686,7 +2729,7 @@ function CaseForm({
             />
           </Field>
 
-          <section className="grid gap-3 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
+          {role !== "broker" ? <section className="grid gap-3 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Banknote className="h-4 w-4 text-muted" aria-hidden="true" />
@@ -2754,7 +2797,7 @@ function CaseForm({
                 </div>
               ))}
             </div>
-          </section>
+          </section> : null}
 
           {canAttachDocuments ? (
             <section className="grid gap-2 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
@@ -2849,7 +2892,7 @@ function CaseForm({
             >
               Cancel
             </button>
-            <button className="primary-button" disabled={saving || !values.dealer}>
+            <button className="primary-button" disabled={saving || (role !== "broker" && !values.dealer) || !values.ownerId}>
               {uploadingMessage ? (
                 <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (

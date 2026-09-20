@@ -51,6 +51,7 @@ export const roleStatusPermissions: Record<Role, CaseStatus[]> = {
   ],
   operator: ["prepare_delivery", "car_delivery", "cancelled"],
   sales_manager: [],
+  broker: [...caseStatuses],
 };
 
 export function getAssignedRoles(status: CaseStatus): Role[] {
@@ -98,7 +99,7 @@ export function getNotificationRoles(status: CaseStatus, dealer?: CaseDealer | "
 }
 
 export function canCreateCase(role: Role) {
-  return role === "admin" || role === "customer_service";
+  return role === "admin" || role === "customer_service" || role === "broker";
 }
 
 export function canDeleteCase(role: Role) {
@@ -106,11 +107,11 @@ export function canDeleteCase(role: Role) {
 }
 
 export function canEditBanks(role: Role) {
-  return role === "admin" || role === "customer_service" || role === "finance";
+  return role === "admin" || role === "customer_service" || role === "finance" || role === "broker";
 }
 
 export function canUploadDocuments(role: Role) {
-  return role === "admin" || role === "customer_service";
+  return role === "admin" || role === "customer_service" || role === "broker";
 }
 
 export function canUpdateToStatus(role: Role, status: CaseStatus) {
@@ -121,9 +122,14 @@ function isCallerDocumentCollectedTask(record: CaseRecord, role: Role) {
   return role === "caller" && record.status === "documents_collected";
 }
 
-export function canEditCase(role: Role, record: CaseRecord) {
+export function canEditCase(role: Role, record: CaseRecord, userId = "") {
   if (role === "sales_manager") return false;
   if (role === "admin") return true;
+  if (record.ownerRole === "broker") {
+    if (role === "broker") return record.ownerId === userId;
+    return role === "finance";
+  }
+  if (role === "broker") return false;
   if (role === "customer_service" && canCreateCase(role)) return true;
   if (isCallerDocumentCollectedTask(record, role)) return true;
   return getAssignedRoles(record.status).includes(role);
@@ -199,21 +205,24 @@ export function needsAttentionForRole(record: CaseRecord, role: Role): boolean {
   return !roleActivity;
 }
 
-export function isMyTask(record: CaseRecord, role: Role) {
+export function isMyTask(record: CaseRecord, role: Role, userId = "") {
   if (isTerminalStatus(record.status)) return false;
   if (role === "sales_manager") return false;
   if (role === "admin") return true;
+  if (role === "broker") return record.ownerId === userId;
   if (isCallerDocumentCollectedTask(record, role)) return true;
   return getAssignedRoles(record.status).includes(role);
 }
 
-export function getVisibleCases(records: CaseRecord[], role: Role) {
-  if (role === "admin" || role === "customer_service") return records;
+export function getVisibleCases(records: CaseRecord[], role: Role, userId = "") {
+  if (role === "broker") return records.filter((record) => record.ownerId === userId);
+  if (role === "admin" || role === "customer_service" || role === "finance") return records;
   if (role === "sales_manager") {
     return records.filter((record) => record.dealer === "kah_motor");
   }
 
   return records.filter((record) => {
+    if (record.ownerRole === "broker") return false;
     if (role === "operator") {
       if (record.dealer !== "kah_motor") return false;
       if (["rejected", "cancelled"].includes(record.status)) return false;

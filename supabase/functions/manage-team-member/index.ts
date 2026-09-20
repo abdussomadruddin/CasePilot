@@ -6,7 +6,8 @@ type Role =
   | "finance"
   | "caller"
   | "operator"
-  | "sales_manager";
+  | "sales_manager"
+  | "broker";
 
 type TeamMemberPayload = {
   action?: "create" | "update" | "delete";
@@ -26,6 +27,7 @@ const roles: Role[] = [
   "caller",
   "operator",
   "sales_manager",
+  "broker",
 ];
 
 const roleLabels: Record<Role, string> = {
@@ -35,6 +37,7 @@ const roleLabels: Record<Role, string> = {
   caller: "Caller",
   operator: "Operator",
   sales_manager: "Sales Manager",
+  broker: "Broker",
 };
 
 const corsHeaders = {
@@ -250,6 +253,7 @@ Deno.serve(async (request) => {
         serviceClient.from("cases").update({ updated_by: null }).eq("updated_by", payload.id),
         serviceClient.from("case_documents").update({ uploaded_by: null }).eq("uploaded_by", payload.id),
         serviceClient.from("case_activities").update({ actor_id: null }).eq("actor_id", payload.id),
+        serviceClient.from("cases").update({ owner_id: null }).eq("owner_id", payload.id),
       ]);
       const cleanupError = cleanupQueries.find((result) => result.error)?.error;
       if (cleanupError) {

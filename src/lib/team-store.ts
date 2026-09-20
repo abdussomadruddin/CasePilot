@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase";
+import { getValidAccessToken } from "@/lib/auth";
 import type { Role } from "@/lib/types";
 
 export type TeamMemberFormValues = {
@@ -23,14 +24,7 @@ async function invokeManageTeam(
   values: Pick<TeamMemberFormValues, "id"> | TeamMemberFormValues,
 ) {
   const supabase = getSupabaseClient();
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
-
-  if (sessionError || !session?.access_token) {
-    throw new Error("Admin session expired. Please sign in again.");
-  }
+  const accessToken = await getValidAccessToken();
 
   const password = "password" in values ? values.password.trim() : "";
 
@@ -44,7 +38,7 @@ async function invokeManageTeam(
       password: password || undefined,
     },
     headers: {
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
     },
   });
 

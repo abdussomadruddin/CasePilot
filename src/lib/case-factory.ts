@@ -22,5 +22,8 @@ export function createEmptyCase(): CaseRecord {
     createdAt: now,
     updatedAt: now,
     nextFollowUpAt: nextFollowUpFrom(),
+    ownerId: "",
+    ownerName: "Customer Service",
+    ownerRole: "customer_service",
   };
 }

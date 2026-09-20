@@ -57,6 +57,8 @@ type CaseRow = {
   created_at: string;
   updated_at: string;
   next_follow_up_at: string | null;
+  owner_id: string | null;
+  owner?: { id: string; full_name: string | null; role: Role } | null;
   case_banks?: BankRow[];
   case_documents?: DocumentRow[];
   case_activities?: ActivityRow[];
@@ -129,6 +131,9 @@ function mapCase(row: CaseRow): CaseRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     nextFollowUpAt: row.next_follow_up_at || nextFollowUpFrom(new Date(row.updated_at)),
+    ownerId: row.owner_id || "",
+    ownerName: row.owner?.full_name || "Customer Service",
+    ownerRole: row.owner?.role === "broker" ? "broker" : "customer_service",
   };
 }
 
@@ -199,6 +204,7 @@ function toCaseRow(record: CaseRecord) {
     created_by_role: record.createdBy,
     updated_by_role: record.updatedBy,
     next_follow_up_at: record.nextFollowUpAt || null,
+    owner_id: record.ownerId || null,
   };
 }
 
@@ -279,6 +285,7 @@ export async function loadCases(): Promise<StoreResult> {
       case_banks (*),
       case_documents (*),
       case_activities (*)
+      ,owner:profiles!cases_owner_id_fkey(id,full_name,role)
     `,
     )
     .is("deleted_at", null)
@@ -295,6 +302,7 @@ export async function loadCases(): Promise<StoreResult> {
 export async function saveCase(
   record: CaseRecord,
   actorRole: Role,
+  actorId: string,
   previousRecord?: CaseRecord,
 ): Promise<CaseRecord[]> {
   const now = new Date().toISOString();
@@ -376,6 +384,7 @@ export async function saveCase(
         message: activity.message,
         status: activity.status || null,
         created_at: activity.createdAt,
+        actor_id: actorId,
       })),
     );
 
@@ -391,6 +400,7 @@ export async function saveCase(
       caseId: savedRecord.id,
       status: savedRecord.status,
       roles: rolesToNotify,
+      userIds: savedRecord.ownerRole === "broker" && savedRecord.ownerId ? [savedRecord.ownerId] : [],
       reason,
     });
 
