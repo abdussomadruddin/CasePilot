@@ -242,12 +242,12 @@ Deno.serve(async () => {
 
     if (+now >= notificationDueAt && !alreadyProcessedCaseIds.has(record.id)) {
       const isBrokerCase = record.owner?.role === "broker" && Boolean(record.owner_id);
-      const followUpRoles = isBrokerCase
-        ? ["finance" satisfies Role]
+      const followUpRoles: Role[] = isBrokerCase
+        ? ["finance"]
         : progressRoles(status, record.dealer);
-      const rolesToNotify: Role[] = followUpRoles.length
-        ? followUpRoles
-        : ["customer_service"];
+      const rolesToNotify: Role[] = [
+        ...new Set<Role>(["admin", ...followUpRoles]),
+      ];
 
       if (isBrokerCase && record.owner_id) {
         if (!casesByUser[record.owner_id]) casesByUser[record.owner_id] = [];
