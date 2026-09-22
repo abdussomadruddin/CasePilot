@@ -9,7 +9,7 @@ export function createEmptyCase(): CaseRecord {
     dealer: "",
     customerName: "",
     customerPhone: "",
-    carModel: "Honda City",
+    carModel: "",
     carVariant: "",
     carColor: "",
     status: "documents_collected",

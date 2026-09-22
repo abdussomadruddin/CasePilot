@@ -152,11 +152,16 @@ const caseMonthLabelFormatter = new Intl.DateTimeFormat("en-MY", {
 });
 
 type CarCatalogItem = {
+  brand: CarBrand;
   model: string;
   segment: string;
   variants: string[];
   colors: string[];
 };
+
+type CarBrand = "Honda" | "Proton" | "JAECOO" | "JETOUR" | "Chery";
+
+const carBrands: CarBrand[] = ["Honda", "Proton", "JAECOO", "JETOUR", "Chery"];
 
 const metricTabs: TabDefinition[] = [
   { id: "all", label: "All Cases", icon: FolderKanban, toneClass: "bg-honda text-white" },
@@ -169,6 +174,217 @@ const metricTabs: TabDefinition[] = [
 
 const carCatalog: CarCatalogItem[] = [
   {
+    brand: "Proton",
+    model: "Proton S70",
+    segment: "Sedan",
+    variants: ["1.5T Executive", "1.5T Premium", "1.5T Flagship", "1.5T Flagship X"],
+    colors: [
+      "Quartz Black",
+      "Marine Blue",
+      "Space Grey",
+      "Snow White",
+      "Armour Silver",
+      "Ruby Red",
+    ],
+  },
+  {
+    brand: "Proton",
+    model: "Proton NEW S70 1.5 i-GT",
+    segment: "Sedan",
+    variants: ["LITE", "PRIME"],
+    colors: [
+      "Quartz Black",
+      "Marine Blue",
+      "Space Grey",
+      "Snow White",
+      "Armour Silver",
+      "Ruby Red",
+    ],
+  },
+  {
+    brand: "Proton",
+    model: "Proton Saga",
+    segment: "Sedan",
+    variants: ["Standard", "Executive", "Premium"],
+    colors: [],
+  },
+  {
+    brand: "Proton",
+    model: "Proton Persona",
+    segment: "Sedan",
+    variants: ["Standard", "Executive", "Premium"],
+    colors: [],
+  },
+  {
+    brand: "Proton",
+    model: "Proton Iriz",
+    segment: "Hatchback",
+    variants: ["Standard", "Executive", "Active"],
+    colors: [],
+  },
+  {
+    brand: "Proton",
+    model: "Proton X50",
+    segment: "SUV",
+    variants: ["Executive", "Premium", "Flagship"],
+    colors: [],
+  },
+  {
+    brand: "Proton",
+    model: "Proton X70",
+    segment: "SUV",
+    variants: ["Standard", "Executive", "Premium"],
+    colors: [],
+  },
+  {
+    brand: "Proton",
+    model: "Proton X90",
+    segment: "SUV",
+    variants: ["Standard", "Executive", "Premium", "Flagship"],
+    colors: [],
+  },
+  {
+    brand: "Proton",
+    model: "Proton e.MAS 5",
+    segment: "Hatchback / EV",
+    variants: ["Prime", "Premium"],
+    colors: [],
+  },
+  {
+    brand: "Proton",
+    model: "Proton e.MAS 7",
+    segment: "SUV / EV",
+    variants: ["Prime", "Premium"],
+    colors: [],
+  },
+  {
+    brand: "JAECOO",
+    model: "JAECOO J5",
+    segment: "SUV",
+    variants: ["Comfort", "Premium"],
+    colors: [],
+  },
+  {
+    brand: "JAECOO",
+    model: "JAECOO J5 EV",
+    segment: "SUV / EV",
+    variants: ["Comfort", "Premium"],
+    colors: [],
+  },
+  {
+    brand: "JAECOO",
+    model: "JAECOO J7",
+    segment: "SUV",
+    variants: ["2WD", "AWD"],
+    colors: [],
+  },
+  {
+    brand: "JAECOO",
+    model: "JAECOO J7 PHEV",
+    segment: "SUV / PHEV",
+    variants: ["PHEV"],
+    colors: [],
+  },
+  {
+    brand: "JAECOO",
+    model: "JAECOO J8",
+    segment: "SUV",
+    variants: ["2WD", "AWD"],
+    colors: [],
+  },
+  {
+    brand: "JETOUR",
+    model: "JETOUR Dashing",
+    segment: "SUV",
+    variants: ["Comfort", "Prime"],
+    colors: [],
+  },
+  {
+    brand: "JETOUR",
+    model: "JETOUR VT9",
+    segment: "SUV",
+    variants: ["Comfort", "Prime"],
+    colors: [],
+  },
+  {
+    brand: "JETOUR",
+    model: "JETOUR T1",
+    segment: "SUV",
+    variants: ["1.5L TGDi 2WD", "2.0L TGDi XWD"],
+    colors: [],
+  },
+  {
+    brand: "JETOUR",
+    model: "JETOUR T2",
+    segment: "SUV",
+    variants: ["2.0L TGDi XWD"],
+    colors: [],
+  },
+  {
+    brand: "JETOUR",
+    model: "JETOUR T2 i-DM",
+    segment: "SUV / PHEV",
+    variants: ["i-DM PHEV"],
+    colors: [],
+  },
+  {
+    brand: "Chery",
+    model: "Chery TIGGO Cross",
+    segment: "SUV",
+    variants: ["Turbo", "Hybrid"],
+    colors: [],
+  },
+  {
+    brand: "Chery",
+    model: "Chery O5",
+    segment: "Sedan",
+    variants: ["C", "H"],
+    colors: [],
+  },
+  {
+    brand: "Chery",
+    model: "Chery OMODA E5",
+    segment: "SUV / EV",
+    variants: ["C", "H"],
+    colors: [],
+  },
+  {
+    brand: "Chery",
+    model: "Chery TIGGO 7 Pro",
+    segment: "SUV",
+    variants: ["Comfort", "Premium"],
+    colors: [],
+  },
+  {
+    brand: "Chery",
+    model: "Chery TIGGO 7 PHEV",
+    segment: "SUV / PHEV",
+    variants: ["CSH PHEV"],
+    colors: [],
+  },
+  {
+    brand: "Chery",
+    model: "Chery TIGGO 8",
+    segment: "SUV",
+    variants: ["Pro"],
+    colors: [],
+  },
+  {
+    brand: "Chery",
+    model: "Chery TIGGO 8 PHEV",
+    segment: "SUV / PHEV",
+    variants: ["CSH PHEV"],
+    colors: [],
+  },
+  {
+    brand: "Chery",
+    model: "Chery TIGGO 9",
+    segment: "SUV",
+    variants: ["Premium", "Signature"],
+    colors: [],
+  },
+  {
+    brand: "Honda",
     model: "Honda City",
     segment: "Sedan",
     variants: ["1.5L S", "1.5L E", "1.5L V", "1.5L RS", "1.5L e:HEV RS"],
@@ -183,6 +399,7 @@ const carCatalog: CarCatalogItem[] = [
     ],
   },
   {
+    brand: "Honda",
     model: "Honda City Hatchback",
     segment: "Hatchback",
     variants: ["1.5L S", "1.5L E", "1.5L V", "1.5L RS", "1.5L e:HEV RS"],
@@ -197,6 +414,7 @@ const carCatalog: CarCatalogItem[] = [
     ],
   },
   {
+    brand: "Honda",
     model: "Honda WR-V",
     segment: "SUV",
     variants: ["1.5L S", "1.5L E", "1.5L V", "1.5L RS"],
@@ -210,6 +428,7 @@ const carCatalog: CarCatalogItem[] = [
     ],
   },
   {
+    brand: "Honda",
     model: "Honda HR-V",
     segment: "SUV",
     variants: [
@@ -230,6 +449,7 @@ const carCatalog: CarCatalogItem[] = [
     ],
   },
   {
+    brand: "Honda",
     model: "Honda Civic",
     segment: "Sedan",
     variants: [
@@ -248,6 +468,7 @@ const carCatalog: CarCatalogItem[] = [
     ],
   },
   {
+    brand: "Honda",
     model: "Honda CR-V",
     segment: "SUV",
     variants: ["2.0L e:HEV E", "1.5L Turbocharged V", "2.0L e:HEV RS"],
@@ -261,6 +482,7 @@ const carCatalog: CarCatalogItem[] = [
     ],
   },
   {
+    brand: "Honda",
     model: "Honda e:N1",
     segment: "SUV / EV",
     variants: ["e:N1"],
@@ -272,6 +494,7 @@ const carCatalog: CarCatalogItem[] = [
     ],
   },
   {
+    brand: "Honda",
     model: "Honda Civic Type R",
     segment: "Sports",
     variants: ["Type R"],
@@ -284,6 +507,7 @@ const carCatalog: CarCatalogItem[] = [
     ],
   },
   {
+    brand: "Honda",
     model: "Honda Prelude",
     segment: "Sports Coupe",
     variants: ["Prelude e:HEV"],
@@ -2842,6 +3066,9 @@ function CaseForm({
     banks: source.banks.length ? source.banks : [emptyBank()],
   });
   const [documentFiles, setDocumentFiles] = useState<File[]>([]);
+  const [selectedBrand, setSelectedBrand] = useState<CarBrand | "">(
+    getCarCatalogItem(source.carModel)?.brand || "",
+  );
   const normalizedFormRole = String(role).toLowerCase().replace(/[\s-]+/g, "_");
   const canManageBanks =
     isNew || normalizedFormRole === "customer_service" || canEditBanks(role);
@@ -2852,7 +3079,9 @@ function CaseForm({
     : [values.status, ...allowedStatuses];
   const selectedCar = getCarCatalogItem(values.carModel);
   const modelOptions = optionsWithCurrent(
-    carCatalog.map((item) => item.model),
+    carCatalog
+      .filter((item) => item.brand === selectedBrand)
+      .map((item) => item.model),
     values.carModel,
   );
   const variantOptions = optionsWithCurrent(
@@ -2884,6 +3113,22 @@ function CaseForm({
       carColor:
         nextCar && nextCar.colors.includes(current.carColor) ? current.carColor : "",
     }));
+  }
+
+  function updateCarBrand(brand: CarBrand | "") {
+    setSelectedBrand(brand);
+    setValues((current) => {
+      const currentCar = getCarCatalogItem(current.carModel);
+
+      if (currentCar?.brand === brand) return current;
+
+      return {
+        ...current,
+        carModel: "",
+        carVariant: "",
+        carColor: "",
+      };
+    });
   }
 
   function updateBank(index: number, key: keyof BankDetail, value: string) {
@@ -3001,11 +3246,27 @@ function CaseForm({
                 required
               />
             </Field>
+            <Field label="Brand">
+              <select
+                className="field"
+                value={selectedBrand}
+                onChange={(event) => updateCarBrand(event.target.value as CarBrand | "")}
+                required
+              >
+                <option value="">Select brand</option>
+                {carBrands.map((brand) => (
+                  <option key={brand} value={brand}>
+                    {brand}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="Model">
               <select
                 className="field"
                 value={values.carModel}
                 onChange={(event) => updateCarModel(event.target.value)}
+                disabled={!selectedBrand}
                 required
               >
                 <option value="">Select model</option>
@@ -3038,20 +3299,30 @@ function CaseForm({
               </select>
             </Field>
             <Field label="Color">
-              <select
-                className="field"
-                value={values.carColor}
-                onChange={(event) => updateField("carColor", event.target.value)}
-                disabled={!values.carModel}
-                required
-              >
-                <option value="">Select color</option>
-                {colorOptions.map((color) => (
-                  <option key={color} value={color}>
-                    {color}
-                  </option>
-                ))}
-              </select>
+              {selectedCar && selectedCar.colors.length > 0 ? (
+                <select
+                  className="field"
+                  value={values.carColor}
+                  onChange={(event) => updateField("carColor", event.target.value)}
+                  required
+                >
+                  <option value="">Select color</option>
+                  {colorOptions.map((color) => (
+                    <option key={color} value={color}>
+                      {color}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="field"
+                  value={values.carColor}
+                  onChange={(event) => updateField("carColor", event.target.value)}
+                  disabled={!values.carModel}
+                  placeholder="Enter vehicle color"
+                  required
+                />
+              )}
             </Field>
             <Field label="Status">
               <select
