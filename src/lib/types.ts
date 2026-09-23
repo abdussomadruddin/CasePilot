@@ -186,7 +186,7 @@ export type CaseRecord = {
 
 export const leadStatuses = [
   "new", "contacted", "number_invalid", "all_offer_presented",
-  "potential", "need_follow_up", "rejected", "document_collected",
+  "need_follow_up", "potential", "rejected", "document_collected",
 ] as const;
 
 export type LeadStatus = (typeof leadStatuses)[number];
