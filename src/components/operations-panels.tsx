@@ -128,6 +128,9 @@ export function LeadPanel({
   const [draft, setDraft] = useState<LeadRecord | null>(null);
   const [initialNote, setInitialNote] = useState("");
   const [note, setNote] = useState("");
+  const [inlineNoteId, setInlineNoteId] = useState("");
+  const [inlineNote, setInlineNote] = useState("");
+  const [pendingRejectId, setPendingRejectId] = useState("");
   const [filter, setFilter] = useState<LeadStatus | "all">(initialFilter);
   const [view, setView] = useState<"all" | "followup">(initialView);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -162,16 +165,23 @@ export function LeadPanel({
     }
   }
 
-  async function updateStatus(lead: LeadRecord, status: LeadStatus) {
-    if (status === "rejected" && profile.role !== "admin" && !note.trim()) {
+  async function updateStatus(lead: LeadRecord, status: LeadStatus, statusNote = note) {
+    if (status === "rejected" && profile.role !== "admin" && !statusNote.trim()) {
+      setInlineNoteId(lead.id);
+      setPendingRejectId(lead.id);
       setError("Add a note explaining why the lead was rejected before changing status.");
       return;
     }
     setSaving(true);
     setError("");
     try {
-      await saveLead({ ...lead, status }, profile.id, status === "rejected" ? note : "", lead.status, profile.role !== "admin");
-      if (status === "rejected") setNote("");
+      await saveLead({ ...lead, status }, profile.id, status === "rejected" ? statusNote : "", lead.status, profile.role !== "admin");
+      if (status === "rejected") {
+        setNote("");
+        setInlineNote("");
+        setInlineNoteId("");
+        setPendingRejectId("");
+      }
       await onRefresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to update status.");
@@ -188,6 +198,28 @@ export function LeadPanel({
     try {
       await addLeadNote(selected.id, profile.id, note);
       setNote("");
+      await onRefresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to save note.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitInlineNote(event: FormEvent<HTMLFormElement>, leadId: string) {
+    event.preventDefault();
+    if (!inlineNote.trim()) return;
+    if (pendingRejectId === leadId) {
+      const lead = leads.find((item) => item.id === leadId);
+      if (lead) await updateStatus(lead, "rejected", inlineNote);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await addLeadNote(leadId, profile.id, inlineNote);
+      setInlineNote("");
+      setInlineNoteId("");
       await onRefresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to save note.");
@@ -241,10 +273,23 @@ export function LeadPanel({
       </select> : null}
       <div className="grid gap-2">
         {shown.map((lead) => (
-          <button key={lead.id} type="button" className="surface-card grid w-full gap-2 p-4 text-left hover:border-zinc-500 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }}>
-            <div className="min-w-0"><p className="truncate font-semibold text-white">{lead.customerName}</p><p className="text-sm text-zinc-400">{lead.phoneRevealedAt ? `${lead.customerPhone} · ` : ""}{lead.carModel}</p><p className="text-xs text-zinc-500">{ownerLabel(lead.ownerId, teamMembers)}</p></div>
-            <span className="w-fit rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span>
-          </button>
+          <article key={lead.id} className="surface-card min-w-0 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }} aria-label={`Open ${lead.customerName} details`}>
+                <span className="block truncate font-semibold text-white">{lead.customerName}</span>
+                <span className="block truncate text-sm text-zinc-400">{lead.phoneRevealedAt ? `${lead.customerPhone} · ` : ""}{lead.carModel}</span>
+                <span className="block truncate text-xs text-zinc-500">{ownerLabel(lead.ownerId, teamMembers)}</span>
+              </button>
+              {!lead.phoneRevealedAt ? <span className="shrink-0 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span> : null}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
+              <button className="secondary-button" type="button" disabled={saving} onClick={() => void callLead(lead)}><PhoneCall className="h-4 w-4" /> Call</button>
+              {lead.phoneRevealedAt ? <a className="secondary-button text-emerald-200" href={`https://wa.me/${lead.customerPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /> WhatsApp</a> : null}
+              {lead.phoneRevealedAt ? <select className="field min-w-0 flex-1 basis-36" aria-label={`Status for ${lead.customerName}`} value={lead.status} disabled={saving} onChange={(event) => void updateStatus(lead, event.target.value as LeadStatus, inlineNoteId === lead.id ? inlineNote : "")}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || lead.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select> : null}
+              <button className="icon-button" type="button" aria-label={`Add note for ${lead.customerName}`} title="Add note" onClick={() => { setError(""); setInlineNoteId(inlineNoteId === lead.id ? "" : lead.id); setInlineNote(""); setPendingRejectId(""); }}><Pencil className="h-4 w-4" /></button>
+            </div>
+            {inlineNoteId === lead.id ? <form className="mt-3 grid gap-2" onSubmit={(event) => void submitInlineNote(event, lead.id)}><label className="sr-only" htmlFor={`lead-note-${lead.id}`}>Note for {lead.customerName}</label><textarea id={`lead-note-${lead.id}`} className="field min-h-20" value={inlineNote} onChange={(event) => setInlineNote(event.target.value)} placeholder={pendingRejectId === lead.id ? "Reason for rejection" : "Add follow-up note"} /><div className="flex gap-2"><button className="secondary-button" disabled={saving || !inlineNote.trim()}><Save className="h-4 w-4" /> {pendingRejectId === lead.id ? "Reject lead" : "Save note"}</button><button className="icon-button" type="button" aria-label="Close note" onClick={() => { setInlineNoteId(""); setInlineNote(""); setPendingRejectId(""); }}><X className="h-4 w-4" /></button></div></form> : null}
+          </article>
         ))}
         {!shown.length ? <p className="surface-card p-6 text-sm text-zinc-400">{view === "followup" ? "No contacted leads are due for follow-up." : "No leads in this status."}</p> : null}
       </div>
