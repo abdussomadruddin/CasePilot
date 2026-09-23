@@ -12,6 +12,7 @@ type LeadRow = {
   customer_name: string;
   customer_phone: string;
   phone_revealed_at: string | null;
+  follow_up_activity_at: string | null;
   email: string | null;
   car_brand: string;
   car_model: string;
@@ -53,6 +54,7 @@ function mapLead(row: LeadRow): LeadRecord {
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
     phoneRevealedAt: row.phone_revealed_at || "",
+    followUpActivityAt: row.follow_up_activity_at || "",
     email: row.email || "",
     carBrand: row.car_brand,
     carModel: row.car_model,

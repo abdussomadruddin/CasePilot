@@ -73,6 +73,7 @@ import {
   caseStatuses,
   leadStatuses,
   leadStatusLabels,
+  isLeadFollowUpDue,
   caseDealerLabels,
   caseDealers,
   roles,
@@ -701,6 +702,8 @@ export function CaseDashboard() {
   const [prefillCase, setPrefillCase] = useState<CaseRecord | null>(null);
   const [appointmentSubject, setAppointmentSubject] = useState("");
   const [leadStatusJump, setLeadStatusJump] = useState<LeadStatus | "all">("all");
+  const [leadViewJump, setLeadViewJump] = useState<"all" | "followup">("all");
+  const [leadNowMs, setLeadNowMs] = useState(() => Date.now());
   const currentMonth = caseMonthKey(new Date().toISOString());
   const lastMonth = previousCaseMonth(currentMonth);
   const [cases, setCases] = useState<CaseRecord[]>([]);
@@ -839,6 +842,12 @@ export function CaseDashboard() {
   useEffect(() => {
     const section = new URLSearchParams(window.location.search).get("section");
     if (section === "appointments" || section === "leads" || section === "cases") setAppSection(section);
+    if (section === "leads" && new URLSearchParams(window.location.search).get("view") === "followup") setLeadViewJump("followup");
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setLeadNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -1699,9 +1708,13 @@ export function CaseDashboard() {
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("this_month"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(currentMonth); setAppSection("cases"); }}><CalendarDays className="mb-3 h-5 w-5 text-violet-400" /><span className="block text-sm text-zinc-400">This Month Cases</span><strong className="text-2xl">{metrics.this_month}</strong></button>
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("last_month"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(lastMonth); setAppSection("cases"); }}><CalendarRange className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Last Month Cases</span><strong className="text-2xl">{metrics.last_month}</strong></button>
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("followup"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(""); setAppSection("cases"); }}><CalendarClock className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Follow Up Due</span><strong className="text-2xl">{metrics.followup}</strong></button>
-              {["admin", "customer_service", "broker"].includes(role) ? <><button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("leads")}><Users className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Leads</span><strong className="text-2xl">{leads.length}</strong></button><button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("appointments")}><CalendarDays className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Upcoming appointments</span><strong className="text-2xl">{appointments.filter((item) => item.status === "scheduled" && +new Date(item.startsAt) >= Date.now()).length}</strong></button></> : null}
+              {["admin", "customer_service", "broker"].includes(role) ? <>
+                <button type="button" className="surface-card p-4 text-left" onClick={() => { setLeadStatusJump("all"); setLeadViewJump("all"); setAppSection("leads"); }}><Users className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Leads</span><strong className="text-2xl">{leads.length}</strong></button>
+                <button type="button" className="surface-card p-4 text-left" onClick={() => { setLeadStatusJump("all"); setLeadViewJump("followup"); setAppSection("leads"); }}><Clock3 className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Lead Follow Up</span><strong className="text-2xl">{leads.filter((lead) => isLeadFollowUpDue(lead, leadNowMs)).length}</strong></button>
+                <button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("appointments")}><CalendarDays className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Upcoming appointments</span><strong className="text-2xl">{appointments.filter((item) => item.status === "scheduled" && +new Date(item.startsAt) >= Date.now()).length}</strong></button>
+              </> : null}
             </div>
-            {["admin", "customer_service", "broker"].includes(role) ? <><h2 className="text-sm font-semibold text-zinc-400">Leads by status</h2><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{leadStatuses.map((status) => <button type="button" key={status} className="surface-card flex items-center justify-between p-4 text-left" onClick={() => { setLeadStatusJump(status); setAppSection("leads"); }}><span>{leadStatusLabels[status]}</span><strong>{leads.filter((lead) => lead.status === status).length}</strong></button>)}</div></> : null}
+            {["admin", "customer_service", "broker"].includes(role) ? <><h2 className="text-sm font-semibold text-zinc-400">Leads by status</h2><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{leadStatuses.map((status) => <button type="button" key={status} className="surface-card flex items-center justify-between p-4 text-left" onClick={() => { setLeadStatusJump(status); setLeadViewJump("all"); setAppSection("leads"); }}><span>{leadStatusLabels[status]}</span><strong>{leads.filter((lead) => lead.status === status).length}</strong></button>)}</div></> : null}
           </section>
         ) : null}
 
@@ -1863,7 +1876,7 @@ export function CaseDashboard() {
         </section>
         </> : null}
         {appSection === "team" && role === "admin" ? <TeamManagementPanel members={teamMembers} saving={teamSaving} onCreate={handleCreateTeamMember} onUpdate={handleUpdateTeamMember} onDelete={handleDeleteTeamMember} /> : null}
-        {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={leadStatusJump} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
+        {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={`${leadStatusJump}:${leadViewJump}`} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} initialView={leadViewJump} onViewChange={setLeadViewJump} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
         {appSection === "appointments" && profile && ["admin", "customer_service", "broker"].includes(role) ? <AppointmentPanel key={appointmentSubject} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} appointments={appointments} initialSubject={appointmentSubject} onRefresh={refreshCases} /> : null}
       </div>
       <div
@@ -1892,20 +1905,35 @@ export function CaseDashboard() {
             { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
             { id: "cases", label: "Case", icon: FolderKanban },
             ...(["admin", "customer_service", "broker"].includes(role)
-              ? [{ id: "leads", label: "Lead", icon: Users }, { id: "appointments", label: "Appointment", icon: CalendarDays }]
+              ? [{ id: "leads", label: "Lead", icon: Users }, { id: "lead_followup", label: "Lead Follow Up", icon: Clock3 }, { id: "appointments", label: "Appointment", icon: CalendarDays }]
               : []),
             ...(role === "admin" ? [{ id: "team", label: "Team", icon: UserPlus }] : []),
-          ] as const).map(({ id, label, icon: Icon }) => (
+          ] as const).map(({ id, label, icon: Icon }) => {
+            const active = id === "lead_followup"
+              ? appSection === "leads" && leadViewJump === "followup"
+              : id === "leads"
+                ? appSection === "leads" && leadViewJump === "all"
+                : appSection === id;
+            return (
             <button
               key={id}
               type="button"
-              className={`flex items-center gap-3 rounded-md px-4 py-3 text-left ${appSection === id ? "bg-red-950 text-white" : "text-zinc-300 hover:bg-zinc-900"}`}
-              aria-current={appSection === id ? "page" : undefined}
-              onClick={() => { setAppSection(id as typeof appSection); setDrawerOpen(false); window.scrollTo({ top: 0 }); }}
+              className={`flex items-center gap-3 rounded-md px-4 py-3 text-left ${active ? "bg-red-950 text-white" : "text-zinc-300 hover:bg-zinc-900"}`}
+              aria-current={active ? "page" : undefined}
+              onClick={() => {
+                if (id === "lead_followup" || id === "leads") {
+                  setLeadStatusJump("all");
+                  setLeadViewJump(id === "lead_followup" ? "followup" : "all");
+                  setAppSection("leads");
+                } else setAppSection(id as typeof appSection);
+                setDrawerOpen(false);
+                window.scrollTo({ top: 0 });
+              }}
             >
               <Icon className="h-5 w-5" />{label}
             </button>
-          ))}
+          );
+          })}
           <div className="mt-auto border-t border-zinc-800 pt-4 text-sm text-zinc-400">{profile?.fullName}</div>
         </nav>
       </div>

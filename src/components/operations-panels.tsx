@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   addLeadNote,
   deleteLead,
@@ -23,6 +23,7 @@ import {
 import {
   leadStatuses,
   leadStatusLabels,
+  isLeadFollowUpDue,
   roleLabels,
   type AppointmentKind,
   type AppointmentRecord,
@@ -91,6 +92,7 @@ function newLead(profile: Profile): LeadRecord {
     customerName: "",
     customerPhone: "",
     phoneRevealedAt: "",
+    followUpActivityAt: "",
     email: "",
     carBrand: "",
     carModel: "",
@@ -112,21 +114,32 @@ export function LeadPanel({
   onCreateCase,
   onAppointment,
   initialFilter = "all",
+  initialView = "all",
+  onViewChange,
 }: CommonProps & {
   catalog: VehicleOption[];
   onCreateCase: (lead: LeadRecord) => void;
   onAppointment: (lead: LeadRecord) => void;
   initialFilter?: LeadStatus | "all";
+  initialView?: "all" | "followup";
+  onViewChange?: (view: "all" | "followup") => void;
 }) {
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<LeadRecord | null>(null);
   const [initialNote, setInitialNote] = useState("");
   const [note, setNote] = useState("");
   const [filter, setFilter] = useState<LeadStatus | "all">(initialFilter);
+  const [view, setView] = useState<"all" | "followup">(initialView);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const selected = leads.find((lead) => lead.id === selectedId);
-  const shown = leads.filter((lead) => filter === "all" || lead.status === filter);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const dueLeads = leads.filter((lead) => isLeadFollowUpDue(lead, nowMs));
+  const shown = view === "followup" ? dueLeads : leads.filter((lead) => filter === "all" || lead.status === filter);
   const brands = [...new Set(catalog.map((item) => item.brand))];
   const models = draft ? catalog.filter((item) => item.brand === draft.carBrand) : [];
 
@@ -218,10 +231,14 @@ export function LeadPanel({
         <button type="button" className="primary-button" onClick={() => { const lead = newLead(profile); if (profile.role === "admin") lead.ownerId = teamMembers.find((member) => member.active && ["customer_service", "broker"].includes(member.role))?.id || ""; setDraft(lead); setInitialNote(""); }}><Plus className="h-4 w-4" /> New Lead</button>
       </div>
       {error ? <p className="rounded-md border border-red-800 bg-red-950/50 p-3 text-sm text-red-100" role="alert">{error}</p> : null}
-      <select className="field max-w-xs" value={filter} onChange={(event) => setFilter(event.target.value as LeadStatus | "all")} aria-label="Filter leads by status">
+      <div className="flex gap-2 border-b border-zinc-800 pb-2" role="tablist" aria-label="Lead views">
+        <button type="button" role="tab" aria-selected={view === "all"} className={view === "all" ? "primary-button" : "secondary-button"} onClick={() => { setView("all"); onViewChange?.("all"); }}>All Leads <span>{leads.length}</span></button>
+        <button type="button" role="tab" aria-selected={view === "followup"} className={view === "followup" ? "primary-button" : "secondary-button"} onClick={() => { setView("followup"); onViewChange?.("followup"); }}>Follow Up Due <span>{dueLeads.length}</span></button>
+      </div>
+      {view === "all" ? <select className="field max-w-xs" value={filter} onChange={(event) => setFilter(event.target.value as LeadStatus | "all")} aria-label="Filter leads by status">
         <option value="all">All statuses ({leads.length})</option>
         {leadStatuses.map((status) => <option key={status} value={status}>{leadStatusLabels[status]} ({leads.filter((lead) => lead.status === status).length})</option>)}
-      </select>
+      </select> : null}
       <div className="grid gap-2">
         {shown.map((lead) => (
           <button key={lead.id} type="button" className="surface-card grid w-full gap-2 p-4 text-left hover:border-zinc-500 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }}>
@@ -229,7 +246,7 @@ export function LeadPanel({
             <span className="w-fit rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span>
           </button>
         ))}
-        {!shown.length ? <p className="surface-card p-6 text-sm text-zinc-400">No leads in this status.</p> : null}
+        {!shown.length ? <p className="surface-card p-6 text-sm text-zinc-400">{view === "followup" ? "No contacted leads are due for follow-up." : "No leads in this status."}</p> : null}
       </div>
 
       {selected ? (

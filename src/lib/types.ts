@@ -208,6 +208,7 @@ export type LeadRecord = {
   customerName: string;
   customerPhone: string;
   phoneRevealedAt: string;
+  followUpActivityAt: string;
   email: string;
   carBrand: string;
   carModel: string;
@@ -217,6 +218,11 @@ export type LeadRecord = {
   notes: LeadNote[];
   events: LeadEvent[];
 };
+
+export function isLeadFollowUpDue(lead: LeadRecord, nowMs: number): boolean {
+  return lead.status === "contacted" && Boolean(lead.followUpActivityAt)
+    && nowMs - new Date(lead.followUpActivityAt).getTime() >= 86_400_000;
+}
 
 export type LeadNote = {
   id: string;
