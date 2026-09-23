@@ -826,9 +826,14 @@ export function CaseDashboard() {
 
   useEffect(() => {
     if (!drawerOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const close = (event: KeyboardEvent) => { if (event.key === "Escape") setDrawerOpen(false); };
     window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", close);
+    };
   }, [drawerOpen]);
 
   useEffect(() => {
@@ -841,13 +846,13 @@ export function CaseDashboard() {
       const deltaX = (event.changedTouches[0]?.clientX || 0) - startX;
       const deltaY = (event.changedTouches[0]?.clientY || 0) - startY;
       if (Math.abs(deltaY) > Math.abs(deltaX) || Math.abs(deltaX) < 70) return;
-      if (startX < 32 && deltaX > 0) setDrawerOpen(true);
-      if (startX < 320 && deltaX < 0) setDrawerOpen(false);
+      if (!drawerOpen && startX < 32 && deltaX > 0) setDrawerOpen(true);
+      if (drawerOpen && startX < 320 && deltaX < 0) setDrawerOpen(false);
     };
     window.addEventListener("touchstart", touchStart, { passive: true });
     window.addEventListener("touchend", touchEnd, { passive: true });
     return () => { window.removeEventListener("touchstart", touchStart); window.removeEventListener("touchend", touchEnd); };
-  }, []);
+  }, [drawerOpen]);
 
   useEffect(() => {
     if (!profile || !["admin", "customer_service", "broker"].includes(profile.role)) return;
@@ -1668,9 +1673,11 @@ export function CaseDashboard() {
 
         {appSection === "dashboard" ? (
           <section className="grid gap-4">
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("all"); setAppSection("cases"); }}><FolderKanban className="mb-3 h-5 w-5 text-red-400" /><span className="block text-sm text-zinc-400">Cases</span><strong className="text-2xl">{visibleCases.length}</strong></button>
-              <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("followup"); setAppSection("cases"); }}><CalendarClock className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Follow Up Due</span><strong className="text-2xl">{metrics.followup}</strong></button>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+              <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("all"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(""); setAppSection("cases"); }}><FolderKanban className="mb-3 h-5 w-5 text-red-400" /><span className="block text-sm text-zinc-400">Cases</span><strong className="text-2xl">{visibleCases.length}</strong></button>
+              <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("this_month"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(currentMonth); setAppSection("cases"); }}><CalendarDays className="mb-3 h-5 w-5 text-violet-400" /><span className="block text-sm text-zinc-400">This Month Cases</span><strong className="text-2xl">{metrics.this_month}</strong></button>
+              <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("last_month"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(lastMonth); setAppSection("cases"); }}><CalendarRange className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Last Month Cases</span><strong className="text-2xl">{metrics.last_month}</strong></button>
+              <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("followup"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(""); setAppSection("cases"); }}><CalendarClock className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Follow Up Due</span><strong className="text-2xl">{metrics.followup}</strong></button>
               {["admin", "customer_service", "broker"].includes(role) ? <><button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("leads")}><Users className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Leads</span><strong className="text-2xl">{leads.length}</strong></button><button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("appointments")}><CalendarDays className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Upcoming appointments</span><strong className="text-2xl">{appointments.filter((item) => item.status === "scheduled" && +new Date(item.startsAt) >= Date.now()).length}</strong></button></> : null}
             </div>
             {["admin", "customer_service", "broker"].includes(role) ? <><h2 className="text-sm font-semibold text-zinc-400">Leads by status</h2><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{leadStatuses.map((status) => <button type="button" key={status} className="surface-card flex items-center justify-between p-4 text-left" onClick={() => { setLeadStatusJump(status); setAppSection("leads"); }}><span>{leadStatusLabels[status]}</span><strong>{leads.filter((lead) => lead.status === status).length}</strong></button>)}</div></> : null}
@@ -1837,7 +1844,49 @@ export function CaseDashboard() {
         {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={leadStatusJump} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
         {appSection === "appointments" && profile && ["admin", "customer_service", "broker"].includes(role) ? <AppointmentPanel key={appointmentSubject} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} appointments={appointments} initialSubject={appointmentSubject} onRefresh={refreshCases} /> : null}
       </div>
-      {drawerOpen ? <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Navigation"><button type="button" className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} /><nav className="absolute inset-y-0 left-0 flex w-[min(19rem,84vw)] flex-col gap-2 border-r border-zinc-700 bg-zinc-950 p-5 shadow-2xl" aria-label="Main navigation"><div className="mb-5 flex items-center justify-between"><span className="font-bold">CasePilot</span><button className="icon-button" type="button" onClick={() => setDrawerOpen(false)} aria-label="Close navigation"><X className="h-5 w-5" /></button></div>{([ { id: "dashboard", label: "Dashboard", icon: LayoutDashboard }, { id: "cases", label: "Case", icon: FolderKanban }, ...(["admin", "customer_service", "broker"].includes(role) ? [{ id: "leads", label: "Lead", icon: Users }, { id: "appointments", label: "Appointment", icon: CalendarDays }] : []), ...(role === "admin" ? [{ id: "team", label: "Team", icon: UserPlus }] : []) ] as const).map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`flex items-center gap-3 rounded-md px-4 py-3 text-left ${appSection === id ? "bg-red-950 text-white" : "text-zinc-300 hover:bg-zinc-900"}`} aria-current={appSection === id ? "page" : undefined} onClick={() => { setAppSection(id as typeof appSection); setDrawerOpen(false); window.scrollTo({ top: 0 }); }}><Icon className="h-5 w-5" />{label}</button>)}<div className="mt-auto border-t border-zinc-800 pt-4 text-sm text-zinc-400">{profile?.fullName}</div></nav></div> : null}
+      <div
+        className={`casepilot-drawer fixed inset-0 z-50 ${drawerOpen ? "casepilot-drawer-open" : ""}`}
+        role={drawerOpen ? "dialog" : undefined}
+        aria-modal={drawerOpen ? "true" : undefined}
+        aria-label="Navigation"
+        aria-hidden={!drawerOpen}
+        inert={!drawerOpen}
+      >
+        <button
+          type="button"
+          className="casepilot-drawer-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm"
+          aria-label="Close navigation"
+          onClick={() => setDrawerOpen(false)}
+        />
+        <nav
+          className="casepilot-drawer-panel absolute inset-y-0 left-0 flex w-[min(19rem,84vw)] flex-col gap-2 border-r border-zinc-700 bg-zinc-950 p-5 shadow-2xl"
+          aria-label="Main navigation"
+        >
+          <div className="mb-5 flex items-center justify-between">
+            <span className="font-bold">CasePilot</span>
+            <button className="icon-button" type="button" onClick={() => setDrawerOpen(false)} aria-label="Close navigation"><X className="h-5 w-5" /></button>
+          </div>
+          {([
+            { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+            { id: "cases", label: "Case", icon: FolderKanban },
+            ...(["admin", "customer_service", "broker"].includes(role)
+              ? [{ id: "leads", label: "Lead", icon: Users }, { id: "appointments", label: "Appointment", icon: CalendarDays }]
+              : []),
+            ...(role === "admin" ? [{ id: "team", label: "Team", icon: UserPlus }] : []),
+          ] as const).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              className={`flex items-center gap-3 rounded-md px-4 py-3 text-left ${appSection === id ? "bg-red-950 text-white" : "text-zinc-300 hover:bg-zinc-900"}`}
+              aria-current={appSection === id ? "page" : undefined}
+              onClick={() => { setAppSection(id as typeof appSection); setDrawerOpen(false); window.scrollTo({ top: 0 }); }}
+            >
+              <Icon className="h-5 w-5" />{label}
+            </button>
+          ))}
+          <div className="mt-auto border-t border-zinc-800 pt-4 text-sm text-zinc-400">{profile?.fullName}</div>
+        </nav>
+      </div>
 
       {isFormOpen ? (
         <CaseForm
