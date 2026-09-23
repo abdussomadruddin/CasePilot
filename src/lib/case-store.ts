@@ -25,6 +25,8 @@ import {
 
 const documentRetentionMs = 60 * 24 * 60 * 60 * 1000;
 const defaultUploadTimeoutMs = 5 * 60 * 1000;
+const directDriveUploadLimit = 3 * 1024 * 1024;
+const storageUploadLimit = 50 * 1024 * 1024;
 
 type StoreResult = {
   source: "supabase";
@@ -482,17 +484,23 @@ async function uploadDocumentToGoogleDrive(
     body: formData,
     signal,
   });
-  const result = (await response.json()) as {
+  const responseText = await response.text();
+  let result: {
     error?: string;
     fileId?: string;
     fileName?: string;
     fileUrl?: string;
     folderId?: string;
     folderUrl?: string;
-  };
+  } = {};
+  try {
+    result = JSON.parse(responseText);
+  } catch {
+    // Vercel may return HTML for an oversized request or a platform error.
+  }
 
   if (!response.ok || !result.fileId || !result.fileUrl || !result.folderId) {
-    throw new Error(result.error || "Unable to upload document to Google Drive.");
+    throw new Error(result.error || `Unable to upload document to Google Drive (${response.status}).`);
   }
 
   return {
@@ -594,13 +602,7 @@ export async function uploadDocuments(
   if (!documents.length) return (await loadCases()).cases;
 
   const supabase = getSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in again before uploading documents.");
-  }
+  const accessToken = await getValidAccessToken();
 
   const uploaded: CaseDocument[] = [];
   const failed: string[] = [];
@@ -610,6 +612,10 @@ export async function uploadDocuments(
   let timedOut = false;
 
   for (const { file, documentType } of documents) {
+    if (file.size > storageUploadLimit) {
+      failed.push(`${file.name}: File exceeds the 50 MB upload limit.`);
+      continue;
+    }
     const remainingMs = timeoutMs - (Date.now() - startedAt);
 
     if (remainingMs <= 0) {
@@ -629,19 +635,38 @@ export async function uploadDocuments(
         fileName: file.name,
       });
       const uploadedAt = new Date().toISOString();
-      const driveFile = await uploadDocumentToGoogleDrive(
-        record,
-        file,
-        session.access_token,
-        controller.signal,
-      );
+      let fileUrl = "";
+      let storagePath = "";
+      let folderUrl = "";
+      let fileName = file.name;
+      if (file.size <= directDriveUploadLimit) {
+        try {
+          const driveFile = await uploadDocumentToGoogleDrive(record, file, accessToken, controller.signal);
+          fileUrl = driveFile.fileUrl;
+          storagePath = `google-drive:${driveFile.folderId}:${driveFile.fileId}`;
+          folderUrl = driveFile.folderUrl;
+          fileName = driveFile.fileName;
+        } catch (caught) {
+          console.warn("Google Drive upload unavailable; saving to CasePilot storage.", caught);
+        }
+      }
+      if (!fileUrl) {
+        const extension = file.name.match(/\.([a-zA-Z0-9]{1,10})$/)?.[1]?.toLowerCase();
+        const path = `${record.id}/${crypto.randomUUID()}${extension ? `.${extension}` : ""}`;
+        const { error: storageError } = await supabase.storage
+          .from("case-documents")
+          .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+        if (storageError) throw storageError;
+        storagePath = path;
+        fileUrl = supabase.storage.from("case-documents").getPublicUrl(path).data.publicUrl;
+      }
       const document: CaseDocument = {
         id: crypto.randomUUID(),
-        name: driveFile.fileName || file.name,
-        url: driveFile.fileUrl,
+        name: fileName,
+        url: fileUrl,
         documentType,
-        storagePath: `google-drive:${driveFile.folderId}:${driveFile.fileId}`,
-        folderUrl: driveFile.folderUrl,
+        storagePath,
+        folderUrl,
         uploadedBy: actorRole,
         uploadedAt,
         expiresAt: new Date(+new Date(uploadedAt) + documentRetentionMs).toISOString(),
@@ -690,7 +715,7 @@ export async function uploadDocuments(
       total,
     });
     try {
-      synced = await syncCaseDocumentsFromDrive(record, actorRole, session.access_token);
+      synced = await syncCaseDocumentsFromDrive(record, actorRole, accessToken);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Sync failed.";
       failed.push(`Drive sync: ${message}`);

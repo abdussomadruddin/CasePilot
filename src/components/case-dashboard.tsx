@@ -577,13 +577,15 @@ function optionsWithCurrent(options: readonly string[], current: string) {
 
 function getDocumentDownloadUrl(doc: { name: string; url: string }) {
   if (isGoogleDriveUrl(doc.url)) return doc.url;
+  if (/^https:\/\/[^/]+\/storage\/v1\/object\/public\/case-documents\//.test(doc.url)) return doc.url;
 
   const params = new URLSearchParams({ url: doc.url, name: doc.name });
   return `/api/download-document?${params.toString()}`;
 }
 
 function getCaseDriveFolderUrl(documents: CaseDocument[]) {
-  return documents.find((document) => document.folderUrl)?.folderUrl || "";
+  const folderUrl = documents[0]?.folderUrl;
+  return folderUrl && documents.every((document) => document.folderUrl === folderUrl) ? folderUrl : "";
 }
 
 function isGoogleDriveUrl(value: string) {
@@ -602,7 +604,7 @@ function downloadDocuments(documents: Array<{ name: string; url: string }>) {
       link.href = getDocumentDownloadUrl(doc);
       link.download = doc.name;
       link.rel = "noopener";
-      if (isGoogleDriveUrl(doc.url)) {
+      if (doc.url.startsWith("https://")) {
         link.target = "_blank";
       }
       window.document.body.appendChild(link);
@@ -874,22 +876,6 @@ export function CaseDashboard() {
   }, [drawerOpen]);
 
   useEffect(() => {
-    if (!profile || !["admin", "customer_service", "broker"].includes(profile.role)) return;
-    const supabase = getSupabaseClient();
-    let timer: number | undefined;
-    const refresh = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => { void Promise.all([loadLeads(), loadAppointments()]).then(([nextLeads, nextAppointments]) => { setLeads(nextLeads); setAppointments(nextAppointments); }).catch(console.warn); }, 250);
-    };
-    let channel = supabase.channel("casepilot-operations-sync");
-    for (const table of ["leads", "lead_notes", "lead_events", "appointments"]) {
-      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
-    }
-    channel.subscribe();
-    return () => { window.clearTimeout(timer); void supabase.removeChannel(channel); };
-  }, [profile]);
-
-  useEffect(() => {
     if (role !== "admin" && activeTab === "team") {
       setActiveTab("all");
     }
@@ -924,58 +910,90 @@ export function CaseDashboard() {
   useEffect(() => {
     if (!profile) return;
 
+    const currentProfile = profile;
     const supabase = getSupabaseClient();
-    let refreshTimer: number | null = null;
     let disposed = false;
+    const canUseOperations = ["admin", "customer_service", "broker"].includes(currentProfile.role);
 
-    async function refreshFromRealtime() {
-      if (disposed) return;
+    function makeRefresh<T>(load: () => Promise<T>, apply: (value: T) => void) {
+      let refreshing = false;
+      let pending = false;
+      return async () => {
+        pending = true;
+        if (refreshing || disposed) return;
+        refreshing = true;
+        while (pending && !disposed) {
+          pending = false;
+          try {
+            const value = await load();
+            if (!disposed) apply(value);
+          } catch (caught) {
+            if (!disposed) console.warn("Unable to refresh dashboard", caught);
+          }
+        }
+        refreshing = false;
+      };
+    }
 
-      try {
-        const result = await loadCases();
-        if (!disposed) setCases(result.cases);
-      } catch (caught) {
-        if (!disposed) {
-          console.warn(
-            "Unable to refresh cases from realtime",
-            caught instanceof Error ? caught.message : caught,
-          );
+    const refreshCasesNow = makeRefresh(async () => (await loadCases()).cases, setCases);
+    const refreshTeamNow = makeRefresh(() => loadTeamMembers(currentProfile.role === "admin"), setTeamMembers);
+    const refreshLeadsNow = makeRefresh(loadLeads, setLeads);
+    const refreshAppointmentsNow = makeRefresh(loadAppointments, setAppointments);
+
+    function refreshAll() {
+      void refreshCasesNow();
+      void refreshTeamNow();
+      if (canUseOperations) {
+        void refreshLeadsNow();
+        void refreshAppointmentsNow();
+      }
+    }
+
+    function refreshProfile() {
+      void getCurrentProfile().then((current) => {
+        if (disposed || !current || current.id !== currentProfile.id) return;
+        if (current.role !== currentProfile.role || current.fullName !== currentProfile.fullName || current.active !== currentProfile.active) {
+          setProfile(current);
+          setRole(current.role);
+        }
+      }).catch((caught) => console.warn("Unable to refresh profile", caught));
+      void refreshTeamNow();
+      void refreshCasesNow();
+    }
+
+    function refreshWhenVisible() {
+      if (document.visibilityState === "visible") {
+        refreshProfile();
+        if (canUseOperations) {
+          void refreshLeadsNow();
+          void refreshAppointmentsNow();
         }
       }
     }
 
-    function scheduleRefresh() {
-      if (refreshTimer) window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(refreshFromRealtime, 250);
+    let channel = supabase.channel("casepilot-dashboard-sync");
+    for (const table of ["cases", "case_banks", "case_documents", "case_activities"]) {
+      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => { void refreshCasesNow(); });
     }
-
-    const channel = supabase
-      .channel("casepilot-dashboard-sync")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "cases" },
-        scheduleRefresh,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "case_banks" },
-        scheduleRefresh,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "case_documents" },
-        scheduleRefresh,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "case_activities" },
-        scheduleRefresh,
-      )
-      .subscribe();
+    if (canUseOperations) {
+      for (const table of ["leads", "lead_notes", "lead_events"]) {
+        channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => { void refreshLeadsNow(); });
+      }
+      channel = channel.on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => { void refreshAppointmentsNow(); });
+    }
+    channel = channel.on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, refreshProfile);
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") refreshAll();
+    });
+    window.addEventListener("focus", refreshWhenVisible);
+    window.addEventListener("pageshow", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       disposed = true;
-      if (refreshTimer) window.clearTimeout(refreshTimer);
+      window.removeEventListener("focus", refreshWhenVisible);
+      window.removeEventListener("pageshow", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
       void supabase.removeChannel(channel);
     };
   }, [profile]);
@@ -2893,7 +2911,7 @@ function CaseCard({
                           <a
                             className="icon-button h-8 w-8"
                             href={getDocumentDownloadUrl(doc)}
-                            target={isGoogleDriveUrl(doc.url) ? "_blank" : undefined}
+                            target={doc.url.startsWith("https://") ? "_blank" : undefined}
                             rel="noopener"
                             aria-label={`Open ${doc.name}`}
                           >
@@ -3080,16 +3098,11 @@ function WhatsAppComposer({
 
   async function messageWithCaseFolder() {
     const trimmed = message.trim();
-
-    if (!caseFolderUrl) return trimmed;
-
-    return [
-      trimmed,
-      "",
-      "Documents:",
-      "",
-      `Case Folder : ${caseFolderUrl}`,
-    ].join("\n");
+    if (!record.documents.length) return trimmed;
+    const documentLinks = caseFolderUrl
+      ? [`Case Folder : ${caseFolderUrl}`]
+      : record.documents.map((document) => `${document.name}: ${document.url}`);
+    return [trimmed, "", "Documents:", "", ...documentLinks].join("\n");
   }
 
   async function sendWhatsApp() {
@@ -3147,7 +3160,7 @@ function WhatsAppComposer({
           <section className="grid gap-2 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-muted" aria-hidden="true" />
-              <h3 className="text-sm font-semibold text-ink">Case folder to forward</h3>
+              <h3 className="text-sm font-semibold text-ink">Documents to forward</h3>
             </div>
 
             {caseFolderUrl ? (
@@ -3167,7 +3180,7 @@ function WhatsAppComposer({
                 <ExternalLink className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
               </a>
             ) : (
-              <p className="text-sm text-muted">No case folder link available</p>
+              <p className="text-sm text-muted">{record.documents.length ? "Individual document links will be included." : "No documents available."}</p>
             )}
           </section>
         </div>
@@ -3637,7 +3650,7 @@ function CaseForm({
                     Upload files
                   </span>
                   <span className="mt-1 block text-xs leading-5 text-muted">
-                    Files will be saved in the case Google Drive folder.
+                    Files are saved with the case. Google Drive is used when available.
                   </span>
                 </span>
                 <span className="shrink-0 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs font-semibold text-zinc-200">
