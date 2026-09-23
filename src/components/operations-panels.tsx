@@ -73,7 +73,7 @@ function Modal({
 }) {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="mx-auto max-w-xl rounded-md border border-zinc-700 bg-zinc-950 shadow-2xl">
+      <div className="mx-auto w-full max-w-xl min-w-0 rounded-md border border-zinc-700 bg-zinc-950 shadow-2xl">
         <div className="flex items-center justify-between border-b border-zinc-800 p-4">
           <h2 className="text-lg font-semibold">{title}</h2>
           <button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X className="h-5 w-5" /></button>
@@ -375,8 +375,9 @@ export function AppointmentPanel({
   const now = Date.now();
   const upcoming = appointments.filter((appointment) => appointment.status === "scheduled" && +new Date(appointment.startsAt) >= now);
   const previous = appointments.filter((appointment) => !upcoming.includes(appointment));
-  const availableCases = profile.role === "admin" ? cases : cases.filter((record) => record.ownerId === profile.id);
-  const availableLeads = profile.role === "admin" ? leads : leads.filter((lead) => lead.ownerId === profile.id);
+  const canChooseSubject = (ownerId: string) => profile.role === "admin" || ownerId === profile.id;
+  const availableCases = cases.filter((record) => canChooseSubject(record.ownerId));
+  const availableLeads = leads.filter((lead) => canChooseSubject(lead.ownerId));
   const subjectOptions = useMemo(() => [
     ...availableLeads.map((lead) => ({ value: `lead:${lead.id}`, label: `Lead · ${lead.customerName}`, ownerId: lead.ownerId })),
     ...availableCases.map((record) => ({ value: `case:${record.id}`, label: `Case · ${record.customerName}`, ownerId: record.ownerId })),
@@ -398,6 +399,12 @@ export function AppointmentPanel({
   async function submitAppointment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
+    const subjectValue = draft.leadId ? `lead:${draft.leadId}` : draft.caseId ? `case:${draft.caseId}` : "";
+    const subject = subjectOptions.find((item) => item.value === subjectValue);
+    if (!subject || (draft.kind === "delivery" && !draft.caseId) || !canChooseSubject(subject.ownerId)) {
+      setError("Select your own lead or case for this appointment.");
+      return;
+    }
     const startsAt = new Date(`${localTime}:00+08:00`).toISOString();
     if (+new Date(startsAt) <= Date.now() && draft.status === "scheduled") {
       setError("Choose a future date and time.");
@@ -406,7 +413,7 @@ export function AppointmentPanel({
     setSaving(true);
     setError("");
     try {
-      await saveAppointment({ ...draft, startsAt });
+      await saveAppointment({ ...draft, ownerId: subject.ownerId, startsAt });
       await onRefresh();
       setDraft(null);
     } catch (caught) {
@@ -444,11 +451,11 @@ export function AppointmentPanel({
     <div className="grid gap-2">{upcoming.length ? upcoming.map(appointmentItem) : <p className="surface-card p-6 text-sm text-zinc-400">No upcoming appointments.</p>}</div>
     {previous.length ? <><h3 className="mt-4 text-sm font-semibold text-zinc-400">Past and cancelled</h3><div className="grid gap-2">{previous.map(appointmentItem)}</div></> : null}
     {draft ? <Modal title={appointments.some((item) => item.id === draft.id) ? "Edit Appointment" : "New Appointment"} onClose={() => setDraft(null)}>
-      <form className="grid gap-4 p-4" onSubmit={submitAppointment}>
+      <form className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 p-4" onSubmit={submitAppointment}>
         <label className="grid gap-1 text-sm">Type<select className="field" value={draft.kind} onChange={(event) => { const kind = event.target.value as AppointmentKind; setDraft({ ...draft, kind, leadId: kind === "delivery" ? "" : draft.leadId }); }}><option value="test_drive">Test Drive</option><option value="delivery">Delivery</option></select></label>
         <label className="grid gap-1 text-sm">Lead or Case<select className="field" value={draft.leadId ? `lead:${draft.leadId}` : draft.caseId ? `case:${draft.caseId}` : ""} required onChange={(event) => { const option = subjectOptions.find((item) => item.value === event.target.value); setDraft({ ...draft, ownerId: option?.ownerId || profile.id, leadId: event.target.value.startsWith("lead:") ? event.target.value.slice(5) : "", caseId: event.target.value.startsWith("case:") ? event.target.value.slice(5) : "" }); }}><option value="">Select record</option>{subjectOptions.filter((item) => draft.kind === "test_drive" || item.value.startsWith("case:")).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         {draft.leadId || draft.caseId ? <p className="text-xs text-zinc-400">Alerts to {ownerLabel(draft.ownerId, teamMembers)} at 3 days, 1 day, 4 hours and 1 hour. Admin receives the 1-day alert.</p> : null}
-        <label className="grid gap-1 text-sm">Date and time (Kuala Lumpur)<input className="field" type="datetime-local" value={localTime} onChange={(event) => setLocalTime(event.target.value)} required /></label>
+        <label className="grid min-w-0 gap-1 text-sm">Date and time (Kuala Lumpur)<input className="field appointment-datetime min-w-0 max-w-full" type="datetime-local" value={localTime} onChange={(event) => setLocalTime(event.target.value)} required /></label>
         <label className="grid gap-1 text-sm">Location (optional)<input className="field" value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} /></label>
         <label className="grid gap-1 text-sm">Notes (optional)<textarea className="field min-h-20" value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label>
         <div className="flex gap-2"><button className="primary-button" disabled={saving}><Save className="h-4 w-4" /> {saving ? "Saving..." : "Save Appointment"}</button><button type="button" className="secondary-button" onClick={() => setDraft(null)}>Cancel</button></div>
