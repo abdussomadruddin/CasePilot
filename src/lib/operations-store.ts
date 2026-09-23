@@ -100,8 +100,7 @@ export async function saveLead(
   const supabase = getSupabaseClient();
   const isRejecting = lead.status === "rejected" && previousStatus !== "rejected";
   if (isRejecting && requireRejectionNote && !note.trim()) throw new Error("Add a note explaining why the lead was rejected.");
-  const { error } = await supabase.from("leads").upsert({
-    id: lead.id,
+  const values = {
     owner_id: lead.ownerId,
     customer_name: lead.customerName.trim(),
     customer_phone: lead.customerPhone.trim(),
@@ -111,9 +110,12 @@ export async function saveLead(
     car_model: lead.carModel,
     status: lead.status,
     ...(isRejecting ? { rejection_reason: note.trim() } : {}),
-    created_at: lead.createdAt,
-  });
+  };
+  const { data, error } = previousStatus === undefined
+    ? await supabase.from("leads").insert({ id: lead.id, ...values, created_at: lead.createdAt }).select("id").single()
+    : await supabase.from("leads").update(values).eq("id", lead.id).select("id").single();
   if (error) throw error;
+  if (!data) throw new Error("Lead was not saved. Please refresh and try again.");
   if (!previousStatus || previousStatus !== lead.status) {
     const { error: eventError } = await supabase.from("lead_events").insert({
       lead_id: lead.id,
