@@ -839,15 +839,26 @@ export function CaseDashboard() {
   useEffect(() => {
     const section = new URLSearchParams(window.location.search).get("section");
     if (section === "appointments" || section === "leads" || section === "cases") setAppSection(section);
+  }, []);
+
+  useEffect(() => {
     let startX = 0;
     let startY = 0;
-    const touchStart = (event: TouchEvent) => { startX = event.touches[0]?.clientX || 0; startY = event.touches[0]?.clientY || 0; };
+    let ignoreGesture = false;
+    const touchStart = (event: TouchEvent) => {
+      const target = event.target;
+      ignoreGesture = event.touches.length !== 1 ||
+        (target instanceof Element && Boolean(target.closest("input, textarea, select, [role='dialog']:not(.casepilot-drawer)")));
+      startX = event.touches[0]?.clientX ?? 0;
+      startY = event.touches[0]?.clientY ?? 0;
+    };
     const touchEnd = (event: TouchEvent) => {
-      const deltaX = (event.changedTouches[0]?.clientX || 0) - startX;
-      const deltaY = (event.changedTouches[0]?.clientY || 0) - startY;
-      if (Math.abs(deltaY) > Math.abs(deltaX) || Math.abs(deltaX) < 70) return;
-      if (!drawerOpen && startX < 32 && deltaX > 0) setDrawerOpen(true);
-      if (drawerOpen && startX < 320 && deltaX < 0) setDrawerOpen(false);
+      if (ignoreGesture || event.changedTouches.length !== 1) return;
+      const deltaX = (event.changedTouches[0]?.clientX ?? 0) - startX;
+      const deltaY = (event.changedTouches[0]?.clientY ?? 0) - startY;
+      if (Math.abs(deltaX) < 80 || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return;
+      if (!drawerOpen && deltaX > 0) setDrawerOpen(true);
+      if (drawerOpen && deltaX < 0) setDrawerOpen(false);
     };
     window.addEventListener("touchstart", touchStart, { passive: true });
     window.addEventListener("touchend", touchEnd, { passive: true });
