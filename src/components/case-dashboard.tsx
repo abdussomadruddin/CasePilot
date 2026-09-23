@@ -1558,7 +1558,17 @@ export function CaseDashboard() {
     <main className="mobile-dashboard min-h-screen px-3 py-3 sm:px-5 sm:py-5 lg:px-8">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-5">
         <header className="dashboard-header surface-card relative z-20">
-          <div className="flex flex-col gap-5 rounded-lg bg-gradient-to-r from-red-950/70 via-zinc-950 to-zinc-950 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="mobile-header flex items-center gap-2 px-1 py-1 sm:hidden">
+            <button type="button" className="mobile-header-icon" onClick={() => setDrawerOpen(true)} aria-label="Open navigation menu" aria-expanded={drawerOpen}><Menu className="h-5 w-5" /></button>
+            <div className="min-w-0 flex-1 leading-tight">
+              <span className="block text-xs text-zinc-400">Selamat datang,</span>
+              <strong className="block truncate text-base font-semibold text-white">{profile?.fullName || formatRole(role)}</strong>
+            </div>
+            <span className="mobile-header-icon text-emerald-300" role="status" aria-label="Alerts on" title="Alerts on"><Bell className="h-5 w-5" /></span>
+            <button type="button" className="mobile-header-icon" onClick={refreshCases} disabled={loading} aria-label="Refresh" title="Refresh"><RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} /></button>
+            <button type="button" className="mobile-header-icon" onClick={handleSignOut} disabled={authLoading} aria-label="Sign out" title="Sign out"><LogOut className="h-5 w-5" /></button>
+          </div>
+          <div className="hidden flex-col gap-5 rounded-lg bg-gradient-to-r from-red-950/70 via-zinc-950 to-zinc-950 p-4 sm:flex sm:p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-4">
               <button type="button" className="secondary-button h-11 w-11 shrink-0 justify-center px-0" onClick={() => setDrawerOpen(true)} aria-label="Open navigation menu" aria-expanded={drawerOpen}><Menu className="h-5 w-5" /></button>
               <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
@@ -1685,6 +1695,7 @@ export function CaseDashboard() {
         ) : null}
 
         {appSection === "cases" ? <>
+        {canCreateCase(role) ? <button type="button" className="primary-button w-full sm:hidden" onClick={openCreateForm}><Plus className="h-4 w-4" aria-hidden="true" />New Case</button> : null}
         <section className="dashboard-metrics grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {metricTabs.map((tab) => (
             <MetricCard
