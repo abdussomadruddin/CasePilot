@@ -16,6 +16,8 @@ import {
   Filter,
   FolderKanban,
   ListChecks,
+  LayoutDashboard,
+  Menu,
   LogIn,
   LogOut,
   MessageCircle,
@@ -46,6 +48,8 @@ import {
   signOut,
 } from "@/lib/auth";
 import { createEmptyCase } from "@/lib/case-factory";
+import { AppointmentPanel, LeadPanel } from "@/components/operations-panels";
+import { loadAppointments, loadLeads } from "@/lib/operations-store";
 import {
   loadCases,
   loadTeamMembers,
@@ -67,6 +71,8 @@ import {
 } from "@/lib/team-store";
 import {
   caseStatuses,
+  leadStatuses,
+  leadStatusLabels,
   caseDealerLabels,
   caseDealers,
   roles,
@@ -81,6 +87,9 @@ import {
   type CaseStatus,
   type DashboardTab,
   type Profile,
+  type LeadRecord,
+  type LeadStatus,
+  type AppointmentRecord,
   type Role,
   type UploadDocumentInput,
 } from "@/lib/types";
@@ -685,6 +694,13 @@ function defaultWhatsAppMessage(record: CaseRecord) {
 }
 
 export function CaseDashboard() {
+  const [appSection, setAppSection] = useState<"dashboard" | "cases" | "leads" | "appointments" | "team">("dashboard");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [leads, setLeads] = useState<LeadRecord[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
+  const [prefillCase, setPrefillCase] = useState<CaseRecord | null>(null);
+  const [appointmentSubject, setAppointmentSubject] = useState("");
+  const [leadStatusJump, setLeadStatusJump] = useState<LeadStatus | "all">("all");
   const currentMonth = caseMonthKey(new Date().toISOString());
   const lastMonth = previousCaseMonth(currentMonth);
   const [cases, setCases] = useState<CaseRecord[]>([]);
@@ -780,13 +796,18 @@ export function CaseDashboard() {
         setProfile(currentProfile);
         if (currentProfile) {
           setRole(currentProfile.role);
-          const [result, members] = await Promise.all([
+          const canUseOperations = ["admin", "customer_service", "broker"].includes(currentProfile.role);
+          const [result, members, nextLeads, nextAppointments] = await Promise.all([
             loadCases(),
             loadTeamMembers(currentProfile.role === "admin"),
+            canUseOperations ? loadLeads() : Promise.resolve([]),
+            canUseOperations ? loadAppointments() : Promise.resolve([]),
           ]);
           if (!mounted) return;
           setCases(result.cases);
           setTeamMembers(members);
+          setLeads(nextLeads);
+          setAppointments(nextAppointments);
         }
       } catch (caught) {
         if (!mounted) return;
@@ -802,6 +823,47 @@ export function CaseDashboard() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setDrawerOpen(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    const section = new URLSearchParams(window.location.search).get("section");
+    if (section === "appointments" || section === "leads" || section === "cases") setAppSection(section);
+    let startX = 0;
+    let startY = 0;
+    const touchStart = (event: TouchEvent) => { startX = event.touches[0]?.clientX || 0; startY = event.touches[0]?.clientY || 0; };
+    const touchEnd = (event: TouchEvent) => {
+      const deltaX = (event.changedTouches[0]?.clientX || 0) - startX;
+      const deltaY = (event.changedTouches[0]?.clientY || 0) - startY;
+      if (Math.abs(deltaY) > Math.abs(deltaX) || Math.abs(deltaX) < 70) return;
+      if (startX < 32 && deltaX > 0) setDrawerOpen(true);
+      if (startX < 320 && deltaX < 0) setDrawerOpen(false);
+    };
+    window.addEventListener("touchstart", touchStart, { passive: true });
+    window.addEventListener("touchend", touchEnd, { passive: true });
+    return () => { window.removeEventListener("touchstart", touchStart); window.removeEventListener("touchend", touchEnd); };
+  }, []);
+
+  useEffect(() => {
+    if (!profile || !["admin", "customer_service", "broker"].includes(profile.role)) return;
+    const supabase = getSupabaseClient();
+    let timer: number | undefined;
+    const refresh = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => { void Promise.all([loadLeads(), loadAppointments()]).then(([nextLeads, nextAppointments]) => { setLeads(nextLeads); setAppointments(nextAppointments); }).catch(console.warn); }, 250);
+    };
+    let channel = supabase.channel("casepilot-operations-sync");
+    for (const table of ["leads", "lead_notes", "lead_events", "appointments"]) {
+      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
+    }
+    channel.subscribe();
+    return () => { window.clearTimeout(timer); void supabase.removeChannel(channel); };
+  }, [profile]);
 
   useEffect(() => {
     if (role !== "admin" && activeTab === "team") {
@@ -1035,12 +1097,17 @@ export function CaseDashboard() {
       setIsHeaderMenuOpen(false);
       setLoading(true);
       setError("");
-      const [result, members] = await Promise.all([
+      const canUseOperations = ["admin", "customer_service", "broker"].includes(role);
+      const [result, members, nextLeads, nextAppointments] = await Promise.all([
         loadCases(),
         loadTeamMembers(role === "admin"),
+        canUseOperations ? loadLeads() : Promise.resolve([]),
+        canUseOperations ? loadAppointments() : Promise.resolve([]),
       ]);
       setCases(result.cases);
       setTeamMembers(members);
+      setLeads(nextLeads);
+      setAppointments(nextAppointments);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to refresh cases.");
     } finally {
@@ -1059,12 +1126,17 @@ export function CaseDashboard() {
 
       if (currentProfile) {
         setRole(currentProfile.role);
-        const [result, members] = await Promise.all([
+        const canUseOperations = ["admin", "customer_service", "broker"].includes(currentProfile.role);
+        const [result, members, nextLeads, nextAppointments] = await Promise.all([
           loadCases(),
           loadTeamMembers(currentProfile.role === "admin"),
+          canUseOperations ? loadLeads() : Promise.resolve([]),
+          canUseOperations ? loadAppointments() : Promise.resolve([]),
         ]);
         setCases(result.cases);
         setTeamMembers(members);
+        setLeads(nextLeads);
+        setAppointments(nextAppointments);
       } else {
         setError("Signed in, but no role profile was found.");
       }
@@ -1083,6 +1155,8 @@ export function CaseDashboard() {
       setProfile(null);
       setCases([]);
       setTeamMembers([]);
+      setLeads([]);
+      setAppointments([]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to sign out.");
     } finally {
@@ -1133,18 +1207,31 @@ export function CaseDashboard() {
   function openCreateForm() {
     setUploadingMessage("");
     setEditingCase(null);
+    setPrefillCase(null);
+    setAppSection("cases");
+    setIsFormOpen(true);
+  }
+
+  function openCreateFromLead(lead: LeadRecord) {
+    const base = createEmptyCase();
+    setPrefillCase({ ...base, leadId: lead.id, ownerId: lead.ownerId,
+      customerName: lead.customerName, customerPhone: lead.customerPhone,
+      carModel: lead.carModel, dealer: profile?.role === "broker" ? "other_dealer" : "" });
+    setEditingCase(null);
+    setAppSection("cases");
     setIsFormOpen(true);
   }
 
   function openEditForm(record: CaseRecord) {
     setUploadingMessage("");
     setEditingCase(record);
+    setPrefillCase(null);
     setIsFormOpen(true);
   }
 
   async function handleSave(values: CaseFormValues, documents: UploadDocumentInput[]) {
     if (!profile) return;
-    const base = editingCase || createEmptyCase();
+    const base = editingCase || prefillCase || createEmptyCase();
     const now = new Date().toISOString();
     const ownerId = role === "admin" ? values.ownerId : editingCase?.ownerId || profile.id;
     const owner = teamMembers.find((member) => member.id === ownerId);
@@ -1204,6 +1291,7 @@ export function CaseDashboard() {
           setSuccessMessage("Case saved. Documents uploaded.");
           setIsFormOpen(false);
           setEditingCase(null);
+          setPrefillCase(null);
         } catch (caught) {
           const message =
             caught instanceof Error ? caught.message : "Unable to upload documents.";
@@ -1211,6 +1299,7 @@ export function CaseDashboard() {
           setCases(fresh.cases);
           setIsFormOpen(false);
           setEditingCase(null);
+          setPrefillCase(null);
           setSuccessMessage("");
           setError(
             `Case saved, but upload did not finish: ${message} Please submit the missing file(s) again.`,
@@ -1219,6 +1308,7 @@ export function CaseDashboard() {
       } else {
         setIsFormOpen(false);
         setEditingCase(null);
+        setPrefillCase(null);
         setSuccessMessage("Case saved.");
       }
     } catch (caught) {
@@ -1465,12 +1555,13 @@ export function CaseDashboard() {
         <header className="dashboard-header surface-card relative z-20">
           <div className="flex flex-col gap-5 rounded-lg bg-gradient-to-r from-red-950/70 via-zinc-950 to-zinc-950 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-4">
+              <button type="button" className="secondary-button h-11 w-11 shrink-0 justify-center px-0" onClick={() => setDrawerOpen(true)} aria-label="Open navigation menu" aria-expanded={drawerOpen}><Menu className="h-5 w-5" /></button>
               <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
                 <FolderKanban className="h-6 w-6" aria-hidden="true" />
               </div>
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-extrabold tracking-normal text-white sm:text-2xl">
-                  Case Operation System
+                  {appSection === "dashboard" ? "Dashboard" : appSection === "cases" ? "Case" : appSection === "leads" ? "Lead" : appSection === "appointments" ? "Appointment" : "Team"}
                 </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
                   <span className="rounded-full border border-red-500/30 bg-red-950/50 px-2.5 py-1 text-red-100">
@@ -1484,7 +1575,7 @@ export function CaseDashboard() {
             </div>
 
             <div className="flex items-center justify-end gap-2">
-              {canCreateCase(role) ? (
+              {appSection === "cases" && canCreateCase(role) ? (
                 <button
                   className="primary-button"
                   onClick={() => {
@@ -1532,21 +1623,6 @@ export function CaseDashboard() {
                         </div>
                       ) : null}
 
-                      {profile && role === "admin" ? (
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-zinc-100 transition hover:bg-zinc-900"
-                          onClick={() => {
-                            setActiveTab("team");
-                            setIsHeaderMenuOpen(false);
-                          }}
-                          role="menuitem"
-                        >
-                          <Users className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          <span className="truncate">Team</span>
-                        </button>
-                      ) : null}
-
                       {profile ? (
                         <button
                           type="button"
@@ -1590,6 +1666,18 @@ export function CaseDashboard() {
           </div>
         ) : null}
 
+        {appSection === "dashboard" ? (
+          <section className="grid gap-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("all"); setAppSection("cases"); }}><FolderKanban className="mb-3 h-5 w-5 text-red-400" /><span className="block text-sm text-zinc-400">Cases</span><strong className="text-2xl">{visibleCases.length}</strong></button>
+              <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("followup"); setAppSection("cases"); }}><CalendarClock className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Follow Up Due</span><strong className="text-2xl">{metrics.followup}</strong></button>
+              {["admin", "customer_service", "broker"].includes(role) ? <><button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("leads")}><Users className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Leads</span><strong className="text-2xl">{leads.length}</strong></button><button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("appointments")}><CalendarDays className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Upcoming appointments</span><strong className="text-2xl">{appointments.filter((item) => item.status === "scheduled" && +new Date(item.startsAt) >= Date.now()).length}</strong></button></> : null}
+            </div>
+            {["admin", "customer_service", "broker"].includes(role) ? <><h2 className="text-sm font-semibold text-zinc-400">Leads by status</h2><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{leadStatuses.map((status) => <button type="button" key={status} className="surface-card flex items-center justify-between p-4 text-left" onClick={() => { setLeadStatusJump(status); setAppSection("leads"); }}><span>{leadStatusLabels[status]}</span><strong>{leads.filter((lead) => lead.status === status).length}</strong></button>)}</div></> : null}
+          </section>
+        ) : null}
+
+        {appSection === "cases" ? <>
         <section className="dashboard-metrics grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {metricTabs.map((tab) => (
             <MetricCard
@@ -1610,16 +1698,7 @@ export function CaseDashboard() {
         </section>
 
         <section className="grid gap-3">
-          {activeTab === "team" && role === "admin" ? (
-            <TeamManagementPanel
-              members={teamMembers}
-              saving={teamSaving}
-              onCreate={handleCreateTeamMember}
-              onUpdate={handleUpdateTeamMember}
-              onDelete={handleDeleteTeamMember}
-            />
-          ) : (
-            <>
+          <>
               <div className="flex min-w-0 flex-col gap-3 py-2 lg:flex-row lg:items-center lg:justify-between">
                 <button type="button" className="secondary-button sm:hidden" onClick={() => setFiltersOpen(true)} aria-expanded={filtersOpen}>
                   <Filter className="h-4 w-4" /> Filters {filtersActive ? "· Active" : ""}
@@ -1751,39 +1830,30 @@ export function CaseDashboard() {
                     : "No cases in this tab"}
                 </div>
               )}
-            </>
-          )}
+          </>
         </section>
+        </> : null}
+        {appSection === "team" && role === "admin" ? <TeamManagementPanel members={teamMembers} saving={teamSaving} onCreate={handleCreateTeamMember} onUpdate={handleUpdateTeamMember} onDelete={handleDeleteTeamMember} /> : null}
+        {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={leadStatusJump} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
+        {appSection === "appointments" && profile && ["admin", "customer_service", "broker"].includes(role) ? <AppointmentPanel key={appointmentSubject} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} appointments={appointments} initialSubject={appointmentSubject} onRefresh={refreshCases} /> : null}
       </div>
-
-      <nav className="mobile-bottom-nav sm:hidden" aria-label="Main navigation">
-        {([
-          { id: "all", label: "Cases", icon: FolderKanban },
-          { id: "tasks", label: "My Tasks", icon: ListChecks },
-          { id: "followup", label: "Follow Up", icon: CalendarClock },
-          { id: "completed", label: "Completed", icon: CheckCircle2 },
-        ] as const).map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" aria-current={activeTab === id ? "page" : undefined}
-            className={activeTab === id ? "text-red-400" : "text-zinc-400"}
-            onClick={() => { setActiveTab(id); if (id === "all") setMonthFilter(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-            <Icon className="h-5 w-5" /><span>{label}</span>
-          </button>
-        ))}
-      </nav>
+      {drawerOpen ? <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Navigation"><button type="button" className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} /><nav className="absolute inset-y-0 left-0 flex w-[min(19rem,84vw)] flex-col gap-2 border-r border-zinc-700 bg-zinc-950 p-5 shadow-2xl" aria-label="Main navigation"><div className="mb-5 flex items-center justify-between"><span className="font-bold">CasePilot</span><button className="icon-button" type="button" onClick={() => setDrawerOpen(false)} aria-label="Close navigation"><X className="h-5 w-5" /></button></div>{([ { id: "dashboard", label: "Dashboard", icon: LayoutDashboard }, { id: "cases", label: "Case", icon: FolderKanban }, ...(["admin", "customer_service", "broker"].includes(role) ? [{ id: "leads", label: "Lead", icon: Users }, { id: "appointments", label: "Appointment", icon: CalendarDays }] : []), ...(role === "admin" ? [{ id: "team", label: "Team", icon: UserPlus }] : []) ] as const).map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`flex items-center gap-3 rounded-md px-4 py-3 text-left ${appSection === id ? "bg-red-950 text-white" : "text-zinc-300 hover:bg-zinc-900"}`} aria-current={appSection === id ? "page" : undefined} onClick={() => { setAppSection(id as typeof appSection); setDrawerOpen(false); window.scrollTo({ top: 0 }); }}><Icon className="h-5 w-5" />{label}</button>)}<div className="mt-auto border-t border-zinc-800 pt-4 text-sm text-zinc-400">{profile?.fullName}</div></nav></div> : null}
 
       {isFormOpen ? (
         <CaseForm
-          key={editingCase?.id || "new"}
+          key={editingCase?.id || prefillCase?.leadId || "new"}
           role={role}
           profile={profile}
           teamMembers={teamMembers}
           record={editingCase}
+          initialRecord={prefillCase}
           saving={saving}
           uploadingMessage={uploadingMessage}
           onClose={() => {
             if (saving) return;
             setIsFormOpen(false);
             setEditingCase(null);
+            setPrefillCase(null);
           }}
           onSave={handleSave}
         />
@@ -3036,6 +3106,7 @@ function CaseForm({
   profile,
   teamMembers,
   record,
+  initialRecord,
   saving,
   uploadingMessage,
   onClose,
@@ -3045,6 +3116,7 @@ function CaseForm({
   profile: Profile | null;
   teamMembers: Profile[];
   record: CaseRecord | null;
+  initialRecord: CaseRecord | null;
   saving: boolean;
   uploadingMessage: string;
   onClose: () => void;
@@ -3052,10 +3124,10 @@ function CaseForm({
 }) {
   const isNew = !record;
   const empty = createEmptyCase();
-  const source = record || empty;
+  const source = record || initialRecord || empty;
   const [values, setValues] = useState<CaseFormValues>({
-    ownerId: record?.ownerId || (role === "admin" ? "" : profile?.id || ""),
-    dealer: role === "broker" ? "other_dealer" : record?.dealer || "",
+    ownerId: source.ownerId || (role === "admin" ? "" : profile?.id || ""),
+    dealer: role === "broker" ? "other_dealer" : source.dealer || "",
     customerName: source.customerName,
     customerPhone: source.customerPhone,
     carModel: source.carModel,

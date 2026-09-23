@@ -42,6 +42,7 @@ type UploadDocumentsOptions = {
 };
 
 type CaseRow = {
+  lead_id: string | null;
   id: string;
   dealer: CaseDealer | null;
   customer_name: string;
@@ -112,6 +113,7 @@ function normalizeDealer(dealer?: string | null): CaseDealer {
 function mapCase(row: CaseRow): CaseRecord {
   return {
     id: row.id,
+    leadId: row.lead_id || "",
     dealer: normalizeDealer(row.dealer),
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
@@ -192,6 +194,7 @@ function sortOldestFirst(a: ActivityEvent, b: ActivityEvent) {
 function toCaseRow(record: CaseRecord) {
   return {
     id: record.id,
+    lead_id: record.leadId || null,
     dealer: record.dealer || "kah_motor",
     customer_name: record.customerName,
     customer_phone: record.customerPhone,

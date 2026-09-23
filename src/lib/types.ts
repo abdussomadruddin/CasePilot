@@ -162,6 +162,7 @@ export type ActivityEvent = {
 
 export type CaseRecord = {
   id: string;
+  leadId: string;
   dealer: CaseDealer | "";
   customerName: string;
   customerPhone: string;
@@ -181,6 +182,71 @@ export type CaseRecord = {
   ownerId: string;
   ownerName: string;
   ownerRole: "customer_service" | "broker";
+};
+
+export const leadStatuses = [
+  "new", "contacted", "number_invalid", "all_offer_presented",
+  "potential", "need_follow_up", "rejected", "document_collected",
+] as const;
+
+export type LeadStatus = (typeof leadStatuses)[number];
+
+export const leadStatusLabels: Record<LeadStatus, string> = {
+  new: "New",
+  contacted: "Contacted",
+  number_invalid: "Number Invalid",
+  all_offer_presented: "All Offer Presented",
+  potential: "Potential",
+  need_follow_up: "Need Follow Up",
+  rejected: "Rejected",
+  document_collected: "Document Collected",
+};
+
+export type LeadRecord = {
+  id: string;
+  ownerId: string;
+  customerName: string;
+  customerPhone: string;
+  phoneRevealedAt: string;
+  email: string;
+  carBrand: string;
+  carModel: string;
+  status: LeadStatus;
+  createdAt: string;
+  updatedAt: string;
+  notes: LeadNote[];
+  events: LeadEvent[];
+};
+
+export type LeadNote = {
+  id: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+};
+
+export type LeadEvent = {
+  id: string;
+  actorId: string;
+  status: LeadStatus;
+  createdAt: string;
+};
+
+export type AppointmentKind = "test_drive" | "delivery";
+export type AppointmentStatus = "scheduled" | "completed" | "cancelled";
+
+export type AppointmentRecord = {
+  id: string;
+  ownerId: string;
+  leadId: string;
+  caseId: string;
+  kind: AppointmentKind;
+  status: AppointmentStatus;
+  startsAt: string;
+  location: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type CaseFormValues = {
