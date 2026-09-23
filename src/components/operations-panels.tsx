@@ -137,7 +137,7 @@ export function LeadPanel({
     setError("");
     try {
       const previous = leads.find((lead) => lead.id === draft.id);
-      await saveLead(draft, profile.id, initialNote, previous?.status);
+      await saveLead(draft, profile.id, initialNote, previous?.status, profile.role !== "admin");
       await onRefresh();
       setSelectedId(draft.id);
       setDraft(null);
@@ -150,10 +150,15 @@ export function LeadPanel({
   }
 
   async function updateStatus(lead: LeadRecord, status: LeadStatus) {
+    if (status === "rejected" && profile.role !== "admin" && !note.trim()) {
+      setError("Add a note explaining why the lead was rejected before changing status.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
-      await saveLead({ ...lead, status }, profile.id, "", lead.status);
+      await saveLead({ ...lead, status }, profile.id, status === "rejected" ? note : "", lead.status, profile.role !== "admin");
+      if (status === "rejected") setNote("");
       await onRefresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to update status.");
@@ -179,7 +184,7 @@ export function LeadPanel({
   }
 
   async function removeLead() {
-    if (!selected || !window.confirm(`Delete lead ${selected.customerName}?`)) return;
+    if (profile.role !== "admin" || !selected || !window.confirm(`Delete lead ${selected.customerName}?`)) return;
     setSaving(true);
     setError("");
     try {
@@ -197,7 +202,7 @@ export function LeadPanel({
     setError("");
     try {
       if (!lead.phoneRevealedAt) {
-        await revealLeadPhone(lead.id);
+        await revealLeadPhone(lead.id, profile.id);
         await onRefresh();
       }
       window.location.href = `tel:${lead.customerPhone.replace(/[^\d+]/g, "")}`;
@@ -219,7 +224,7 @@ export function LeadPanel({
       </select>
       <div className="grid gap-2">
         {shown.map((lead) => (
-          <button key={lead.id} type="button" className="surface-card grid w-full gap-2 p-4 text-left hover:border-zinc-500 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center" onClick={() => setSelectedId(lead.id)}>
+          <button key={lead.id} type="button" className="surface-card grid w-full gap-2 p-4 text-left hover:border-zinc-500 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }}>
             <div className="min-w-0"><p className="truncate font-semibold text-white">{lead.customerName}</p><p className="text-sm text-zinc-400">{lead.phoneRevealedAt ? `${lead.customerPhone} · ` : ""}{lead.carModel}</p><p className="text-xs text-zinc-500">{ownerLabel(lead.ownerId, teamMembers)}</p></div>
             <span className="w-fit rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span>
           </button>
@@ -228,15 +233,15 @@ export function LeadPanel({
       </div>
 
       {selected ? (
-        <Modal title={selected.customerName} onClose={() => setSelectedId("")}>
+        <Modal title={selected.customerName} onClose={() => { setNote(""); setSelectedId(""); }}>
           <div className="grid gap-4 p-4">
             <div className="grid gap-1 text-sm"><p className="text-zinc-400">{selected.phoneRevealedAt ? selected.customerPhone : "Phone hidden"}{selected.email ? ` · ${selected.email}` : ""}</p><p>{selected.carBrand} · {selected.carModel}</p><p className="text-zinc-400">{ownerLabel(selected.ownerId, teamMembers)}</p><p className="text-xs text-zinc-500">Created {displayTime(selected.createdAt)}</p></div>
             <div className="grid gap-2 sm:grid-cols-2">
               <button className="secondary-button" type="button" onClick={() => void callLead(selected)}><PhoneCall className="h-4 w-4" /> Call</button>
               {selected.phoneRevealedAt ? <a className="secondary-button text-emerald-200" href={`https://wa.me/${selected.customerPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /> WhatsApp</a> : null}
-              <select className="field" aria-label="Lead status" value={selected.status} disabled={saving} onChange={(event) => void updateStatus(selected, event.target.value as LeadStatus)}>{leadStatuses.map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select>
+              {selected.phoneRevealedAt ? <select className="field" aria-label="Lead status" value={selected.status} disabled={saving} onChange={(event) => void updateStatus(selected, event.target.value as LeadStatus)}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || selected.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select> : null}
             </div>
-            <form className="grid gap-2" onSubmit={submitNote}><label className="text-sm font-medium">Note</label><textarea className="field min-h-20" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add follow-up note" /><button className="secondary-button w-fit" disabled={saving || !note.trim()}><Save className="h-4 w-4" /> Save note</button></form>
+            <form className="grid gap-2" onSubmit={submitNote}><label className="text-sm font-medium">Note</label><textarea className="field min-h-20" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add follow-up note or rejection reason" /><button className="secondary-button w-fit" disabled={saving || !note.trim()}><Save className="h-4 w-4" /> Save note</button></form>
             {selected.notes.length || selected.events.length ? <div className="grid max-h-48 gap-2 overflow-y-auto border-t border-zinc-800 pt-3 text-sm"><p className="font-semibold">History</p>{[
               ...selected.notes.map((entry) => ({ id: entry.id, time: entry.createdAt, text: entry.body })),
               ...selected.events.map((entry) => ({ id: entry.id, time: entry.createdAt, text: `Status: ${leadStatusLabels[entry.status]}` })),
@@ -245,7 +250,7 @@ export function LeadPanel({
               <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Edit</button>
               <button className="secondary-button" type="button" onClick={() => { onAppointment(selected); setSelectedId(""); }}><CalendarClock className="h-4 w-4" /> Appointment</button>
               {cases.some((item) => item.leadId === selected.id) ? <span className="flex items-center gap-2 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4" /> Case created</span> : <button className="primary-button" type="button" onClick={() => { onCreateCase(selected); setSelectedId(""); }}><FilePlus2 className="h-4 w-4" /> Create Case</button>}
-              <button className="secondary-button border-red-900 text-red-200" type="button" disabled={saving} onClick={() => void removeLead()}><Trash2 className="h-4 w-4" /> Delete</button>
+              {profile.role === "admin" ? <button className="secondary-button border-red-900 text-red-200" type="button" disabled={saving} onClick={() => void removeLead()}><Trash2 className="h-4 w-4" /> Delete</button> : null}
             </div>
           </div>
         </Modal>
@@ -262,7 +267,7 @@ export function LeadPanel({
               <label className="grid gap-1 text-sm">Brand<select className="field" value={draft.carBrand} onChange={(event) => setDraft({ ...draft, carBrand: event.target.value, carModel: "" })} required><option value="">Select brand</option>{brands.map((brand) => <option key={brand}>{brand}</option>)}</select></label>
               <label className="grid gap-1 text-sm">Model<select className="field" value={draft.carModel} onChange={(event) => setDraft({ ...draft, carModel: event.target.value })} required disabled={!draft.carBrand}><option value="">Select model</option>{models.map((model) => <option key={model.model}>{model.model}</option>)}</select></label>
             </div>
-            <label className="grid gap-1 text-sm">Status<select className="field" value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as LeadStatus })}>{leadStatuses.map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select></label>
+            {draft.phoneRevealedAt ? <label className="grid gap-1 text-sm">Status<select className="field" value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as LeadStatus })}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || draft.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select></label> : null}
             <label className="grid gap-1 text-sm">Note (optional)<textarea className="field min-h-20" value={initialNote} onChange={(event) => setInitialNote(event.target.value)} /></label>
             <div className="flex gap-2"><button className="primary-button" disabled={saving}><Save className="h-4 w-4" /> {saving ? "Saving..." : "Save Lead"}</button><button type="button" className="secondary-button" onClick={() => setDraft(null)}>Cancel</button></div>
           </form>

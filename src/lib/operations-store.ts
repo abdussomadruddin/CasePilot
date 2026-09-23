@@ -93,8 +93,11 @@ export async function saveLead(
   actorId: string,
   note = "",
   previousStatus?: LeadStatus,
+  requireRejectionNote = true,
 ): Promise<void> {
   const supabase = getSupabaseClient();
+  const isRejecting = lead.status === "rejected" && previousStatus !== "rejected";
+  if (isRejecting && requireRejectionNote && !note.trim()) throw new Error("Add a note explaining why the lead was rejected.");
   const { error } = await supabase.from("leads").upsert({
     id: lead.id,
     owner_id: lead.ownerId,
@@ -105,6 +108,7 @@ export async function saveLead(
     car_brand: lead.carBrand,
     car_model: lead.carModel,
     status: lead.status,
+    ...(isRejecting ? { rejection_reason: note.trim() } : {}),
     created_at: lead.createdAt,
   });
   if (error) throw error;
@@ -128,20 +132,32 @@ export async function addLeadNote(leadId: string, actorId: string, body: string)
   if (error) throw error;
 }
 
-export async function revealLeadPhone(leadId: string) {
-  const { error } = await getSupabaseClient()
+export async function revealLeadPhone(leadId: string, actorId: string) {
+  const { data, error } = await getSupabaseClient()
     .from("leads")
-    .update({ phone_revealed_at: new Date().toISOString() })
-    .eq("id", leadId);
+    .update({ phone_revealed_at: new Date().toISOString(), status: "contacted" })
+    .eq("id", leadId)
+    .is("phone_revealed_at", null)
+    .select("id");
   if (error) throw error;
+  if (!data?.length) throw new Error("Lead could not be contacted. Please refresh and try again.");
+  const { error: eventError } = await getSupabaseClient().from("lead_events").insert({
+    lead_id: leadId,
+    actor_id: actorId,
+    status: "contacted",
+  });
+  if (eventError) console.warn("Unable to record lead contact event:", eventError);
 }
 
 export async function deleteLead(leadId: string) {
-  const { error } = await getSupabaseClient()
+  const { data, error } = await getSupabaseClient()
     .from("leads")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", leadId);
+    .eq("id", leadId)
+    .is("deleted_at", null)
+    .select("id");
   if (error) throw error;
+  if (!data?.length) throw new Error("Lead was not deleted. Please refresh and try again.");
 }
 
 function mapAppointment(row: AppointmentRow): AppointmentRecord {
