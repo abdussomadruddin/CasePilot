@@ -14,8 +14,8 @@ type LeadRow = {
   phone_revealed_at: string | null;
   follow_up_activity_at: string | null;
   email: string | null;
-  car_brand: string;
-  car_model: string;
+  car_brand: string | null;
+  car_model: string | null;
   status: LeadStatus;
   created_at: string;
   updated_at: string;
@@ -56,8 +56,8 @@ function mapLead(row: LeadRow): LeadRecord {
     phoneRevealedAt: row.phone_revealed_at || "",
     followUpActivityAt: row.follow_up_activity_at || "",
     email: row.email || "",
-    carBrand: row.car_brand,
-    carModel: row.car_model,
+    carBrand: row.car_brand || "",
+    carModel: row.car_model || "",
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -106,8 +106,8 @@ export async function saveLead(
     customer_phone: lead.customerPhone.trim(),
     phone_revealed_at: lead.phoneRevealedAt || null,
     email: lead.email.trim() || null,
-    car_brand: lead.carBrand,
-    car_model: lead.carModel,
+    car_brand: lead.carBrand || null,
+    car_model: lead.carModel || null,
     status: lead.status,
     ...(isRejecting ? { rejection_reason: note.trim() } : {}),
   };

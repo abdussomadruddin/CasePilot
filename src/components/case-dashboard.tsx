@@ -1732,7 +1732,21 @@ export function CaseDashboard() {
               </> : null}
               {["admin", "customer_service", "broker"].includes(role) ? <button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("appointments")}><CalendarDays className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Upcoming appointments</span><strong className="text-2xl">{appointments.filter((item) => item.status === "scheduled" && +new Date(item.startsAt) >= Date.now()).length}</strong></button> : null}
             </div>
-            {role === "customer_service" || role === "broker" ? <section className="grid gap-2"><h2 className="text-sm font-semibold text-zinc-300">New leads ({newOwnLeads.length})</h2>{newOwnLeads.length ? newOwnLeads.map((lead) => <article key={lead.id} className="surface-card flex min-w-0 items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="truncate font-semibold text-white">{lead.customerName}</p><p className="truncate text-sm text-zinc-400">{lead.carBrand} · {lead.carModel}</p></div><button type="button" className="lead-call-pending inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void callNewLead(lead)}><PhoneCall className="h-4 w-4" />{callingLeadId === lead.id ? "Calling..." : "Call"}</button></article>) : <p className="text-sm text-zinc-500">No new leads to contact.</p>}</section> : null}
+            {role === "customer_service" || role === "broker" ? (
+              <section className="grid gap-2">
+                <h2 className="text-sm font-semibold text-zinc-300">New leads ({newOwnLeads.length})</h2>
+                {newOwnLeads.length ? newOwnLeads.map((lead) => (
+                  <article key={lead.id} className="surface-card flex min-w-0 items-start justify-between gap-3 p-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-white">{lead.customerName}</p>
+                      {lead.carBrand || lead.carModel ? <p className="truncate text-sm text-zinc-400">{[lead.carBrand, lead.carModel].filter(Boolean).join(" · ")}</p> : null}
+                      {lead.notes[0] ? <p className="mt-2 break-words whitespace-pre-wrap text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{lead.notes[0].body}</p> : null}
+                    </div>
+                    <button type="button" className="lead-call-pending inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void callNewLead(lead)}><PhoneCall className="h-4 w-4" />{callingLeadId === lead.id ? "Calling..." : "Call"}</button>
+                  </article>
+                )) : <p className="text-sm text-zinc-500">No new leads to contact.</p>}
+              </section>
+            ) : null}
           </section>
         ) : null}
 

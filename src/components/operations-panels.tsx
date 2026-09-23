@@ -277,11 +277,12 @@ export function LeadPanel({
             <div className="flex items-start justify-between gap-3">
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }} aria-label={`Open ${lead.customerName} details`}>
                 <span className="block truncate font-semibold text-white">{lead.customerName}</span>
-                <span className="block truncate text-sm text-zinc-400">{lead.phoneRevealedAt ? `${lead.customerPhone} · ` : ""}{lead.carModel}</span>
+                {lead.phoneRevealedAt || lead.carModel ? <span className="block truncate text-sm text-zinc-400">{[lead.phoneRevealedAt ? lead.customerPhone : "", lead.carModel].filter(Boolean).join(" · ")}</span> : null}
                 <span className="block truncate text-xs text-zinc-500">{ownerLabel(lead.ownerId, teamMembers)}</span>
               </button>
               {!lead.phoneRevealedAt ? <span className="shrink-0 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span> : null}
             </div>
+            {lead.notes[0] ? <p className="mt-3 break-words whitespace-pre-wrap border-t border-zinc-800 pt-3 text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{lead.notes[0].body}</p> : null}
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
               <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" disabled={saving} onClick={() => void callLead(lead)}><PhoneCall className="h-4 w-4" /> Call</button>
               {lead.phoneRevealedAt ? <a className="secondary-button text-emerald-200" href={`https://wa.me/${lead.customerPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /> WhatsApp</a> : null}
@@ -297,7 +298,7 @@ export function LeadPanel({
       {selected ? (
         <Modal title={selected.customerName} onClose={() => { setNote(""); setSelectedId(""); }}>
           <div className="grid gap-4 p-4">
-            <div className="grid gap-1 text-sm"><p className="text-zinc-400">{selected.phoneRevealedAt ? selected.customerPhone : "Phone hidden"}{selected.email ? ` · ${selected.email}` : ""}</p><p>{selected.carBrand} · {selected.carModel}</p><p className="text-zinc-400">{ownerLabel(selected.ownerId, teamMembers)}</p><p className="text-xs text-zinc-500">Created {displayTime(selected.createdAt)}</p></div>
+            <div className="grid gap-1 text-sm"><p className="text-zinc-400">{selected.phoneRevealedAt ? selected.customerPhone : "Phone hidden"}{selected.email ? ` · ${selected.email}` : ""}</p>{selected.carBrand || selected.carModel ? <p>{[selected.carBrand, selected.carModel].filter(Boolean).join(" · ")}</p> : null}<p className="text-zinc-400">{ownerLabel(selected.ownerId, teamMembers)}</p><p className="text-xs text-zinc-500">Created {displayTime(selected.createdAt)}</p></div>
             <div className="grid gap-2 sm:grid-cols-2">
               <button className={selected.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white"} type="button" onClick={() => void callLead(selected)}><PhoneCall className="h-4 w-4" /> Call</button>
               {selected.phoneRevealedAt ? <a className="secondary-button text-emerald-200" href={`https://wa.me/${selected.customerPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /> WhatsApp</a> : null}
@@ -326,8 +327,8 @@ export function LeadPanel({
             <label className="grid gap-1 text-sm">Phone{leads.some((lead) => lead.id === draft.id) && !draft.phoneRevealedAt ? <input className="field" value="Call the lead to reveal the number" disabled /> : <input className="field" type="tel" value={draft.customerPhone} onChange={(event) => setDraft({ ...draft, customerPhone: event.target.value })} required />}</label>
             <label className="grid gap-1 text-sm">Email (optional)<input className="field" type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-sm">Brand<select className="field" value={draft.carBrand} onChange={(event) => setDraft({ ...draft, carBrand: event.target.value, carModel: "" })} required><option value="">Select brand</option>{brands.map((brand) => <option key={brand}>{brand}</option>)}</select></label>
-              <label className="grid gap-1 text-sm">Model<select className="field" value={draft.carModel} onChange={(event) => setDraft({ ...draft, carModel: event.target.value })} required disabled={!draft.carBrand}><option value="">Select model</option>{models.map((model) => <option key={model.model}>{model.model}</option>)}</select></label>
+              <label className="grid gap-1 text-sm">Brand (optional)<select className="field" value={draft.carBrand} onChange={(event) => setDraft({ ...draft, carBrand: event.target.value, carModel: "" })}><option value="">Select brand</option>{brands.map((brand) => <option key={brand}>{brand}</option>)}</select></label>
+              <label className="grid gap-1 text-sm">Model (optional)<select className="field" value={draft.carModel} onChange={(event) => setDraft({ ...draft, carModel: event.target.value })} disabled={!draft.carBrand}><option value="">Select model</option>{models.map((model) => <option key={model.model}>{model.model}</option>)}</select></label>
             </div>
             {draft.phoneRevealedAt ? <label className="grid gap-1 text-sm">Status<select className="field" value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as LeadStatus })}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || draft.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select></label> : null}
             <label className="grid gap-1 text-sm">Note (optional)<textarea className="field min-h-20" value={initialNote} onChange={(event) => setInitialNote(event.target.value)} /></label>

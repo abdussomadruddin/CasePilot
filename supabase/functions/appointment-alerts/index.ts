@@ -7,7 +7,7 @@ type Appointment = {
   kind: "test_drive" | "delivery";
   starts_at: string;
   updated_at: string;
-  lead?: { customer_name: string; car_model: string } | null;
+  lead?: { customer_name: string; car_model: string | null } | null;
   case?: { customer_name: string; car_model: string } | null;
 };
 
