@@ -178,6 +178,24 @@ textarea {
   text-align: left;
 }
 
+.lead-call-pending {
+  background: #c8102e;
+  animation: lead-call-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes lead-call-pulse {
+  50% {
+    background: #e50925;
+    box-shadow: 0 0 0 4px rgba(229, 9, 37, 0.38);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lead-call-pending {
+    animation: none;
+  }
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,

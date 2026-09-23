@@ -49,7 +49,7 @@ import {
 } from "@/lib/auth";
 import { createEmptyCase } from "@/lib/case-factory";
 import { AppointmentPanel, LeadPanel } from "@/components/operations-panels";
-import { loadAppointments, loadLeads } from "@/lib/operations-store";
+import { loadAppointments, loadLeads, revealLeadPhone } from "@/lib/operations-store";
 import {
   loadCases,
   loadTeamMembers,
@@ -71,8 +71,6 @@ import {
 } from "@/lib/team-store";
 import {
   caseStatuses,
-  leadStatuses,
-  leadStatusLabels,
   isLeadFollowUpDue,
   caseDealerLabels,
   caseDealers,
@@ -698,6 +696,7 @@ export function CaseDashboard() {
   const [appSection, setAppSection] = useState<"dashboard" | "cases" | "leads" | "appointments" | "team">("dashboard");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [leads, setLeads] = useState<LeadRecord[]>([]);
+  const [callingLeadId, setCallingLeadId] = useState("");
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
   const [prefillCase, setPrefillCase] = useState<CaseRecord | null>(null);
   const [appointmentSubject, setAppointmentSubject] = useState("");
@@ -985,6 +984,9 @@ export function CaseDashboard() {
     () => getVisibleCases(cases, role, profile?.id),
     [cases, profile?.id, role],
   );
+  const newOwnLeads = role === "customer_service" || role === "broker"
+    ? leads.filter((lead) => lead.ownerId === profile?.id && lead.status === "new" && !lead.phoneRevealedAt)
+    : [];
 
   const tabCases = useMemo(() => {
     switch (activeTab) {
@@ -1137,6 +1139,21 @@ export function CaseDashboard() {
       setError(caught instanceof Error ? caught.message : "Unable to refresh cases.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function callNewLead(lead: LeadRecord) {
+    if (!profile || lead.ownerId !== profile.id || lead.status !== "new" || lead.phoneRevealedAt) return;
+    setCallingLeadId(lead.id);
+    setError("");
+    try {
+      await revealLeadPhone(lead.id, profile.id);
+      await refreshCases();
+      window.location.href = `tel:${lead.customerPhone.replace(/[^\d+]/g, "")}`;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to call lead.");
+    } finally {
+      setCallingLeadId("");
     }
   }
 
@@ -1709,13 +1726,13 @@ export function CaseDashboard() {
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("last_month"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(lastMonth); setAppSection("cases"); }}><CalendarRange className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Last Month Cases</span><strong className="text-2xl">{metrics.last_month}</strong></button>
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("tasks"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(""); setAppSection("cases"); }}><ListChecks className="mb-3 h-5 w-5 text-blue-400" /><span className="block text-sm text-zinc-400">My Tasks</span><strong className="text-2xl">{visibleCases.filter((record) => isMyTask(record, role, profile?.id)).length}</strong></button>
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("followup"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(""); setAppSection("cases"); }}><CalendarClock className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Follow Up Due</span><strong className="text-2xl">{metrics.followup}</strong></button>
-              {["admin", "customer_service", "broker"].includes(role) ? <>
+              {role === "customer_service" || role === "broker" ? <>
                 <button type="button" className="surface-card p-4 text-left" onClick={() => { setLeadStatusJump("all"); setLeadViewJump("all"); setAppSection("leads"); }}><Users className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Leads</span><strong className="text-2xl">{leads.length}</strong></button>
                 <button type="button" className="surface-card p-4 text-left" onClick={() => { setLeadStatusJump("all"); setLeadViewJump("followup"); setAppSection("leads"); }}><Clock3 className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Lead Follow Up</span><strong className="text-2xl">{leads.filter((lead) => isLeadFollowUpDue(lead, leadNowMs)).length}</strong></button>
-                <button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("appointments")}><CalendarDays className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Upcoming appointments</span><strong className="text-2xl">{appointments.filter((item) => item.status === "scheduled" && +new Date(item.startsAt) >= Date.now()).length}</strong></button>
               </> : null}
+              {["admin", "customer_service", "broker"].includes(role) ? <button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("appointments")}><CalendarDays className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Upcoming appointments</span><strong className="text-2xl">{appointments.filter((item) => item.status === "scheduled" && +new Date(item.startsAt) >= Date.now()).length}</strong></button> : null}
             </div>
-            {["admin", "customer_service", "broker"].includes(role) ? <><h2 className="text-sm font-semibold text-zinc-400">Leads by status</h2><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{leadStatuses.map((status) => <button type="button" key={status} className="surface-card flex items-center justify-between p-4 text-left" onClick={() => { setLeadStatusJump(status); setLeadViewJump("all"); setAppSection("leads"); }}><span>{leadStatusLabels[status]}</span><strong>{leads.filter((lead) => lead.status === status).length}</strong></button>)}</div></> : null}
+            {role === "customer_service" || role === "broker" ? <section className="grid gap-2"><h2 className="text-sm font-semibold text-zinc-300">New leads ({newOwnLeads.length})</h2>{newOwnLeads.length ? newOwnLeads.map((lead) => <article key={lead.id} className="surface-card flex min-w-0 items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="truncate font-semibold text-white">{lead.customerName}</p><p className="truncate text-sm text-zinc-400">{lead.carBrand} · {lead.carModel}</p></div><button type="button" className="lead-call-pending inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void callNewLead(lead)}><PhoneCall className="h-4 w-4" />{callingLeadId === lead.id ? "Calling..." : "Call"}</button></article>) : <p className="text-sm text-zinc-500">No new leads to contact.</p>}</section> : null}
           </section>
         ) : null}
 
