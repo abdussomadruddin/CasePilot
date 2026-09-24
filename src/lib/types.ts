@@ -261,6 +261,8 @@ export type AppointmentRecord = {
   ownerId: string;
   leadId: string;
   caseId: string;
+  customerName: string;
+  customerPhone: string;
   kind: AppointmentKind;
   status: AppointmentStatus;
   startsAt: string;

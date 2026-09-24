@@ -45,6 +45,8 @@ type AppointmentRow = {
   owner_id: string;
   lead_id: string | null;
   case_id: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
   kind: AppointmentRecord["kind"];
   status: AppointmentRecord["status"];
   starts_at: string;
@@ -188,6 +190,8 @@ function mapAppointment(row: AppointmentRow): AppointmentRecord {
     ownerId: row.owner_id,
     leadId: row.lead_id || "",
     caseId: row.case_id || "",
+    customerName: row.customer_name || "",
+    customerPhone: row.customer_phone || "",
     kind: row.kind,
     status: row.status,
     startsAt: row.starts_at,
@@ -213,6 +217,8 @@ export async function saveAppointment(appointment: AppointmentRecord): Promise<v
     owner_id: appointment.ownerId,
     lead_id: appointment.leadId || null,
     case_id: appointment.caseId || null,
+    customer_name: appointment.customerName.trim() || null,
+    customer_phone: appointment.customerPhone.trim() || null,
     kind: appointment.kind,
     status: appointment.status,
     starts_at: appointment.startsAt,

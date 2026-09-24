@@ -7,6 +7,7 @@ type Appointment = {
   kind: "test_drive" | "delivery";
   starts_at: string;
   updated_at: string;
+  customer_name: string | null;
   lead?: { customer_name: string; car_model: string | null } | null;
   case?: { customer_name: string; car_model: string } | null;
 };
@@ -15,9 +16,9 @@ const offsets = [4320, 1440, 240, 60] as const;
 const minuteMs = 60_000;
 
 function appointmentLabel(appointment: Appointment) {
-  const customer = appointment.lead?.customer_name || appointment.case?.customer_name || "Customer";
-  const car = appointment.lead?.car_model || appointment.case?.car_model || "vehicle";
-  return `${customer} • ${car}`;
+  const customer = appointment.lead?.customer_name || appointment.case?.customer_name || appointment.customer_name || "Customer";
+  const car = appointment.lead?.car_model || appointment.case?.car_model;
+  return car ? `${customer} • ${car}` : customer;
 }
 
 Deno.serve(async () => {
@@ -31,7 +32,7 @@ Deno.serve(async () => {
   const now = new Date();
   const { data: appointments, error } = await supabase
     .from("appointments")
-    .select("id,owner_id,kind,starts_at,updated_at,lead:leads(customer_name,car_model),case:cases(customer_name,car_model)")
+    .select("id,owner_id,kind,starts_at,updated_at,customer_name,lead:leads(customer_name,car_model),case:cases(customer_name,car_model)")
     .eq("status", "scheduled")
     .gt("starts_at", now.toISOString())
     .lte("starts_at", new Date(+now + 4320 * minuteMs + 90_000).toISOString());

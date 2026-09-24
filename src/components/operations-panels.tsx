@@ -140,7 +140,6 @@ export function LeadPanel({
   onViewChange?: (view: "all" | "followup") => void;
 }) {
   const [selectedId, setSelectedId] = useState("");
-  const [expandedLeadId, setExpandedLeadId] = useState("");
   const [draft, setDraft] = useState<LeadRecord | null>(null);
   const [initialNote, setInitialNote] = useState("");
   const [note, setNote] = useState("");
@@ -317,17 +316,9 @@ export function LeadPanel({
               <div className="flex shrink-0 items-center gap-2">
                 {!lead.phoneRevealedAt ? <span className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span> : null}
                 <button className="icon-button disabled:cursor-not-allowed disabled:opacity-40" type="button" aria-label={`Copy ${leadName(lead)} details`} title={lead.customerPhone && !lead.phoneRevealedAt ? "Call to unlock copy" : copiedId === lead.id ? "Copied" : "Copy lead details"} disabled={Boolean(lead.customerPhone && !lead.phoneRevealedAt)} onClick={() => void copyLead(lead)}>{copiedId === lead.id ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}</button>
-                <button className="icon-button" type="button" aria-label={`${expandedLeadId === lead.id ? "Collapse" : "Expand"} ${lead.customerName}`} aria-expanded={expandedLeadId === lead.id} title={expandedLeadId === lead.id ? "Close lead details" : "Expand lead details"} onClick={() => setExpandedLeadId(expandedLeadId === lead.id ? "" : lead.id)}><ChevronDown className={`h-4 w-4 transition-transform ${expandedLeadId === lead.id ? "rotate-180" : ""}`} /></button>
+                <button className="icon-button" type="button" aria-label={`Open ${leadName(lead)} details`} title="Open lead details" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }}><ChevronDown className="h-4 w-4" /></button>
               </div>
             </div>
-            {expandedLeadId === lead.id ? <div className="mt-3 grid gap-2 border-t border-zinc-800 pt-3 text-sm sm:grid-cols-2">
-              <p><span className="text-zinc-500">Email</span><br />{lead.email || "-"}</p>
-              <p><span className="text-zinc-500">Interested in</span><br />{[lead.carBrand, lead.carModel].filter(Boolean).join(" · ") || "-"}</p>
-              <p><span className="text-zinc-500">Received</span><br />{displayTime(lead.createdAt)}</p>
-              <p><span className="text-zinc-500">Source</span><br />{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</p>
-              {lead.sourceNote && lead.sourceNote !== latestLeadNote(lead) ? <p className="whitespace-pre-wrap sm:col-span-2"><span className="text-zinc-500">Inquiry</span><br />{hideLeadPhoneInNote(lead.sourceNote, Boolean(lead.phoneRevealedAt))}</p> : null}
-              <button className="secondary-button w-fit sm:col-span-2" type="button" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }}>View details</button>
-            </div> : null}
             {latestLeadNote(lead) ? <p className="mt-3 break-words whitespace-pre-wrap border-t border-zinc-800 pt-3 text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{hideLeadPhoneInNote(latestLeadNote(lead), Boolean(lead.phoneRevealedAt))}</p> : null}
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
               {lead.customerPhone ? <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" disabled={saving} onClick={() => void callLead(lead)}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(lead); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
@@ -403,6 +394,7 @@ function newAppointment(profile: Profile, subject = ""): AppointmentRecord {
     id: crypto.randomUUID(), ownerId: profile.id,
     leadId: isLead ? subject.slice(5) : "",
     caseId: subject.startsWith("case:") ? subject.slice(5) : "",
+    customerName: "", customerPhone: "",
     kind: "test_drive", status: "scheduled",
     startsAt: new Date(+now + 25 * 60 * 60 * 1000).toISOString(),
     location: "", notes: "", createdAt: now.toISOString(), updatedAt: now.toISOString(),
@@ -448,8 +440,12 @@ export function AppointmentPanel({
     if (!draft) return;
     const subjectValue = draft.leadId ? `lead:${draft.leadId}` : draft.caseId ? `case:${draft.caseId}` : "";
     const subject = subjectOptions.find((item) => item.value === subjectValue);
-    if (!subject || (draft.kind === "delivery" && !draft.caseId) || !canChooseSubject(subject.ownerId)) {
+    if (subjectValue && (!subject || !canChooseSubject(subject.ownerId))) {
       setError("Select your own lead or case for this appointment.");
+      return;
+    }
+    if (!subjectValue && (!draft.customerName.trim() || !draft.customerPhone.trim())) {
+      setError("Enter a name and phone number for a standalone appointment.");
       return;
     }
     const startsAt = new Date(`${localTime}:00+08:00`).toISOString();
@@ -460,7 +456,7 @@ export function AppointmentPanel({
     setSaving(true);
     setError("");
     try {
-      await saveAppointment({ ...draft, ownerId: subject.ownerId, startsAt });
+      await saveAppointment({ ...draft, ownerId: subject?.ownerId || profile.id, startsAt });
       await onRefresh();
       setDraft(null);
     } catch (caught) {
@@ -486,7 +482,7 @@ export function AppointmentPanel({
   function appointmentItem(appointment: AppointmentRecord) {
     const subject = subjectOptions.find((item) => item.value === (appointment.leadId ? `lead:${appointment.leadId}` : `case:${appointment.caseId}`));
     return <div key={appointment.id} className="surface-card grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-      <div className="min-w-0"><p className="font-semibold text-white">{appointment.kind === "test_drive" ? "Test Drive" : "Delivery"} · {subject?.label || "Record"}</p><p className="text-sm text-zinc-300">{displayTime(appointment.startsAt)}</p><p className="text-xs text-zinc-500">{ownerLabel(appointment.ownerId, teamMembers)}{appointment.location ? ` · ${appointment.location}` : ""}</p>{appointment.notes ? <p className="mt-2 break-words text-sm text-zinc-400">{appointment.notes}</p> : null}</div>
+      <div className="min-w-0"><p className="font-semibold text-white">{appointment.kind === "test_drive" ? "Test Drive" : "Delivery"} · {subject?.label || appointment.customerName}</p><p className="text-sm text-zinc-300">{displayTime(appointment.startsAt)}</p>{appointment.customerPhone ? <a className="text-sm text-emerald-200" href={`tel:${appointment.customerPhone.replace(/[^\d+]/g, "")}`}>{appointment.customerPhone}</a> : null}<p className="text-xs text-zinc-500">{ownerLabel(appointment.ownerId, teamMembers)}{appointment.location ? ` · ${appointment.location}` : ""}</p>{appointment.notes ? <p className="mt-2 break-words text-sm text-zinc-400">{appointment.notes}</p> : null}</div>
       {appointment.status === "scheduled" ? <div className="flex flex-wrap gap-2"><button type="button" className="secondary-button" onClick={() => openEdit(appointment)}><Pencil className="h-4 w-4" /> Edit</button><button type="button" className="secondary-button" disabled={saving} onClick={() => void updateStatus(appointment, "completed")}><CheckCircle2 className="h-4 w-4" /> Done</button><button type="button" className="secondary-button border-red-900 text-red-200" disabled={saving} onClick={() => void updateStatus(appointment, "cancelled")}><X className="h-4 w-4" /> Cancel</button></div> : <span className="text-sm text-zinc-500">{appointment.status === "completed" ? "Completed" : "Cancelled"}</span>}
     </div>;
   }
@@ -500,8 +496,9 @@ export function AppointmentPanel({
     {draft ? <Modal title={appointments.some((item) => item.id === draft.id) ? "Edit Appointment" : "New Appointment"} onClose={() => setDraft(null)}>
       <form className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 p-4" onSubmit={submitAppointment}>
         <label className="grid gap-1 text-sm">Type<select className="field" value={draft.kind} onChange={(event) => { const kind = event.target.value as AppointmentKind; setDraft({ ...draft, kind, leadId: kind === "delivery" ? "" : draft.leadId }); }}><option value="test_drive">Test Drive</option><option value="delivery">Delivery</option></select></label>
-        <label className="grid gap-1 text-sm">Lead or Case<select className="field" value={draft.leadId ? `lead:${draft.leadId}` : draft.caseId ? `case:${draft.caseId}` : ""} required onChange={(event) => { const option = subjectOptions.find((item) => item.value === event.target.value); setDraft({ ...draft, ownerId: option?.ownerId || profile.id, leadId: event.target.value.startsWith("lead:") ? event.target.value.slice(5) : "", caseId: event.target.value.startsWith("case:") ? event.target.value.slice(5) : "" }); }}><option value="">Select record</option>{subjectOptions.filter((item) => draft.kind === "test_drive" || item.value.startsWith("case:")).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-        {draft.leadId || draft.caseId ? <p className="text-xs text-zinc-400">Alerts to {ownerLabel(draft.ownerId, teamMembers)} at 3 days, 1 day, 4 hours and 1 hour. Admin receives the 1-day alert.</p> : null}
+        <label className="grid gap-1 text-sm">Lead or Case (optional)<select className="field" value={draft.leadId ? `lead:${draft.leadId}` : draft.caseId ? `case:${draft.caseId}` : ""} onChange={(event) => { const option = subjectOptions.find((item) => item.value === event.target.value); setDraft({ ...draft, ownerId: option?.ownerId || profile.id, leadId: event.target.value.startsWith("lead:") ? event.target.value.slice(5) : "", caseId: event.target.value.startsWith("case:") ? event.target.value.slice(5) : "" }); }}><option value="">No linked record</option>{subjectOptions.filter((item) => draft.kind === "test_drive" || item.value.startsWith("case:")).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+        {!draft.leadId && !draft.caseId ? <div className="grid gap-3 sm:grid-cols-2"><label className="grid min-w-0 gap-1 text-sm">Name<input className="field min-w-0" value={draft.customerName} onChange={(event) => setDraft({ ...draft, customerName: event.target.value })} required /></label><label className="grid min-w-0 gap-1 text-sm">Phone<input className="field min-w-0" type="tel" value={draft.customerPhone} onChange={(event) => setDraft({ ...draft, customerPhone: event.target.value })} required /></label></div> : null}
+        <p className="text-xs text-zinc-400">Alerts to {ownerLabel(draft.ownerId, teamMembers)} at 3 days, 1 day, 4 hours and 1 hour. Admin receives the 1-day alert.</p>
         <label className="grid min-w-0 gap-1 text-sm">Date and time (Kuala Lumpur)<input className="field appointment-datetime min-w-0 max-w-full" type="datetime-local" value={localTime} onChange={(event) => setLocalTime(event.target.value)} required /></label>
         <label className="grid gap-1 text-sm">Location (optional)<input className="field" value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} /></label>
         <label className="grid gap-1 text-sm">Notes (optional)<textarea className="field min-h-20" value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label>
