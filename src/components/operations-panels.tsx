@@ -3,6 +3,7 @@
 import {
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   FilePlus2,
   MessageCircle,
   PhoneCall,
@@ -132,6 +133,7 @@ export function LeadPanel({
   onViewChange?: (view: "all" | "followup") => void;
 }) {
   const [selectedId, setSelectedId] = useState("");
+  const [expandedLeadId, setExpandedLeadId] = useState("");
   const [draft, setDraft] = useState<LeadRecord | null>(null);
   const [initialNote, setInitialNote] = useState("");
   const [note, setNote] = useState("");
@@ -288,8 +290,19 @@ export function LeadPanel({
                 <span className="block truncate text-xs text-zinc-500">{ownerLabel(lead.ownerId, teamMembers)}</span>
                 <span className="block truncate text-xs text-zinc-400">{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</span>
               </button>
-              {!lead.phoneRevealedAt ? <span className="shrink-0 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span> : null}
+              <div className="flex shrink-0 items-center gap-2">
+                {!lead.phoneRevealedAt ? <span className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span> : null}
+                <button className="icon-button" type="button" aria-label={`${expandedLeadId === lead.id ? "Collapse" : "Expand"} ${lead.customerName}`} aria-expanded={expandedLeadId === lead.id} title={expandedLeadId === lead.id ? "Close lead details" : "Expand lead details"} onClick={() => setExpandedLeadId(expandedLeadId === lead.id ? "" : lead.id)}><ChevronDown className={`h-4 w-4 transition-transform ${expandedLeadId === lead.id ? "rotate-180" : ""}`} /></button>
+              </div>
             </div>
+            {expandedLeadId === lead.id ? <div className="mt-3 grid gap-2 border-t border-zinc-800 pt-3 text-sm sm:grid-cols-2">
+              <p><span className="text-zinc-500">Email</span><br />{lead.email || "-"}</p>
+              <p><span className="text-zinc-500">Interested in</span><br />{[lead.carBrand, lead.carModel].filter(Boolean).join(" · ") || "-"}</p>
+              <p><span className="text-zinc-500">Received</span><br />{displayTime(lead.createdAt)}</p>
+              <p><span className="text-zinc-500">Source</span><br />{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</p>
+              {lead.sourceNote && lead.sourceNote !== latestLeadNote(lead) ? <p className="whitespace-pre-wrap sm:col-span-2"><span className="text-zinc-500">Inquiry</span><br />{lead.sourceNote}</p> : null}
+              <button className="secondary-button w-fit sm:col-span-2" type="button" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }}>View details</button>
+            </div> : null}
             {latestLeadNote(lead) ? <p className="mt-3 break-words whitespace-pre-wrap border-t border-zinc-800 pt-3 text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{latestLeadNote(lead)}</p> : null}
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
               <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" disabled={saving} onClick={() => void callLead(lead)}><PhoneCall className="h-4 w-4" /> Call</button>
