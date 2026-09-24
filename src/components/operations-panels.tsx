@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { hideLeadPhoneInNote } from "../../supabase/functions/_shared/lead-contact";
 import {
   addLeadNote,
   deleteLead,
@@ -63,6 +64,10 @@ function displayTime(value: string) {
 function ownerLabel(ownerId: string, members: Profile[]) {
   const owner = members.find((member) => member.id === ownerId);
   return owner ? `${owner.fullName} · ${roleLabels[owner.role]}` : "Owner";
+}
+
+function leadName(lead: LeadRecord) {
+  return lead.customerName || "Unnamed lead";
 }
 
 function Modal({
@@ -253,6 +258,10 @@ export function LeadPanel({
   }
 
   async function callLead(lead: LeadRecord) {
+    if (!lead.customerPhone) {
+      setError("This lead has no phone number yet. Add one before calling.");
+      return;
+    }
     setError("");
     try {
       if (!lead.phoneRevealedAt) {
@@ -285,7 +294,7 @@ export function LeadPanel({
           <article key={lead.id} className="surface-card min-w-0 p-4">
             <div className="flex items-start justify-between gap-3">
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }} aria-label={`Open ${lead.customerName} details`}>
-                <span className="block truncate font-semibold text-white">{lead.customerName}</span>
+                <span className="block truncate font-semibold text-white">{leadName(lead)}</span>
                 {lead.phoneRevealedAt || lead.carModel ? <span className="block truncate text-sm text-zinc-400">{[lead.phoneRevealedAt ? lead.customerPhone : "", lead.carModel].filter(Boolean).join(" · ")}</span> : null}
                 <span className="block truncate text-xs text-zinc-500">{ownerLabel(lead.ownerId, teamMembers)}</span>
                 <span className="block truncate text-xs text-zinc-400">{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</span>
@@ -300,12 +309,12 @@ export function LeadPanel({
               <p><span className="text-zinc-500">Interested in</span><br />{[lead.carBrand, lead.carModel].filter(Boolean).join(" · ") || "-"}</p>
               <p><span className="text-zinc-500">Received</span><br />{displayTime(lead.createdAt)}</p>
               <p><span className="text-zinc-500">Source</span><br />{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</p>
-              {lead.sourceNote && lead.sourceNote !== latestLeadNote(lead) ? <p className="whitespace-pre-wrap sm:col-span-2"><span className="text-zinc-500">Inquiry</span><br />{lead.sourceNote}</p> : null}
+              {lead.sourceNote && lead.sourceNote !== latestLeadNote(lead) ? <p className="whitespace-pre-wrap sm:col-span-2"><span className="text-zinc-500">Inquiry</span><br />{hideLeadPhoneInNote(lead.sourceNote, Boolean(lead.phoneRevealedAt))}</p> : null}
               <button className="secondary-button w-fit sm:col-span-2" type="button" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }}>View details</button>
             </div> : null}
-            {latestLeadNote(lead) ? <p className="mt-3 break-words whitespace-pre-wrap border-t border-zinc-800 pt-3 text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{latestLeadNote(lead)}</p> : null}
+            {latestLeadNote(lead) ? <p className="mt-3 break-words whitespace-pre-wrap border-t border-zinc-800 pt-3 text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{hideLeadPhoneInNote(latestLeadNote(lead), Boolean(lead.phoneRevealedAt))}</p> : null}
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
-              <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" disabled={saving} onClick={() => void callLead(lead)}><PhoneCall className="h-4 w-4" /> Call</button>
+              {lead.customerPhone ? <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" disabled={saving} onClick={() => void callLead(lead)}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(lead); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
               {lead.phoneRevealedAt ? <a className="secondary-button text-emerald-200" href={`https://wa.me/${lead.customerPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /> WhatsApp</a> : null}
               {lead.phoneRevealedAt ? <select className="field min-w-0 flex-1 basis-36" aria-label={`Status for ${lead.customerName}`} value={lead.status} disabled={saving} onChange={(event) => void updateStatus(lead, event.target.value as LeadStatus, inlineNoteId === lead.id ? inlineNote : "")}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || lead.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select> : null}
               {lead.phoneRevealedAt ? <button className="icon-button" type="button" aria-label={`Add note for ${lead.customerName}`} title="Add note" onClick={() => { setError(""); setInlineNoteId(inlineNoteId === lead.id ? "" : lead.id); setInlineNote(""); setPendingRejectId(""); }}><Pencil className="h-4 w-4" /></button> : null}
@@ -317,17 +326,17 @@ export function LeadPanel({
       </div>
 
       {selected ? (
-        <Modal title={selected.customerName} onClose={() => { setNote(""); setSelectedId(""); }}>
+        <Modal title={leadName(selected)} onClose={() => { setNote(""); setSelectedId(""); }}>
           <div className="grid gap-4 p-4">
-            <div className="grid gap-1 text-sm"><p className="text-zinc-400">{selected.phoneRevealedAt ? selected.customerPhone : "Phone hidden"}{selected.email ? ` · ${selected.email}` : ""}</p>{selected.carBrand || selected.carModel ? <p>{[selected.carBrand, selected.carModel].filter(Boolean).join(" · ")}</p> : null}<p className="text-zinc-400">{ownerLabel(selected.ownerId, teamMembers)}</p><p className="text-zinc-300">Source: {leadSourceLabels[selected.source]}{selected.sourceDetail ? ` · ${selected.sourceDetail}` : ""}</p>{selected.sourceNote ? <p className="whitespace-pre-wrap text-zinc-300">Inquiry: {selected.sourceNote}</p> : null}<p className="text-xs text-zinc-500">Created {displayTime(selected.createdAt)}</p></div>
+            <div className="grid gap-1 text-sm"><p className="text-zinc-400">{selected.customerPhone ? selected.phoneRevealedAt ? selected.customerPhone : "Phone hidden" : "No phone number"}{selected.email ? ` · ${selected.email}` : ""}</p>{selected.carBrand || selected.carModel ? <p>{[selected.carBrand, selected.carModel].filter(Boolean).join(" · ")}</p> : null}<p className="text-zinc-400">{ownerLabel(selected.ownerId, teamMembers)}</p><p className="text-zinc-300">Source: {leadSourceLabels[selected.source]}{selected.sourceDetail ? ` · ${selected.sourceDetail}` : ""}</p>{selected.sourceNote ? <p className="whitespace-pre-wrap text-zinc-300">Inquiry: {hideLeadPhoneInNote(selected.sourceNote, Boolean(selected.phoneRevealedAt))}</p> : null}<p className="text-xs text-zinc-500">Created {displayTime(selected.createdAt)}</p></div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <button className={selected.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white"} type="button" onClick={() => void callLead(selected)}><PhoneCall className="h-4 w-4" /> Call</button>
+              {selected.customerPhone ? <button className={selected.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white"} type="button" onClick={() => void callLead(selected)}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
               {selected.phoneRevealedAt ? <a className="secondary-button text-emerald-200" href={`https://wa.me/${selected.customerPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /> WhatsApp</a> : null}
               {selected.phoneRevealedAt ? <select className="field" aria-label="Lead status" value={selected.status} disabled={saving} onChange={(event) => void updateStatus(selected, event.target.value as LeadStatus)}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || selected.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select> : null}
             </div>
             {selected.phoneRevealedAt ? <form className="grid gap-2" onSubmit={submitNote}><label className="text-sm font-medium">Note</label><textarea className="field min-h-20" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add follow-up note or rejection reason" /><button className="secondary-button w-fit" disabled={saving || !note.trim()}><Save className="h-4 w-4" /> Save note</button></form> : null}
             {selected.notes.length || selected.events.length ? <div className="grid max-h-48 gap-2 overflow-y-auto border-t border-zinc-800 pt-3 text-sm"><p className="font-semibold">History</p>{[
-              ...selected.notes.map((entry) => ({ id: entry.id, time: entry.createdAt, text: entry.body })),
+              ...selected.notes.map((entry) => ({ id: entry.id, time: entry.createdAt, text: hideLeadPhoneInNote(entry.body, Boolean(selected.phoneRevealedAt)) })),
               ...selected.events.map((entry) => ({ id: entry.id, time: entry.createdAt, text: `Status: ${leadStatusLabels[entry.status]}` })),
             ].sort((a, b) => +new Date(b.time) - +new Date(a.time)).map((entry) => <p key={entry.id} className="rounded-md bg-zinc-900 p-2"><span className="text-xs text-zinc-500">{displayTime(entry.time)}</span><br />{entry.text}</p>)}</div> : null}
             <div className="grid gap-2 border-t border-zinc-800 pt-3 sm:grid-cols-2">
@@ -344,8 +353,8 @@ export function LeadPanel({
         <Modal title={leads.some((lead) => lead.id === draft.id) ? "Edit Lead" : "New Lead"} onClose={() => setDraft(null)}>
           <form className="grid gap-4 p-4" onSubmit={submitLead}>
             {profile.role === "admin" ? <label className="grid gap-1 text-sm">Owner<select className="field" value={draft.ownerId} onChange={(event) => setDraft({ ...draft, ownerId: event.target.value })} required>{teamMembers.filter((member) => member.active && ["customer_service", "broker"].includes(member.role)).map((member) => <option key={member.id} value={member.id}>{ownerLabel(member.id, teamMembers)}</option>)}</select></label> : null}
-            <label className="grid gap-1 text-sm">Name<input className="field" value={draft.customerName} onChange={(event) => setDraft({ ...draft, customerName: event.target.value })} required /></label>
-            <label className="grid gap-1 text-sm">Phone{leads.some((lead) => lead.id === draft.id) && !draft.phoneRevealedAt ? <input className="field" value="Call the lead to reveal the number" disabled /> : <input className="field" type="tel" value={draft.customerPhone} onChange={(event) => setDraft({ ...draft, customerPhone: event.target.value })} required />}</label>
+            <label className="grid gap-1 text-sm">Name (optional)<input className="field" value={draft.customerName} onChange={(event) => setDraft({ ...draft, customerName: event.target.value })} /></label>
+            <label className="grid gap-1 text-sm">Phone (optional){leads.some((lead) => lead.id === draft.id) && draft.customerPhone && !draft.phoneRevealedAt ? <input className="field" value="Call the lead to reveal the number" disabled /> : <input className="field" type="tel" value={draft.customerPhone} onChange={(event) => setDraft({ ...draft, customerPhone: event.target.value })} />}</label>
             <label className="grid gap-1 text-sm">Email (optional)<input className="field" type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-sm">Brand (optional)<select className="field" value={draft.carBrand} onChange={(event) => setDraft({ ...draft, carBrand: event.target.value, carModel: "" })}><option value="">Select brand</option>{brands.map((brand) => <option key={brand}>{brand}</option>)}</select></label>

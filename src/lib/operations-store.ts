@@ -1,4 +1,6 @@
 import { getSupabaseClient } from "@/lib/supabase";
+import { extractLeadContact } from "../../supabase/functions/_shared/lead-contact";
+import { extractLeadVehicle } from "../../supabase/functions/_shared/lead-vehicle";
 import type {
   AppointmentRecord,
   LeadNote,
@@ -14,8 +16,8 @@ type LeadRow = {
   source_detail: string | null;
   source_note: string | null;
   connector_id: string | null;
-  customer_name: string;
-  customer_phone: string;
+  customer_name: string | null;
+  customer_phone: string | null;
   phone_revealed_at: string | null;
   follow_up_activity_at: string | null;
   email: string | null;
@@ -61,8 +63,8 @@ function mapLead(row: LeadRow): LeadRecord {
     sourceDetail: row.source_detail || "",
     sourceNote: row.source_note || "",
     connectorId: row.connector_id || "",
-    customerName: row.customer_name,
-    customerPhone: row.customer_phone,
+    customerName: row.customer_name || "",
+    customerPhone: row.customer_phone || "",
     phoneRevealedAt: row.phone_revealed_at || "",
     followUpActivityAt: row.follow_up_activity_at || "",
     email: row.email || "",
@@ -110,14 +112,20 @@ export async function saveLead(
   const supabase = getSupabaseClient();
   const isRejecting = lead.status === "rejected" && previousStatus !== "rejected";
   if (isRejecting && requireRejectionNote && !note.trim()) throw new Error("Add a note explaining why the lead was rejected.");
+  const contact = extractLeadContact(note, {
+    name: lead.customerName,
+    phone: lead.customerPhone,
+    email: lead.email,
+  });
+  const vehicle = extractLeadVehicle(note, { brand: lead.carBrand, model: lead.carModel });
   const values = {
     owner_id: lead.ownerId,
-    customer_name: lead.customerName.trim(),
-    customer_phone: lead.customerPhone.trim(),
+    customer_name: contact.name || null,
+    customer_phone: contact.phone || null,
     phone_revealed_at: lead.phoneRevealedAt || null,
-    email: lead.email.trim() || null,
-    car_brand: lead.carBrand || null,
-    car_model: lead.carModel || null,
+    email: contact.email || null,
+    car_brand: vehicle.brand || null,
+    car_model: vehicle.model || null,
     status: lead.status,
     ...(isRejecting ? { rejection_reason: note.trim() } : {}),
   };

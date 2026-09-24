@@ -64,8 +64,8 @@ Deno.serve(async (request) => {
     source_detail: payload.sourceDetail || null,
     source_note: payload.note || null,
     connector_id: connector.id,
-    customer_name: payload.name,
-    customer_phone: payload.phone,
+    customer_name: payload.name || null,
+    customer_phone: payload.phone || null,
     email: payload.email || null,
     car_brand: payload.brand || null,
     car_model: payload.model || null,
@@ -85,7 +85,7 @@ Deno.serve(async (request) => {
   try {
     await sendPushesForUsers(supabase, [connector.owner_id], {
       title: "CasePilot · New lead",
-      body: `${payload.name} is ready to contact.`,
+      body: `${payload.name || "New lead"} is ready to contact.`,
       url: "/?section=leads",
     });
   } catch (caught) {

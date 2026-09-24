@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { hideLeadPhoneInNote } from "../../supabase/functions/_shared/lead-contact";
 
 import {
   getCurrentProfile,
@@ -1169,7 +1170,7 @@ export function CaseDashboard() {
   }
 
   async function callNewLead(lead: LeadRecord) {
-    if (!profile || lead.ownerId !== profile.id || lead.status !== "new" || lead.phoneRevealedAt) return;
+    if (!profile || !lead.customerPhone || lead.ownerId !== profile.id || lead.status !== "new" || lead.phoneRevealedAt) return;
     setCallingLeadId(lead.id);
     setError("");
     try {
@@ -1764,12 +1765,12 @@ export function CaseDashboard() {
                 {newOwnLeads.length ? newOwnLeads.map((lead) => (
                   <article key={lead.id} className="surface-card flex min-w-0 items-start justify-between gap-3 p-4">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-white">{lead.customerName}</p>
+                      <p className="truncate font-semibold text-white">{lead.customerName || "Unnamed lead"}</p>
                       {lead.carBrand || lead.carModel ? <p className="truncate text-sm text-zinc-400">{[lead.carBrand, lead.carModel].filter(Boolean).join(" · ")}</p> : null}
                       <p className="truncate text-xs text-zinc-400">{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</p>
-                      {latestLeadNote(lead) ? <p className="mt-2 break-words whitespace-pre-wrap text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{latestLeadNote(lead)}</p> : null}
+                      {latestLeadNote(lead) ? <p className="mt-2 break-words whitespace-pre-wrap text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{hideLeadPhoneInNote(latestLeadNote(lead), Boolean(lead.phoneRevealedAt))}</p> : null}
                     </div>
-                    <button type="button" className="lead-call-pending inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void callNewLead(lead)}><PhoneCall className="h-4 w-4" />{callingLeadId === lead.id ? "Calling..." : "Call"}</button>
+                    {lead.customerPhone ? <button type="button" className="lead-call-pending inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void callNewLead(lead)}><PhoneCall className="h-4 w-4" />{callingLeadId === lead.id ? "Calling..." : "Call"}</button> : <button type="button" className="secondary-button shrink-0" onClick={() => { setLeadStatusJump("new"); setLeadViewJump("all"); setAppSection("leads"); }}>Add phone</button>}
                   </article>
                 )) : <p className="text-sm text-zinc-500">No new leads to contact.</p>}
               </section>
