@@ -39,7 +39,10 @@ test("additional Pabbly fields are retained in the CasePilot note", () => {
   assert.equal(lead.note, "Interested in an SUV\njob status: Kerja Kerajaan\nnet salary: RM2500-RM3500\ncampaign name: September offers\nad name: SUV video");
 });
 
-test("missing mapped values are rejected before insert", () => {
-  assert.throws(() => parseIngestPayload({ source_lead_id: "No Data", name: "Aminah", phone: "+60123456789" }), /source_lead_id/);
+test("missing source ID is accepted because each POST creates a lead", () => {
+  assert.equal(parseIngestPayload({ source_lead_id: "No Data", name: "Aminah", phone: "+60123456789" }).sourceLeadId, "");
+});
+
+test("invalid phone is rejected before insert", () => {
   assert.throws(() => parseIngestPayload({ source_lead_id: "ads-123", name: "Aminah", phone: "123" }), /phone/);
 });

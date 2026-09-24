@@ -56,7 +56,6 @@ export function parseIngestPayload(input: Record<string, unknown>): IngestPayloa
     ? new Date(createdAtInput).toISOString()
     : null;
 
-  if (!sourceLeadId) throw new Error("source_lead_id is required for duplicate protection.");
   if (!name) throw new Error("name is required.");
   if (!phone || phone.replace(/\D/g, "").length < 7) throw new Error("A valid phone is required.");
 

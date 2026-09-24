@@ -57,19 +57,10 @@ Deno.serve(async (request) => {
     .in("role", ["customer_service", "broker"]).maybeSingle();
   if (ownerError || !owner) return reply({ ok: false, error: "Assigned owner is unavailable." }, 409);
 
-  const findExisting = () => supabase.from("leads")
-    .select("id")
-    .eq("source", connector.source)
-    .eq("source_lead_id", payload.sourceLeadId)
-    .maybeSingle();
-  const { data: existing, error: existingError } = await findExisting();
-  if (existingError) return reply({ ok: false, error: "Unable to check lead ID." }, 503);
-  if (existing) return reply({ ok: true, duplicate: true, lead_id: existing.id });
-
   const { data: lead, error: insertError } = await supabase.from("leads").insert({
     owner_id: connector.owner_id,
     source: connector.source,
-    source_lead_id: payload.sourceLeadId,
+    source_lead_id: payload.sourceLeadId || null,
     source_detail: payload.sourceDetail || null,
     source_note: payload.note || null,
     connector_id: connector.id,
@@ -83,10 +74,6 @@ Deno.serve(async (request) => {
   }).select("id").single();
 
   if (insertError) {
-    if (insertError.code === "23505") {
-      const { data: duplicate } = await findExisting();
-      if (duplicate) return reply({ ok: true, duplicate: true, lead_id: duplicate.id });
-    }
     console.error("Lead ingestion failed", insertError.code, insertError.message);
     return reply({ ok: false, error: "Unable to save lead." }, 500);
   }
