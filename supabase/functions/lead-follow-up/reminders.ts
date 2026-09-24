@@ -2,6 +2,16 @@ export type ReminderLead = { id: string; owner_id: string };
 export type ReminderProfile = { id: string; role: string };
 export type ReminderCounts = { newCount: number; contactedCount: number };
 
+const newLeadHoursUtc = new Set([2, 3, 4, 6, 8]);
+const contactedHoursUtc = new Set([1, 7, 13]);
+
+export function reminderTypeAt(now: Date): "new" | "contacted" | null {
+  if (now.getUTCMinutes() > 10) return null;
+  if (newLeadHoursUtc.has(now.getUTCHours())) return "new";
+  if (contactedHoursUtc.has(now.getUTCHours())) return "contacted";
+  return null;
+}
+
 export function groupLeadReminders(
   newLeads: ReminderLead[],
   contactedLeads: ReminderLead[],
@@ -21,11 +31,6 @@ export function groupLeadReminders(
     const counts = grouped.get(lead.owner_id) || { newCount: 0, contactedCount: 0 };
     counts.contactedCount += 1;
     grouped.set(lead.owner_id, counts);
-  }
-  if (contactedLeads.length) {
-    for (const profile of profiles) {
-      if (profile.role === "admin") grouped.set(profile.id, { newCount: 0, contactedCount: contactedLeads.length });
-    }
   }
   return grouped;
 }

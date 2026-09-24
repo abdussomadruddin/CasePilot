@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isLeadFollowUpDue } from "../src/lib/types.ts";
-import { groupLeadReminders, reminderMessage } from "../supabase/functions/lead-follow-up/reminders.ts";
+import { groupLeadReminders, reminderMessage, reminderTypeAt } from "../supabase/functions/lead-follow-up/reminders.ts";
 
 const now = Date.parse("2026-09-24T01:00:00.000Z");
 const contacted = {
@@ -23,20 +23,20 @@ test("other statuses and missing activity are never due", () => {
   assert.equal(isLeadFollowUpDue({ ...contacted, followUpActivityAt: "" }, now), false);
 });
 
-test("new lead reminders go only to the CS or Broker owner; Admin keeps contacted reminders", () => {
+test("new and contacted reminders go only to the active CS or Broker owner", () => {
   const groups = groupLeadReminders(
-    [{ id: "new-1", owner_id: "cs" }, { id: "new-2", owner_id: "broker" }, { id: "new-3", owner_id: "finance" }],
+    [{ id: "new-1", owner_id: "cs" }, { id: "new-2", owner_id: "broker" }, { id: "new-3", owner_id: "finance" }, { id: "new-4", owner_id: "cs" }],
     [{ id: "due-1", owner_id: "cs" }],
     [
       { id: "cs", role: "customer_service" }, { id: "broker", role: "broker" },
       { id: "admin", role: "admin" }, { id: "finance", role: "finance" },
     ],
   );
-  assert.deepEqual(groups.get("cs"), { newCount: 1, contactedCount: 1 });
+  assert.deepEqual(groups.get("cs"), { newCount: 2, contactedCount: 1 });
   assert.deepEqual(groups.get("broker"), { newCount: 1, contactedCount: 0 });
-  assert.deepEqual(groups.get("admin"), { newCount: 0, contactedCount: 1 });
+  assert.equal(groups.has("admin"), false);
   assert.equal(groups.has("finance"), false);
-  assert.equal(reminderMessage(groups.get("cs")), "1 new lead waiting for a call; 1 contacted lead needs follow-up.");
+  assert.equal(reminderMessage(groups.get("cs")), "2 new leads waiting for a call; 1 contacted lead needs follow-up.");
 });
 
 test("Admin receives no reminder when only new leads exist", () => {
@@ -45,4 +45,20 @@ test("Admin receives no reminder when only new leads exist", () => {
     [{ id: "broker", role: "broker" }, { id: "admin", role: "admin" }],
   );
   assert.deepEqual([...groups.keys()], ["broker"]);
+});
+
+test("New slots are 10, 11, 12, 14 and 16 Kuala Lumpur time only", () => {
+  for (const hour of [10, 11, 12, 14, 16]) {
+    assert.equal(reminderTypeAt(new Date(Date.UTC(2026, 8, 25, hour - 8))), "new");
+  }
+  for (const hour of [9, 13, 15, 17, 21]) {
+    assert.notEqual(reminderTypeAt(new Date(Date.UTC(2026, 8, 25, hour - 8))), "new");
+  }
+});
+
+test("Contacted slots stay at 9, 15 and 21 Kuala Lumpur time", () => {
+  for (const hour of [9, 15, 21]) {
+    assert.equal(reminderTypeAt(new Date(Date.UTC(2026, 8, 25, hour - 8))), "contacted");
+  }
+  assert.equal(reminderTypeAt(new Date("2026-09-25T02:11:00Z")), null);
 });

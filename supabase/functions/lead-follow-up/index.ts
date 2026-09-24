@@ -1,8 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.50.0";
 import { sendPushesForUsers } from "../_shared/web-push.ts";
-import { groupLeadReminders, reminderMessage, type ReminderLead, type ReminderProfile } from "./reminders.ts";
+import { groupLeadReminders, reminderMessage, reminderTypeAt, type ReminderLead, type ReminderProfile } from "./reminders.ts";
 
-const slotHoursUtc = new Set([1, 7, 13]);
 const oneDayMs = 24 * 60 * 60 * 1000;
 
 Deno.serve(async () => {
@@ -13,40 +12,48 @@ Deno.serve(async () => {
   }
 
   const now = new Date();
-  if (!slotHoursUtc.has(now.getUTCHours()) || now.getUTCMinutes() > 10) {
+  const reminderType = reminderTypeAt(now);
+  if (!reminderType) {
     return Response.json({ ok: true, skipped: "outside_schedule" });
   }
 
   const slotAt = new Date(now);
   slotAt.setUTCMinutes(0, 0, 0);
   const supabase = createClient(supabaseUrl, serviceRoleKey);
-  const { data: dueLeads, error: leadError } = await supabase
-    .from("leads")
-    .select("id,owner_id")
-    .eq("status", "contacted")
-    .is("deleted_at", null)
-    .not("follow_up_activity_at", "is", null)
-    .lte("follow_up_activity_at", new Date(+now - oneDayMs).toISOString());
-  if (leadError) return Response.json({ ok: false, error: leadError.message }, { status: 500 });
-  const { data: newLeads, error: newLeadError } = await supabase
-    .from("leads")
-    .select("id,owner_id")
-    .eq("status", "new")
-    .is("deleted_at", null)
-    .is("phone_revealed_at", null);
-  if (newLeadError) return Response.json({ ok: false, error: newLeadError.message }, { status: 500 });
-  if (!dueLeads?.length && !newLeads?.length) return Response.json({ ok: true, due: 0, new: 0, sent: 0 });
+  let dueLeads: ReminderLead[] = [];
+  let newLeads: ReminderLead[] = [];
+  if (reminderType === "contacted") {
+    const { data, error } = await supabase
+      .from("leads")
+      .select("id,owner_id")
+      .eq("status", "contacted")
+      .is("deleted_at", null)
+      .not("follow_up_activity_at", "is", null)
+      .lte("follow_up_activity_at", new Date(+now - oneDayMs).toISOString());
+    if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
+    dueLeads = (data || []) as ReminderLead[];
+  } else {
+    const { data, error } = await supabase
+      .from("leads")
+      .select("id,owner_id")
+      .eq("status", "new")
+      .is("deleted_at", null)
+      .is("phone_revealed_at", null);
+    if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
+    newLeads = (data || []) as ReminderLead[];
+  }
+  if (!dueLeads.length && !newLeads.length) return Response.json({ ok: true, due: 0, new: 0, sent: 0 });
 
   const { data: profiles, error: profileError } = await supabase
     .from("profiles")
     .select("id,role")
     .eq("active", true)
-    .in("role", ["admin", "customer_service", "broker"]);
+    .in("role", ["customer_service", "broker"]);
   if (profileError) return Response.json({ ok: false, error: profileError.message }, { status: 500 });
 
   const grouped = groupLeadReminders(
-    (newLeads || []) as ReminderLead[],
-    (dueLeads || []) as ReminderLead[],
+    newLeads,
+    dueLeads,
     (profiles || []) as ReminderProfile[],
   );
 
@@ -86,5 +93,5 @@ Deno.serve(async () => {
     failed += result.failed;
   }
 
-  return Response.json({ ok: true, due: dueLeads?.length || 0, new: newLeads?.length || 0, recipients: grouped.size, sent, failed });
+  return Response.json({ ok: true, due: dueLeads.length, new: newLeads.length, recipients: grouped.size, sent, failed });
 });
