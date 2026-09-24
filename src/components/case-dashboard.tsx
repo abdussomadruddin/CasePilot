@@ -15,6 +15,7 @@ import {
   FileText,
   Filter,
   FolderKanban,
+  PlugZap,
   ListChecks,
   LayoutDashboard,
   Menu,
@@ -49,6 +50,7 @@ import {
 } from "@/lib/auth";
 import { createEmptyCase } from "@/lib/case-factory";
 import { AppointmentPanel, LeadPanel } from "@/components/operations-panels";
+import { IntegrationPanel } from "@/components/integration-panel";
 import { loadAppointments, loadLeads, revealLeadPhone } from "@/lib/operations-store";
 import {
   loadCases,
@@ -72,6 +74,8 @@ import {
 import {
   caseStatuses,
   isLeadFollowUpDue,
+  latestLeadNote,
+  leadSourceLabels,
   caseDealerLabels,
   caseDealers,
   roles,
@@ -695,7 +699,7 @@ function defaultWhatsAppMessage(record: CaseRecord) {
 }
 
 export function CaseDashboard() {
-  const [appSection, setAppSection] = useState<"dashboard" | "cases" | "leads" | "appointments" | "team">("dashboard");
+  const [appSection, setAppSection] = useState<"dashboard" | "cases" | "leads" | "appointments" | "team" | "integration">("dashboard");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [leads, setLeads] = useState<LeadRecord[]>([]);
   const [callingLeadId, setCallingLeadId] = useState("");
@@ -842,7 +846,7 @@ export function CaseDashboard() {
 
   useEffect(() => {
     const section = new URLSearchParams(window.location.search).get("section");
-    if (section === "appointments" || section === "leads" || section === "cases") setAppSection(section);
+    if (section === "appointments" || section === "leads" || section === "cases" || section === "integration") setAppSection(section);
     if (section === "leads" && new URLSearchParams(window.location.search).get("view") === "followup") setLeadViewJump("followup");
   }, []);
 
@@ -884,6 +888,10 @@ export function CaseDashboard() {
       setDealerFilter("all");
     }
   }, [activeTab, role]);
+
+  useEffect(() => {
+    if (role !== "admin" && (appSection === "team" || appSection === "integration")) setAppSection("dashboard");
+  }, [appSection, role]);
 
   useEffect(() => {
     if (!profile) return;
@@ -1631,7 +1639,7 @@ export function CaseDashboard() {
               </div>
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-extrabold tracking-normal text-white sm:text-2xl">
-                  {appSection === "dashboard" ? "Dashboard" : appSection === "cases" ? "Case" : appSection === "leads" ? "Lead" : appSection === "appointments" ? "Appointment" : "Team"}
+                  {appSection === "dashboard" ? "Dashboard" : appSection === "cases" ? "Case" : appSection === "leads" ? "Lead" : appSection === "appointments" ? "Appointment" : appSection === "integration" ? "Integration" : "Team"}
                 </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
                   <span className="rounded-full border border-red-500/30 bg-red-950/50 px-2.5 py-1 text-red-100">
@@ -1758,7 +1766,8 @@ export function CaseDashboard() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold text-white">{lead.customerName}</p>
                       {lead.carBrand || lead.carModel ? <p className="truncate text-sm text-zinc-400">{[lead.carBrand, lead.carModel].filter(Boolean).join(" · ")}</p> : null}
-                      {lead.notes[0] ? <p className="mt-2 break-words whitespace-pre-wrap text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{lead.notes[0].body}</p> : null}
+                      <p className="truncate text-xs text-zinc-400">{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</p>
+                      {latestLeadNote(lead) ? <p className="mt-2 break-words whitespace-pre-wrap text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{latestLeadNote(lead)}</p> : null}
                     </div>
                     <button type="button" className="lead-call-pending inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void callNewLead(lead)}><PhoneCall className="h-4 w-4" />{callingLeadId === lead.id ? "Calling..." : "Call"}</button>
                   </article>
@@ -1926,6 +1935,7 @@ export function CaseDashboard() {
         </section>
         </> : null}
         {appSection === "team" && role === "admin" ? <TeamManagementPanel members={teamMembers} saving={teamSaving} onCreate={handleCreateTeamMember} onUpdate={handleUpdateTeamMember} onDelete={handleDeleteTeamMember} /> : null}
+        {appSection === "integration" && role === "admin" ? <IntegrationPanel teamMembers={teamMembers} leads={leads} /> : null}
         {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={`${leadStatusJump}:${leadViewJump}`} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} initialView={leadViewJump} onViewChange={setLeadViewJump} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
         {appSection === "appointments" && profile && ["admin", "customer_service", "broker"].includes(role) ? <AppointmentPanel key={appointmentSubject} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} appointments={appointments} initialSubject={appointmentSubject} onRefresh={refreshCases} /> : null}
       </div>
@@ -1957,7 +1967,7 @@ export function CaseDashboard() {
             ...(["admin", "customer_service", "broker"].includes(role)
               ? [{ id: "leads", label: "Lead", icon: Users }, { id: "lead_followup", label: "Lead Follow Up", icon: Clock3 }, { id: "appointments", label: "Appointment", icon: CalendarDays }]
               : []),
-            ...(role === "admin" ? [{ id: "team", label: "Team", icon: UserPlus }] : []),
+            ...(role === "admin" ? [{ id: "team", label: "Team", icon: UserPlus }, { id: "integration", label: "Integration", icon: PlugZap }] : []),
           ] as const).map(({ id, label, icon: Icon }) => {
             const active = id === "lead_followup"
               ? appSection === "leads" && leadViewJump === "followup"

@@ -6,6 +6,11 @@ const oldSupabaseUrl = "https://rfqwyhafvfvafiqrcmxa.supabase.co";
 
 let browserClient: SupabaseClient | null = null;
 
+export function getSupabaseUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return !configuredUrl || configuredUrl === oldSupabaseUrl ? defaultSupabaseUrl : configuredUrl;
+}
+
 export function hasSupabaseConfig() {
   return true;
 }
@@ -13,7 +18,7 @@ export function hasSupabaseConfig() {
 export function getSupabaseClient() {
   const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const useDefaultProject = !configuredUrl || configuredUrl === oldSupabaseUrl;
-  const supabaseUrl = useDefaultProject ? defaultSupabaseUrl : configuredUrl;
+  const supabaseUrl = getSupabaseUrl();
   const supabaseKey = useDefaultProject
     ? defaultSupabaseKey
     : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || defaultSupabaseKey;

@@ -9,6 +9,11 @@ import type {
 type LeadRow = {
   id: string;
   owner_id: string;
+  source: LeadRecord["source"];
+  source_lead_id: string | null;
+  source_detail: string | null;
+  source_note: string | null;
+  connector_id: string | null;
   customer_name: string;
   customer_phone: string;
   phone_revealed_at: string | null;
@@ -51,6 +56,11 @@ function mapLead(row: LeadRow): LeadRecord {
   return {
     id: row.id,
     ownerId: row.owner_id,
+    source: row.source || "manual_upload",
+    sourceLeadId: row.source_lead_id || "",
+    sourceDetail: row.source_detail || "",
+    sourceNote: row.source_note || "",
+    connectorId: row.connector_id || "",
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
     phoneRevealedAt: row.phone_revealed_at || "",
@@ -112,7 +122,7 @@ export async function saveLead(
     ...(isRejecting ? { rejection_reason: note.trim() } : {}),
   };
   const { data, error } = previousStatus === undefined
-    ? await supabase.from("leads").insert({ id: lead.id, ...values, created_at: lead.createdAt }).select("id").single()
+    ? await supabase.from("leads").insert({ id: lead.id, ...values, source: "manual_upload", created_at: lead.createdAt }).select("id").single()
     : await supabase.from("leads").update(values).eq("id", lead.id).select("id").single();
   if (error) throw error;
   if (!data) throw new Error("Lead was not saved. Please refresh and try again.");

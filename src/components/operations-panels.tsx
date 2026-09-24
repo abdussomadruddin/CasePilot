@@ -23,6 +23,8 @@ import {
 import {
   leadStatuses,
   leadStatusLabels,
+  leadSourceLabels,
+  latestLeadNote,
   isLeadFollowUpDue,
   roleLabels,
   type AppointmentKind,
@@ -89,6 +91,11 @@ function newLead(profile: Profile): LeadRecord {
   return {
     id: crypto.randomUUID(),
     ownerId: profile.id,
+    source: "manual_upload",
+    sourceLeadId: "",
+    sourceDetail: "",
+    sourceNote: "",
+    connectorId: "",
     customerName: "",
     customerPhone: "",
     phoneRevealedAt: "",
@@ -279,10 +286,11 @@ export function LeadPanel({
                 <span className="block truncate font-semibold text-white">{lead.customerName}</span>
                 {lead.phoneRevealedAt || lead.carModel ? <span className="block truncate text-sm text-zinc-400">{[lead.phoneRevealedAt ? lead.customerPhone : "", lead.carModel].filter(Boolean).join(" · ")}</span> : null}
                 <span className="block truncate text-xs text-zinc-500">{ownerLabel(lead.ownerId, teamMembers)}</span>
+                <span className="block truncate text-xs text-zinc-400">{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</span>
               </button>
               {!lead.phoneRevealedAt ? <span className="shrink-0 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span> : null}
             </div>
-            {lead.notes[0] ? <p className="mt-3 break-words whitespace-pre-wrap border-t border-zinc-800 pt-3 text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{lead.notes[0].body}</p> : null}
+            {latestLeadNote(lead) ? <p className="mt-3 break-words whitespace-pre-wrap border-t border-zinc-800 pt-3 text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{latestLeadNote(lead)}</p> : null}
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
               <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" disabled={saving} onClick={() => void callLead(lead)}><PhoneCall className="h-4 w-4" /> Call</button>
               {lead.phoneRevealedAt ? <a className="secondary-button text-emerald-200" href={`https://wa.me/${lead.customerPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /> WhatsApp</a> : null}
@@ -298,7 +306,7 @@ export function LeadPanel({
       {selected ? (
         <Modal title={selected.customerName} onClose={() => { setNote(""); setSelectedId(""); }}>
           <div className="grid gap-4 p-4">
-            <div className="grid gap-1 text-sm"><p className="text-zinc-400">{selected.phoneRevealedAt ? selected.customerPhone : "Phone hidden"}{selected.email ? ` · ${selected.email}` : ""}</p>{selected.carBrand || selected.carModel ? <p>{[selected.carBrand, selected.carModel].filter(Boolean).join(" · ")}</p> : null}<p className="text-zinc-400">{ownerLabel(selected.ownerId, teamMembers)}</p><p className="text-xs text-zinc-500">Created {displayTime(selected.createdAt)}</p></div>
+            <div className="grid gap-1 text-sm"><p className="text-zinc-400">{selected.phoneRevealedAt ? selected.customerPhone : "Phone hidden"}{selected.email ? ` · ${selected.email}` : ""}</p>{selected.carBrand || selected.carModel ? <p>{[selected.carBrand, selected.carModel].filter(Boolean).join(" · ")}</p> : null}<p className="text-zinc-400">{ownerLabel(selected.ownerId, teamMembers)}</p><p className="text-zinc-300">Source: {leadSourceLabels[selected.source]}{selected.sourceDetail ? ` · ${selected.sourceDetail}` : ""}</p>{selected.sourceNote ? <p className="whitespace-pre-wrap text-zinc-300">Inquiry: {selected.sourceNote}</p> : null}<p className="text-xs text-zinc-500">Created {displayTime(selected.createdAt)}</p></div>
             <div className="grid gap-2 sm:grid-cols-2">
               <button className={selected.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white"} type="button" onClick={() => void callLead(selected)}><PhoneCall className="h-4 w-4" /> Call</button>
               {selected.phoneRevealedAt ? <a className="secondary-button text-emerald-200" href={`https://wa.me/${selected.customerPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /> WhatsApp</a> : null}

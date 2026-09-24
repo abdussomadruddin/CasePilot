@@ -205,6 +205,11 @@ export const leadStatusLabels: Record<LeadStatus, string> = {
 export type LeadRecord = {
   id: string;
   ownerId: string;
+  source: "manual_upload" | "meta_ads" | "tiktok_ads";
+  sourceLeadId: string;
+  sourceDetail: string;
+  sourceNote: string;
+  connectorId: string;
   customerName: string;
   customerPhone: string;
   phoneRevealedAt: string;
@@ -218,6 +223,16 @@ export type LeadRecord = {
   notes: LeadNote[];
   events: LeadEvent[];
 };
+
+export const leadSourceLabels: Record<LeadRecord["source"], string> = {
+  manual_upload: "Manual Upload",
+  meta_ads: "Meta Ads",
+  tiktok_ads: "TikTok Ads",
+};
+
+export function latestLeadNote(lead: LeadRecord) {
+  return lead.notes[0]?.body || lead.sourceNote;
+}
 
 export function isLeadFollowUpDue(lead: LeadRecord, nowMs: number): boolean {
   return lead.status === "contacted" && Boolean(lead.followUpActivityAt)
