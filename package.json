@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test:lead-follow-up": "node --experimental-strip-types --test scripts/test-lead-follow-up.mjs",
     "test:lead-ingest": "node --experimental-strip-types --test scripts/test-lead-ingest.mjs",
+    "test:lead-copy": "node --experimental-strip-types --test scripts/test-lead-copy.mjs",
     "stress": "node scripts/stress-test.mjs"
   },
   "dependencies": {

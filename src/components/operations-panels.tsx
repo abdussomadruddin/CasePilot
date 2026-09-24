@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CheckCircle2,
   ChevronDown,
+  Copy,
   FilePlus2,
   MessageCircle,
   PhoneCall,
@@ -14,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { formatLeadCopy } from "@/lib/lead-copy";
 import { hideLeadPhoneInNote } from "../../supabase/functions/_shared/lead-contact";
 import {
   addLeadNote,
@@ -149,6 +151,7 @@ export function LeadPanel({
   const [view, setView] = useState<"all" | "followup">(initialView);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [saving, setSaving] = useState(false);
+  const [copiedId, setCopiedId] = useState("");
   const [error, setError] = useState("");
   const selected = leads.find((lead) => lead.id === selectedId);
   useEffect(() => {
@@ -274,6 +277,18 @@ export function LeadPanel({
     }
   }
 
+  async function copyLead(lead: LeadRecord) {
+    if (lead.customerPhone && !lead.phoneRevealedAt) return;
+    try {
+      await navigator.clipboard.writeText(formatLeadCopy(lead));
+      setCopiedId(lead.id);
+      setError("");
+      window.setTimeout(() => setCopiedId((current) => current === lead.id ? "" : current), 2000);
+    } catch {
+      setError("Unable to copy lead details. Please try again.");
+    }
+  }
+
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -301,6 +316,7 @@ export function LeadPanel({
               </button>
               <div className="flex shrink-0 items-center gap-2">
                 {!lead.phoneRevealedAt ? <span className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span> : null}
+                <button className="icon-button disabled:cursor-not-allowed disabled:opacity-40" type="button" aria-label={`Copy ${leadName(lead)} details`} title={lead.customerPhone && !lead.phoneRevealedAt ? "Call to unlock copy" : copiedId === lead.id ? "Copied" : "Copy lead details"} disabled={Boolean(lead.customerPhone && !lead.phoneRevealedAt)} onClick={() => void copyLead(lead)}>{copiedId === lead.id ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}</button>
                 <button className="icon-button" type="button" aria-label={`${expandedLeadId === lead.id ? "Collapse" : "Expand"} ${lead.customerName}`} aria-expanded={expandedLeadId === lead.id} title={expandedLeadId === lead.id ? "Close lead details" : "Expand lead details"} onClick={() => setExpandedLeadId(expandedLeadId === lead.id ? "" : lead.id)}><ChevronDown className={`h-4 w-4 transition-transform ${expandedLeadId === lead.id ? "rotate-180" : ""}`} /></button>
               </div>
             </div>
