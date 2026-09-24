@@ -131,6 +131,9 @@ export function LeadPanel({
   initialFilter = "all",
   initialView = "all",
   onViewChange,
+  cohortLeadIds,
+  cohortLabel,
+  onClearCohort,
 }: CommonProps & {
   catalog: VehicleOption[];
   onCreateCase: (lead: LeadRecord) => void;
@@ -138,6 +141,9 @@ export function LeadPanel({
   initialFilter?: LeadStatus | "all";
   initialView?: "all" | "followup";
   onViewChange?: (view: "all" | "followup") => void;
+  cohortLeadIds?: string[];
+  cohortLabel?: string;
+  onClearCohort?: () => void;
 }) {
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<LeadRecord | null>(null);
@@ -157,8 +163,9 @@ export function LeadPanel({
     const timer = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
-  const dueLeads = leads.filter((lead) => isLeadFollowUpDue(lead, nowMs));
-  const shown = view === "followup" ? dueLeads : leads.filter((lead) => filter === "all" || lead.status === filter);
+  const scopedLeads = cohortLeadIds ? leads.filter((lead) => cohortLeadIds.includes(lead.id)) : leads;
+  const dueLeads = scopedLeads.filter((lead) => isLeadFollowUpDue(lead, nowMs));
+  const shown = view === "followup" ? dueLeads : scopedLeads.filter((lead) => filter === "all" || lead.status === filter);
   const brands = [...new Set(catalog.map((item) => item.brand))];
   const models = draft ? catalog.filter((item) => item.brand === draft.carBrand) : [];
 
@@ -312,17 +319,18 @@ export function LeadPanel({
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-xl font-bold text-white">Lead</h2><p className="text-sm text-zinc-400">{leads.length} leads</p></div>
+        <div><h2 className="text-xl font-bold text-white">Lead</h2><p className="text-sm text-zinc-400">{scopedLeads.length} leads</p></div>
         <button type="button" className="primary-button" onClick={() => { const lead = newLead(profile); if (profile.role === "admin") lead.ownerId = teamMembers.find((member) => member.active && ["customer_service", "broker"].includes(member.role))?.id || ""; setDraft(lead); setInitialNote(""); }}><Plus className="h-4 w-4" /> New Lead</button>
       </div>
       {error ? <p className="rounded-md border border-red-800 bg-red-950/50 p-3 text-sm text-red-100" role="alert">{error}</p> : null}
+      {cohortLeadIds ? <div className="flex items-center justify-between gap-3 border-b border-cyan-800 py-2 text-sm"><span className="text-cyan-200">{cohortLabel}</span><button type="button" className="secondary-button" onClick={onClearCohort}>All leads</button></div> : null}
       <div className="flex gap-2 border-b border-zinc-800 pb-2" role="tablist" aria-label="Lead views">
-        <button type="button" role="tab" aria-selected={view === "all"} className={view === "all" ? "primary-button" : "secondary-button"} onClick={() => { setView("all"); onViewChange?.("all"); }}>All Leads <span>{leads.length}</span></button>
+        <button type="button" role="tab" aria-selected={view === "all"} className={view === "all" ? "primary-button" : "secondary-button"} onClick={() => { setView("all"); onViewChange?.("all"); }}>All Leads <span>{scopedLeads.length}</span></button>
         <button type="button" role="tab" aria-selected={view === "followup"} className={view === "followup" ? "primary-button" : "secondary-button"} onClick={() => { setView("followup"); onViewChange?.("followup"); }}>Follow Up Due <span>{dueLeads.length}</span></button>
       </div>
       {view === "all" ? <select className="field max-w-xs" value={filter} onChange={(event) => setFilter(event.target.value as LeadStatus | "all")} aria-label="Filter leads by status">
-        <option value="all">All statuses ({leads.length})</option>
-        {leadStatuses.map((status) => <option key={status} value={status}>{leadStatusLabels[status]} ({leads.filter((lead) => lead.status === status).length})</option>)}
+        <option value="all">All statuses ({scopedLeads.length})</option>
+        {leadStatuses.map((status) => <option key={status} value={status}>{leadStatusLabels[status]} ({scopedLeads.filter((lead) => lead.status === status).length})</option>)}
       </select> : null}
       <div className="grid gap-2">
         {shown.map((lead) => (

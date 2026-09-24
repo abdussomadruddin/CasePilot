@@ -51,6 +51,7 @@ import {
 } from "@/lib/auth";
 import { createEmptyCase } from "@/lib/case-factory";
 import { AppointmentPanel, LeadPanel } from "@/components/operations-panels";
+import { FunnelChart } from "@/components/funnel-chart";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { loadAppointments, loadLeads, revealLeadPhone } from "@/lib/operations-store";
 import {
@@ -709,6 +710,7 @@ export function CaseDashboard() {
   const [appointmentSubject, setAppointmentSubject] = useState("");
   const [leadStatusJump, setLeadStatusJump] = useState<LeadStatus | "all">("all");
   const [leadViewJump, setLeadViewJump] = useState<"all" | "followup">("all");
+  const [funnelSelection, setFunnelSelection] = useState<{ section: "leads" | "cases"; ids: string[]; label: string } | null>(null);
   const [leadNowMs, setLeadNowMs] = useState(() => Date.now());
   const currentMonth = caseMonthKey(new Date().toISOString());
   const lastMonth = previousCaseMonth(currentMonth);
@@ -1049,6 +1051,7 @@ export function CaseDashboard() {
     let total = 0;
 
     for (const record of tabCases) {
+      if (funnelSelection?.section === "cases" && !funnelSelection.ids.includes(record.id)) continue;
       if (dealerFilterActive && record.dealer !== dealerFilter) continue;
       if (monthFilterActive && caseMonthKey(record.createdAt) !== monthFilter) {
         continue;
@@ -1062,6 +1065,7 @@ export function CaseDashboard() {
   }, [
     dealerFilter,
     dealerFilterActive,
+    funnelSelection,
     monthFilter,
     monthFilterActive,
     tabCases,
@@ -1072,6 +1076,7 @@ export function CaseDashboard() {
     let total = 0;
 
     for (const record of tabCases) {
+      if (funnelSelection?.section === "cases" && !funnelSelection.ids.includes(record.id)) continue;
       if (dealerFilterActive && record.dealer !== dealerFilter) continue;
       if (statusFilter !== "all" && record.status !== statusFilter) continue;
 
@@ -1096,6 +1101,7 @@ export function CaseDashboard() {
   }, [
     dealerFilter,
     dealerFilterActive,
+    funnelSelection,
     monthFilter,
     statusFilter,
     tabCases,
@@ -1107,17 +1113,35 @@ export function CaseDashboard() {
         (record) =>
           (statusFilter === "all" || record.status === statusFilter) &&
           (!dealerFilterActive || record.dealer === dealerFilter) &&
-          (!monthFilterActive || caseMonthKey(record.createdAt) === monthFilter),
+          (!monthFilterActive || caseMonthKey(record.createdAt) === monthFilter) &&
+          (funnelSelection?.section !== "cases" || funnelSelection.ids.includes(record.id)),
       ),
     [
       dealerFilter,
       dealerFilterActive,
+      funnelSelection,
       monthFilter,
       monthFilterActive,
       statusFilter,
       tabCases,
     ],
   );
+
+  function openFunnelStage(stage: "leads" | "cases" | "delivered" | "direct", ids: string[], label: string) {
+    const section = stage === "leads" ? "leads" : "cases";
+    setFunnelSelection({ section, ids, label });
+    if (section === "leads") {
+      setLeadStatusJump("all");
+      setLeadViewJump("all");
+    } else {
+      setActiveTab("all");
+      setStatusFilter("all");
+      setDealerFilter("all");
+      setMonthFilter("");
+    }
+    setAppSection(section);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   const metricCases = useMemo(
     () =>
@@ -1776,10 +1800,12 @@ export function CaseDashboard() {
                 )) : <p className="text-sm text-zinc-500">No new leads to contact.</p>}
               </section>
             ) : null}
+            {role === "admin" || role === "sales_manager" ? <FunnelChart role={role} leads={role === "admin" ? leads : []} cases={visibleCases} nowMs={leadNowMs} onOpenStage={openFunnelStage} /> : null}
           </section>
         ) : null}
 
         {appSection === "cases" ? <>
+        {funnelSelection?.section === "cases" ? <div className="flex items-center justify-between gap-3 border-b border-cyan-800 py-2 text-sm"><span className="text-cyan-200">{funnelSelection.label}</span><button type="button" className="secondary-button" onClick={() => setFunnelSelection(null)}>All cases</button></div> : null}
         {canCreateCase(role) ? <button type="button" className="primary-button w-full sm:hidden" onClick={openCreateForm}><Plus className="h-4 w-4" aria-hidden="true" />New Case</button> : null}
         <section className="dashboard-metrics grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {metricTabs.map((tab) => (
@@ -1928,7 +1954,7 @@ export function CaseDashboard() {
                 ))
               ) : (
                 <div className="surface-card p-8 text-center text-sm text-muted">
-                  {filtersActive
+                  {filtersActive || funnelSelection?.section === "cases"
                     ? "No cases match the selected filters"
                     : "No cases in this tab"}
                 </div>
@@ -1938,7 +1964,7 @@ export function CaseDashboard() {
         </> : null}
         {appSection === "team" && role === "admin" ? <TeamManagementPanel members={teamMembers} saving={teamSaving} onCreate={handleCreateTeamMember} onUpdate={handleUpdateTeamMember} onDelete={handleDeleteTeamMember} /> : null}
         {appSection === "integration" && role === "admin" ? <IntegrationPanel teamMembers={teamMembers} leads={leads} /> : null}
-        {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={`${leadStatusJump}:${leadViewJump}`} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} initialView={leadViewJump} onViewChange={setLeadViewJump} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
+        {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={`${leadStatusJump}:${leadViewJump}:${funnelSelection?.section === "leads" ? funnelSelection.label : ""}`} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} initialView={leadViewJump} onViewChange={setLeadViewJump} cohortLeadIds={funnelSelection?.section === "leads" ? funnelSelection.ids : undefined} cohortLabel={funnelSelection?.section === "leads" ? funnelSelection.label : undefined} onClearCohort={() => setFunnelSelection(null)} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
         {appSection === "appointments" && profile && ["admin", "customer_service", "broker"].includes(role) ? <AppointmentPanel key={appointmentSubject} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} appointments={appointments} initialSubject={appointmentSubject} onRefresh={refreshCases} /> : null}
       </div>
       <div
@@ -1983,6 +2009,7 @@ export function CaseDashboard() {
               className={`flex items-center gap-3 rounded-md px-4 py-3 text-left ${active ? "bg-red-950 text-white" : "text-zinc-300 hover:bg-zinc-900"}`}
               aria-current={active ? "page" : undefined}
               onClick={() => {
+                setFunnelSelection(null);
                 if (id === "lead_followup" || id === "leads") {
                   setLeadStatusJump("all");
                   setLeadViewJump(id === "lead_followup" ? "followup" : "all");
