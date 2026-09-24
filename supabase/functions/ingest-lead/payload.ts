@@ -23,6 +23,30 @@ function value(input: Record<string, unknown>, keys: string[], limit: number) {
   return "";
 }
 
+const contactKeys = new Set([
+  "source_system", "source", "source_lead_id", "lead_id", "id",
+  "name", "full_name", "customer_name", "phone", "phone_number",
+  "customer_phone", "email", "note", "remark", "message", "inquiry",
+]);
+
+function noteValue(raw: unknown): string {
+  if (raw == null) return "";
+  const text = typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean"
+    ? String(raw).trim()
+    : JSON.stringify(raw);
+  return ["", "null", "undefined", "no data"].includes(text.toLowerCase()) ? "" : text;
+}
+
+function buildNote(input: Record<string, unknown>): string {
+  const explicitNote = value(input, ["note", "remark", "message", "inquiry"], 3000);
+  const extras = Object.entries(input)
+    .filter(([key]) => !contactKeys.has(key))
+    .map(([key, raw]) => [key.replace(/_/g, " "), noteValue(raw)] as const)
+    .filter(([, text]) => text);
+  return [explicitNote, ...extras.map(([key, text]) => `${key}: ${text}`)]
+    .filter(Boolean).join("\n").slice(0, 3000);
+}
+
 export function parseIngestPayload(input: Record<string, unknown>): IngestPayload {
   const sourceLeadId = value(input, ["source_lead_id", "lead_id", "id"], 200);
   const name = value(input, ["name", "full_name", "customer_name"], 200);
@@ -43,7 +67,7 @@ export function parseIngestPayload(input: Record<string, unknown>): IngestPayloa
     email: value(input, ["email"], 254),
     brand: value(input, ["brand", "car_brand"], 100),
     model: value(input, ["model", "car_model"], 150),
-    note: value(input, ["note", "remark", "message", "inquiry"], 3000),
+    note: buildNote(input),
     sourceDetail: value(input, ["campaign", "campaign_name", "form_name", "source_detail"], 200),
     createdAt,
   };
