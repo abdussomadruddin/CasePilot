@@ -11,6 +11,13 @@ const formAnswers = new Set([
   "nak trade-in", "tiada", "tiada (nak full loan)",
   "10% deposit", "custom deposit", "nak beli cash tunai",
 ].map(normalizedAnswer));
+const vehicleAnswers = new Set([
+  "honda", "proton", "jaecoo", "jetour", "chery",
+  "jaecoo j5", "jaecoo j5 ev", "jaecoo j7", "jaecoo j7 phev", "jaecoo j8",
+  "proton s70", "proton new s70", "proton saga", "proton persona", "proton iriz",
+  "proton x50", "proton x70", "proton x90",
+  "honda city", "honda city hatchback", "honda civic", "honda hr-v", "honda cr-v", "honda wr-v",
+].map(normalizedAnswer));
 
 function normalizedAnswer(value: string) {
   return value.toLowerCase().replace(/[–—]/g, "-").replace(/\s*\/\s*/g, "/").replace(/\s*-\s*/g, "-").replace(/\s+/g, " ").trim();
@@ -33,18 +40,16 @@ function validPhone(value: string) {
   return /^\+?\d[\d\s().-]*$/.test(value) && value.replace(/\D/g, "").length >= 9;
 }
 
-function validName(value: string, allowSingleWord: boolean) {
-  if (formAnswers.has(normalizedAnswer(value))) return false;
-  if (!/^[\p{L}][\p{L} .'’-]*$/u.test(value)) return false;
-  const count = value.split(/\s+/).length;
-  if (count > 5 || (!allowSingleWord && count < 2)) return false;
-  return !/\b(sedan|hatchback|suv|kerja|trade|loan|asap|model|brand|nak|tiada|proton|honda|jaecoo|jetour|chery|city|civic|survey|deposit|freelance|job|status)\b/i.test(value);
+function validName(value: string) {
+  if (!/^[\p{L}][\p{L} .'’/-]*$/u.test(value)) return false;
+  const normalized = normalizedAnswer(value);
+  return !formAnswers.has(normalized) && !vehicleAnswers.has(normalized);
 }
 
 function nameFromUnlabelledLines(note: string) {
   const lines = note.split(/\r?\n/).map(clean).filter(Boolean);
   if (!lines.some((line) => line.match(emailPattern) || line.match(phonePattern))) return "";
-  return lines.find((line) => validName(line, false)) || "";
+  return lines.find(validName) || "";
 }
 
 export function extractLeadContact(note: string, supplied: Partial<LeadContact> = {}): LeadContact {
@@ -57,8 +62,8 @@ export function extractLeadContact(note: string, supplied: Partial<LeadContact> 
     if (kind && candidate && !found[kind]) found[kind] = candidate;
   }
   const suppliedName = clean(supplied.name || "");
-  const name = (validName(suppliedName, true) && suppliedName)
-    || (validName(found.name, true) && found.name)
+  const name = (validName(suppliedName) && suppliedName)
+    || (validName(found.name) && found.name)
     || nameFromUnlabelledLines(note);
   const suppliedPhone = clean(supplied.phone || "");
   const phoneFromNote = validPhone(found.phone) ? found.phone : note.match(phonePattern)?.find((item) => validPhone(item.trim())) || "";

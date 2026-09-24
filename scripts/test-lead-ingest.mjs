@@ -89,6 +89,21 @@ test("all known TikTok form answers are excluded when the name arrives last", ()
   assert.equal(extractLeadContact(["+60 17-355 9147", ...answers].join("\n")).name, "");
 });
 
+test("single-word name is detected after form answers", () => {
+  const note = "JAECOO\nKerja Kerajaan\nRM2500-RM3500\nabdussomad\n+60 17-355 9147\nabdussomad.ruddin@gmail.com";
+  const lead = parseIngestPayload({ note });
+  assert.equal(lead.name, "abdussomad");
+  assert.equal(lead.brand, "JAECOO");
+  assert.equal(lead.phone, "+60 17-355 9147");
+  assert.equal(extractLeadContact("JAECOO\nKerja Kerajaan\n+60 17-355 9147").name, "");
+});
+
+test("name length is unrestricted while form answers stay excluded", () => {
+  const note = "JAECOO\nKerja Kerajaan\nCustom Deposit\n+60 17-355 9147\nNur Abdussomad Bin Abdul Ruddin Ahmad\nabdussomad.ruddin@gmail.com";
+  assert.equal(extractLeadContact(note).name, "Nur Abdussomad Bin Abdul Ruddin Ahmad");
+  assert.equal(extractLeadContact("JAECOO\nJAECOO J7\nCustom Deposit\n+60 17-355 9147").name, "");
+});
+
 test("manual note extraction prefers supplied fields and ignores campaign name", () => {
   assert.deepEqual(extractLeadContact("Campaign name: Sale\nNama: Farah\nTelefon: 0123456789\nEmail: farah@example.com", { name: "Aminah" }), {
     name: "Aminah", phone: "0123456789", email: "farah@example.com",
