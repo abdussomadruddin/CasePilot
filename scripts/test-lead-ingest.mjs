@@ -104,6 +104,22 @@ test("name length is unrestricted while form answers stay excluded", () => {
   assert.equal(extractLeadContact("JAECOO\nJAECOO J7\nCustom Deposit\n+60 17-355 9147").name, "");
 });
 
+test("No, Tiada, dash and zero are not names when SARASVATI is present", () => {
+  const note = "Civic\nvatisaras088@gmail.com\nNo\nRM2500 - RM3500\nSARASVATI\n1-3 bulan\nKerja Swasta\nTiada (Nak Full Loan)\nTiada\n+60 14-807 8900";
+  for (const name of ["No", "Tiada", "-", "0"]) {
+    assert.equal(parseIngestPayload({ name, note }).name, "SARASVATI");
+  }
+  assert.equal(extractLeadContact("No\nTiada\n-\n0\n+60 14-807 8900").name, "");
+});
+
+test("misspelled City Hatchback answer does not become the customer name", () => {
+  const note = "+60 18-364 5924\nTiada (Nak Full Loan)\nsyahsjinspire@gmail.com\nsecepat yang boleh (ASAP)\nTiada\nCity Hacthback\nSyahidan\nKerja Swasta\nRM3500 - RM5000\nNak trade-in";
+  const lead = parseIngestPayload({ name: "City Hacthback", note });
+  assert.equal(lead.name, "Syahidan");
+  assert.equal(lead.brand, "Honda");
+  assert.equal(lead.model, "Honda City Hatchback");
+});
+
 test("manual note extraction prefers supplied fields and ignores campaign name", () => {
   assert.deepEqual(extractLeadContact("Campaign name: Sale\nNama: Farah\nTelefon: 0123456789\nEmail: farah@example.com", { name: "Aminah" }), {
     name: "Aminah", phone: "0123456789", email: "farah@example.com",

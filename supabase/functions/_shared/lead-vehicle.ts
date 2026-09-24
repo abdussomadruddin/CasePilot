@@ -20,6 +20,7 @@ export function extractLeadVehicle(note: string, supplied: Partial<LeadVehicle> 
   const findModel = (text: string) => leadVehicleModels.flatMap((item) => {
     const aliases = [item.model, item.model.slice(item.brand.length).trim()];
     if (item.model === "Proton NEW S70 1.5 i-GT") aliases.push("Proton NEW S70", "NEW S70");
+    if (item.model === "Honda City Hatchback") aliases.push("City Hacthback", "Honda City Hacthback");
     return aliases.filter((alias) => contains(text, alias)).map((alias) => ({ ...item, length: alias.length }));
   }).sort((a, b) => b.length - a.length)[0];
   const match = (directModel && findModel(directModel)) || findModel(note);

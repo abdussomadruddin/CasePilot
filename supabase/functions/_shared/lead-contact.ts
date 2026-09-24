@@ -4,11 +4,11 @@ const missing = new Set(["", "null", "undefined", "no data", "n/a", "-"]);
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 const phonePattern = /(?:\+?60[ \t().-]*|0)1[0-9 \t().-]{7,18}\d/g;
 const formAnswers = new Set([
-  "city sedan", "city hatchback", "civic", "hr-v", "cr-v", "wr-v",
+  "city sedan", "city hatchback", "city hacthback", "civic", "hr-v", "cr-v", "wr-v",
   "secepat yang boleh (asap)", "1-3 bulan", "3-6 bulan", "survey sahaja",
   "kerja kerajaan", "kerja swasta", "berniaga/freelance",
   "rm2500 - rm3500", "rm3500 - rm5000", "rm5000 keatas",
-  "nak trade-in", "tiada", "tiada (nak full loan)",
+  "nak trade-in", "no", "tiada", "tiada (nak full loan)",
   "10% deposit", "custom deposit", "nak beli cash tunai",
 ].map(normalizedAnswer));
 const vehicleAnswers = new Set([
@@ -16,7 +16,7 @@ const vehicleAnswers = new Set([
   "jaecoo j5", "jaecoo j5 ev", "jaecoo j7", "jaecoo j7 phev", "jaecoo j8",
   "proton s70", "proton new s70", "proton saga", "proton persona", "proton iriz",
   "proton x50", "proton x70", "proton x90",
-  "honda city", "honda city hatchback", "honda civic", "honda hr-v", "honda cr-v", "honda wr-v",
+  "honda city", "honda city hatchback", "honda city hacthback", "honda civic", "honda hr-v", "honda cr-v", "honda wr-v",
 ].map(normalizedAnswer));
 
 function normalizedAnswer(value: string) {
