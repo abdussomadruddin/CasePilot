@@ -31,3 +31,14 @@ test("manual lead copies available details without a trailing delimiter", () => 
   });
   assert.equal(result, "*New Car Sales Inquiry From Manual*\n\nNur Aini\naini@example.com\nProton S70");
 });
+
+test("copy before Call hides phone in contact and notes", () => {
+  const result = formatLeadCopy({
+    source: "tiktok_ads", sourceNote: "Aina\n+60 17-355 9147\nInterested in City",
+    customerName: "Aina", customerPhone: "+60 17-355 9147", email: "",
+    carBrand: "Honda", carModel: "Honda City",
+    notes: [{ id: "1", authorId: "a", body: "Call +60 17-355 9147", createdAt: "2026-09-24T00:00:00Z" }],
+  }, false);
+  assert.equal(result.includes("+60 17-355 9147"), false);
+  assert.match(result, /\[phone hidden until Call\]/);
+});

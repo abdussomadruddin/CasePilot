@@ -277,9 +277,30 @@ export function LeadPanel({
   }
 
   async function copyLead(lead: LeadRecord) {
-    if (lead.customerPhone && !lead.phoneRevealedAt) return;
     try {
-      await navigator.clipboard.writeText(formatLeadCopy(lead));
+      const details = formatLeadCopy(lead, Boolean(lead.phoneRevealedAt));
+      let copied = false;
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(details);
+          copied = true;
+        } catch {
+          // Safari may expose the Clipboard API but reject writes in installed apps.
+        }
+      }
+      if (!copied) {
+        const field = document.createElement("textarea");
+        field.value = details;
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        try {
+          field.select();
+          if (!document.execCommand("copy")) throw new Error("Copy failed");
+        } finally {
+          field.remove();
+        }
+      }
       setCopiedId(lead.id);
       setError("");
       window.setTimeout(() => setCopiedId((current) => current === lead.id ? "" : current), 2000);
@@ -315,7 +336,7 @@ export function LeadPanel({
               </button>
               <div className="flex shrink-0 items-center gap-2">
                 {!lead.phoneRevealedAt ? <span className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span> : null}
-                <button className="icon-button disabled:cursor-not-allowed disabled:opacity-40" type="button" aria-label={`Copy ${leadName(lead)} details`} title={lead.customerPhone && !lead.phoneRevealedAt ? "Call to unlock copy" : copiedId === lead.id ? "Copied" : "Copy lead details"} disabled={Boolean(lead.customerPhone && !lead.phoneRevealedAt)} onClick={() => void copyLead(lead)}>{copiedId === lead.id ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}</button>
+                <button className="icon-button" type="button" aria-label={`Copy ${leadName(lead)} details`} title={copiedId === lead.id ? "Copied" : lead.phoneRevealedAt ? "Copy lead details" : "Copy details without phone until Call"} onClick={() => void copyLead(lead)}>{copiedId === lead.id ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}</button>
                 <button className="icon-button" type="button" aria-label={`Open ${leadName(lead)} details`} title="Open lead details" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }}><ChevronDown className="h-4 w-4" /></button>
               </div>
             </div>
