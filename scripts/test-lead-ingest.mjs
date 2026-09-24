@@ -63,6 +63,32 @@ test("contact fields are found in a TikTok note regardless of order", () => {
   assert.equal(lead.email, "nor@example.com");
 });
 
+test("unlabelled TikTok answers identify a person without treating model or job as a name", () => {
+  const note = "Abdussomad Ruddin\n+60 17-355 9147\nabdussomad.ruddin@gmail.com\nCity Sedan\nKerja Kerajaan\nRM2500 - RM3500\n0\nNak trade-in";
+  const lead = parseIngestPayload({ note });
+  assert.equal(lead.name, "Abdussomad Ruddin");
+  assert.equal(lead.phone, "+60 17-355 9147");
+  assert.equal(lead.email, "abdussomad.ruddin@gmail.com");
+  assert.equal(lead.brand, "Honda");
+  assert.equal(lead.model, "Honda City");
+  assert.equal(parseIngestPayload({ name: "secepat yang boleh (ASAP)", note }).name, "Abdussomad Ruddin");
+  assert.equal(extractLeadContact("City Sedan\nKerja Kerajaan\n+60 17-355 9147").name, "");
+});
+
+test("all known TikTok form answers are excluded when the name arrives last", () => {
+  const answers = [
+    "City Sedan", "City Hatchback", "Civic", "HR-V", "CR-V", "WR-V",
+    "secepat yang boleh (ASAP)", "1-3 bulan", "3-6 bulan", "Survey sahaja",
+    "Kerja Kerajaan", "Kerja Swasta", "Berniaga/Freelance",
+    "RM2500 - RM3500", "RM3500 - RM5000", "RM5000 keatas",
+    "Nak trade-in", "Tiada", "Tiada (Nak Full Loan)",
+    "10% Deposit", "Custom Deposit", "Nak beli cash tunai",
+  ];
+  const note = ["+60 17-355 9147", "abdussomad.ruddin@gmail.com", ...answers, "Abdussomad Ruddin"].join("\n");
+  assert.equal(extractLeadContact(note, { name: "Custom Deposit" }).name, "Abdussomad Ruddin");
+  assert.equal(extractLeadContact(["+60 17-355 9147", ...answers].join("\n")).name, "");
+});
+
 test("manual note extraction prefers supplied fields and ignores campaign name", () => {
   assert.deepEqual(extractLeadContact("Campaign name: Sale\nNama: Farah\nTelefon: 0123456789\nEmail: farah@example.com", { name: "Aminah" }), {
     name: "Aminah", phone: "0123456789", email: "farah@example.com",
