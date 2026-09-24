@@ -26,7 +26,7 @@ export function FunnelChart({ role, leads, cases, nowMs, onOpenStage }: {
         { id: "cases" as const, label: "Cases", ids: funnel.caseIds, tone: "bg-cyan-400" },
         { id: "delivered" as const, label: "Delivered", ids: funnel.deliveredIds, tone: "bg-emerald-400" },
       ];
-  const maximum = stages[0].ids.length;
+  const maximum = Math.max(...stages.map((stage) => stage.ids.length));
 
   return <section className="min-w-0 border-t border-zinc-800 pt-5" aria-label="Conversion funnel">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -42,11 +42,11 @@ export function FunnelChart({ role, leads, cases, nowMs, onOpenStage }: {
       </button>)}
     </div>
     <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-zinc-800 pt-4 text-sm sm:grid-cols-3">
-      {role === "admin" ? <><p><span className="block text-zinc-400">Lead → Case</span><strong className="text-base text-white">{funnel.leadToCase}</strong></p><p><span className="block text-zinc-400">Lead → Delivered</span><strong className="text-base text-white">{funnel.leadToDelivered}</strong></p></> : null}
+      {role === "admin" ? <><p><span className="block text-zinc-400">Lead → Linked Case</span><strong className="text-base text-white">{funnel.leadToCase}</strong></p><p><span className="block text-zinc-400">Lead → Linked Delivery</span><strong className="text-base text-white">{funnel.leadToDelivered}</strong></p></> : null}
       <p><span className="block text-zinc-400">Case → Delivered</span><strong className="text-base text-white">{funnel.caseToDelivered}</strong></p>
       {role === "admin" ? <p><span className="block text-zinc-400">Leads without case</span><strong className="text-base text-white">{funnel.notConverted}</strong></p> : null}
       <p><span className="block text-zinc-400">Cases not delivered</span><strong className="text-base text-white">{funnel.notDelivered}</strong></p>
-      {role === "admin" ? <button type="button" className="text-left" onClick={() => onOpenStage("direct", funnel.directCaseIds, `Cases Created Directly · ${funnelPeriods.find((item) => item.id === period)?.label}`)}><span className="block text-zinc-400">Cases Created Directly</span><strong className="inline-flex items-center gap-1 text-base text-white">{funnel.directCaseIds.length}<ArrowRight className="h-3.5 w-3.5 text-zinc-500" aria-hidden="true" /></strong></button> : null}
+      {role === "admin" ? <button type="button" className="text-left" onClick={() => onOpenStage("direct", funnel.directCaseIds, `Cases Created Directly · ${funnelPeriods.find((item) => item.id === period)?.label}`)}><span className="block text-zinc-400">Cases Created Directly (included)</span><strong className="inline-flex items-center gap-1 text-base text-white">{funnel.directCaseIds.length}<ArrowRight className="h-3.5 w-3.5 text-zinc-500" aria-hidden="true" /></strong></button> : null}
     </div>
   </section>;
 }

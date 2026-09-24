@@ -15,7 +15,7 @@ test("Kuala Lumpur day boundaries and rolling periods are inclusive", () => {
   assert.deepEqual(funnelDayRange("90d", now), { start: "2026-06-28", end: "2026-09-25" });
 });
 
-test("admin tracks lead cohort through linked cases and separates direct cases", () => {
+test("admin includes direct cases in case and delivery totals without inflating lead conversion", () => {
   const result = buildFunnel("admin", [
     lead("a", "2026-09-24T16:00:00Z"),
     lead("b", "2026-09-25T04:00:00Z"),
@@ -26,14 +26,28 @@ test("admin tracks lead cohort through linked cases and separates direct cases",
     caseRecord("older-lead", "old", "2026-09-25T02:00:00Z", "car_delivery"),
   ], "today", now);
   assert.deepEqual(result.leadIds, ["a", "b"]);
-  assert.deepEqual(result.caseIds, ["linked"]);
-  assert.deepEqual(result.deliveredIds, ["linked"]);
+  assert.deepEqual(result.caseIds, ["linked", "direct"]);
+  assert.deepEqual(result.deliveredIds, ["linked", "direct"]);
   assert.deepEqual(result.directCaseIds, ["direct"]);
   assert.equal(result.leadToCase, "50%");
   assert.equal(result.caseToDelivered, "100%");
   assert.equal(result.leadToDelivered, "50%");
   assert.equal(result.notConverted, 1);
   assert.equal(result.notDelivered, 0);
+});
+
+test("admin counts direct cases even when there are no leads", () => {
+  const result = buildFunnel("admin", [], [
+    caseRecord("delivered", "", "2026-09-25T02:00:00Z", "car_delivery"),
+    caseRecord("pending", null, "2026-09-25T03:00:00Z"),
+    caseRecord("outside", "", "2026-09-24T15:59:59Z", "car_delivery"),
+  ], "today", now);
+  assert.deepEqual(result.caseIds, ["delivered", "pending"]);
+  assert.deepEqual(result.deliveredIds, ["delivered"]);
+  assert.equal(result.leadToCase, "—");
+  assert.equal(result.leadToDelivered, "—");
+  assert.equal(result.caseToDelivered, "50%");
+  assert.equal(result.notDelivered, 1);
 });
 
 test("sales manager sees only Kah Motor case cohort and current deliveries", () => {

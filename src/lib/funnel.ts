@@ -77,17 +77,19 @@ export function buildFunnel(
   const cohortLeads = leads.filter((lead) => inPeriod(lead.createdAt));
   const leadIds = new Set(cohortLeads.map((lead) => lead.id));
   const linkedCases = cases.filter((record) => record.leadId && leadIds.has(record.leadId));
-  const delivered = linkedCases.filter((record) => record.status === "car_delivery");
   const directCases = cases.filter((record) => !record.leadId && inPeriod(record.createdAt));
+  const funnelCases = [...linkedCases, ...directCases];
+  const delivered = funnelCases.filter((record) => record.status === "car_delivery");
+  const linkedDelivered = linkedCases.filter((record) => record.status === "car_delivery");
   return {
     leadIds: cohortLeads.map((lead) => lead.id),
-    caseIds: linkedCases.map((record) => record.id),
+    caseIds: funnelCases.map((record) => record.id),
     deliveredIds: delivered.map((record) => record.id),
     directCaseIds: directCases.map((record) => record.id),
     leadToCase: funnelRate(linkedCases.length, cohortLeads.length),
-    caseToDelivered: funnelRate(delivered.length, linkedCases.length),
-    leadToDelivered: funnelRate(delivered.length, cohortLeads.length),
+    caseToDelivered: funnelRate(delivered.length, funnelCases.length),
+    leadToDelivered: funnelRate(linkedDelivered.length, cohortLeads.length),
     notConverted: cohortLeads.length - linkedCases.length,
-    notDelivered: linkedCases.length - delivered.length,
+    notDelivered: funnelCases.length - delivered.length,
   };
 }
