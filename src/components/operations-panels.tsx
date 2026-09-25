@@ -15,7 +15,9 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { OwnerFilterSelect } from "@/components/owner-filter-select";
 import { formatLeadCopy } from "@/lib/lead-copy";
+import { matchesOwnerFilter, type OwnerFilter } from "@/lib/owner-filter";
 import { hideLeadPhoneInNote } from "../../supabase/functions/_shared/lead-contact";
 import {
   addLeadNote,
@@ -153,6 +155,7 @@ export function LeadPanel({
   const [inlineNote, setInlineNote] = useState("");
   const [pendingRejectId, setPendingRejectId] = useState("");
   const [filter, setFilter] = useState<LeadStatus | "all">(initialFilter);
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("all");
   const [view, setView] = useState<"all" | "followup">(initialView);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [saving, setSaving] = useState(false);
@@ -163,9 +166,11 @@ export function LeadPanel({
     const timer = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  useEffect(() => setView(initialView), [initialView]);
   const scopedLeads = cohortLeadIds ? leads.filter((lead) => cohortLeadIds.includes(lead.id)) : leads;
-  const dueLeads = scopedLeads.filter((lead) => isLeadFollowUpDue(lead, nowMs));
-  const shown = view === "followup" ? dueLeads : scopedLeads.filter((lead) => filter === "all" || lead.status === filter);
+  const ownerLeads = scopedLeads.filter((lead) => matchesOwnerFilter(lead, ownerFilter, teamMembers));
+  const dueLeads = ownerLeads.filter((lead) => isLeadFollowUpDue(lead, nowMs));
+  const shown = view === "followup" ? dueLeads : ownerLeads.filter((lead) => filter === "all" || lead.status === filter);
   const brands = [...new Set(catalog.map((item) => item.brand))];
   const models = draft ? catalog.filter((item) => item.brand === draft.carBrand) : [];
 
@@ -325,13 +330,16 @@ export function LeadPanel({
       {error ? <p className="rounded-md border border-red-800 bg-red-950/50 p-3 text-sm text-red-100" role="alert">{error}</p> : null}
       {cohortLeadIds ? <div className="flex items-center justify-between gap-3 border-b border-cyan-800 py-2 text-sm"><span className="text-cyan-200">{cohortLabel}</span><button type="button" className="secondary-button" onClick={onClearCohort}>All leads</button></div> : null}
       <div className="flex gap-2 border-b border-zinc-800 pb-2" role="tablist" aria-label="Lead views">
-        <button type="button" role="tab" aria-selected={view === "all"} className={view === "all" ? "primary-button" : "secondary-button"} onClick={() => { setView("all"); onViewChange?.("all"); }}>All Leads <span>{scopedLeads.length}</span></button>
+        <button type="button" role="tab" aria-selected={view === "all"} className={view === "all" ? "primary-button" : "secondary-button"} onClick={() => { setView("all"); onViewChange?.("all"); }}>All Leads <span>{ownerLeads.length}</span></button>
         <button type="button" role="tab" aria-selected={view === "followup"} className={view === "followup" ? "primary-button" : "secondary-button"} onClick={() => { setView("followup"); onViewChange?.("followup"); }}>Follow Up Due <span>{dueLeads.length}</span></button>
       </div>
-      {view === "all" ? <select className="field max-w-xs" value={filter} onChange={(event) => setFilter(event.target.value as LeadStatus | "all")} aria-label="Filter leads by status">
-        <option value="all">All statuses ({scopedLeads.length})</option>
-        {leadStatuses.map((status) => <option key={status} value={status}>{leadStatusLabels[status]} ({scopedLeads.filter((lead) => lead.status === status).length})</option>)}
-      </select> : null}
+      <div className="grid gap-2 sm:flex sm:flex-wrap">
+        {profile.role === "admin" ? <OwnerFilterSelect value={ownerFilter} onChange={setOwnerFilter} members={teamMembers} records={scopedLeads} className="sm:max-w-xs" /> : null}
+        {view === "all" ? <select className="field min-w-0 sm:max-w-xs" value={filter} onChange={(event) => setFilter(event.target.value as LeadStatus | "all")} aria-label="Filter leads by status">
+          <option value="all">All statuses ({ownerLeads.length})</option>
+          {leadStatuses.map((status) => <option key={status} value={status}>{leadStatusLabels[status]} ({ownerLeads.filter((lead) => lead.status === status).length})</option>)}
+        </select> : null}
+      </div>
       <div className="grid gap-2">
         {shown.map((lead) => (
           <article key={lead.id} className="surface-card min-w-0 p-4">
@@ -440,9 +448,11 @@ export function AppointmentPanel({
   const [localTime, setLocalTime] = useState(initialSubject ? appointmentInputTime(new Date(+new Date() + 25 * 60 * 60 * 1000).toISOString()) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("all");
   const now = Date.now();
-  const upcoming = appointments.filter((appointment) => appointment.status === "scheduled" && +new Date(appointment.startsAt) >= now);
-  const previous = appointments.filter((appointment) => !upcoming.includes(appointment));
+  const ownerAppointments = appointments.filter((appointment) => matchesOwnerFilter(appointment, ownerFilter, teamMembers));
+  const upcoming = ownerAppointments.filter((appointment) => appointment.status === "scheduled" && +new Date(appointment.startsAt) >= now);
+  const previous = ownerAppointments.filter((appointment) => !upcoming.includes(appointment));
   const canChooseSubject = (ownerId: string) => profile.role === "admin" || ownerId === profile.id;
   const availableCases = cases.filter((record) => canChooseSubject(record.ownerId));
   const availableLeads = leads.filter((lead) => canChooseSubject(lead.ownerId));
@@ -519,6 +529,7 @@ export function AppointmentPanel({
   return <section className="grid gap-4">
     <div className="flex items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">Appointment</h2><p className="text-sm text-zinc-400">{upcoming.length} upcoming</p></div><button className="primary-button" onClick={openNew}><Plus className="h-4 w-4" /> New Appointment</button></div>
     {error ? <p className="rounded-md border border-red-800 bg-red-950/50 p-3 text-sm text-red-100" role="alert">{error}</p> : null}
+    {profile.role === "admin" ? <OwnerFilterSelect value={ownerFilter} onChange={setOwnerFilter} members={teamMembers} records={appointments} className="sm:max-w-xs" /> : null}
     <h3 className="text-sm font-semibold text-zinc-300">Upcoming</h3>
     <div className="grid gap-2">{upcoming.length ? upcoming.map(appointmentItem) : <p className="surface-card p-6 text-sm text-zinc-400">No upcoming appointments.</p>}</div>
     {previous.length ? <><h3 className="mt-4 text-sm font-semibold text-zinc-400">Past and cancelled</h3><div className="grid gap-2">{previous.map(appointmentItem)}</div></> : null}
