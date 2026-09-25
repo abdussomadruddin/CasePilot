@@ -42,7 +42,7 @@ test("additional Pabbly fields are retained in the CasePilot note", () => {
   assert.equal(lead.note, "Interested in an SUV\nname: Aminah\nphone: +60123456789\nemail: aminah@example.com\njob status: Kerja Kerajaan\nnet salary: RM2500-RM3500\ncampaign name: September offers\nad name: SUV video");
 });
 
-test("missing source ID is accepted because each POST creates a lead", () => {
+test("missing source ID can use contact details for duplicate detection", () => {
   assert.equal(parseIngestPayload({ source_lead_id: "No Data", name: "Aminah", phone: "+60123456789" }).sourceLeadId, "");
 });
 

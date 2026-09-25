@@ -57,25 +57,28 @@ Deno.serve(async (request) => {
     .in("role", ["customer_service", "broker"]).maybeSingle();
   if (ownerError || !owner) return reply({ ok: false, error: "Assigned owner is unavailable." }, 409);
 
-  const { data: lead, error: insertError } = await supabase.from("leads").insert({
-    owner_id: connector.owner_id,
-    source: connector.source,
-    source_lead_id: payload.sourceLeadId || null,
-    source_detail: payload.sourceDetail || null,
-    source_note: payload.note || null,
-    connector_id: connector.id,
-    customer_name: payload.name || null,
-    customer_phone: payload.phone || null,
-    email: payload.email || null,
-    car_brand: payload.brand || null,
-    car_model: payload.model || null,
-    status: "new",
-    ...(payload.createdAt ? { created_at: payload.createdAt } : {}),
-  }).select("id").single();
+  const { data: lead, error: insertError } = await supabase.rpc("ingest_external_lead", {
+    p_connector_id: connector.id,
+    p_lead: {
+      source_lead_id: payload.sourceLeadId || null,
+      source_detail: payload.sourceDetail || null,
+      source_note: payload.note || null,
+      customer_name: payload.name || null,
+      customer_phone: payload.phone || null,
+      email: payload.email || null,
+      car_brand: payload.brand || null,
+      car_model: payload.model || null,
+      ...(payload.createdAt ? { created_at: payload.createdAt } : {}),
+    },
+  }).single();
 
-  if (insertError) {
-    console.error("Lead ingestion failed", insertError.code, insertError.message);
+  if (insertError || !lead) {
+    console.error("Lead ingestion failed", insertError?.code, insertError?.message);
     return reply({ ok: false, error: "Unable to save lead." }, 500);
+  }
+
+  if (lead.duplicate) {
+    return reply({ ok: true, duplicate: true, lead_id: lead.lead_id, owner_id: connector.owner_id, source: connector.source });
   }
 
   const { error: usageError } = await supabase.from("lead_connectors")
@@ -92,5 +95,5 @@ Deno.serve(async (request) => {
     console.warn("Unable to send new lead push", caught);
   }
 
-  return reply({ ok: true, lead_id: lead.id, owner_id: connector.owner_id, source: connector.source }, 201);
+  return reply({ ok: true, duplicate: false, lead_id: lead.lead_id, owner_id: connector.owner_id, source: connector.source }, 201);
 });

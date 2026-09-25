@@ -139,7 +139,7 @@ export function IntegrationPanel({ teamMembers, leads }: { teamMembers: Profile[
           <p><span className="text-zinc-500">Authentication</span><br />No Auth</p>
           <p><span className="text-zinc-500">Header</span><br /><code>X-CasePilot-Key</code></p>
         </div>
-        <details className="text-sm text-zinc-300"><summary className="cursor-pointer">Payload fields</summary><p className="mt-2 leading-6">Optional: <code>source_lead_id</code>, <code>name</code>, <code>phone</code>, <code>email</code>, <code>brand</code>, <code>model</code>, <code>note</code>, <code>campaign</code>, <code>created_at</code>. Labelled details in the note are detected automatically.</p></details>
+        <details className="text-sm text-zinc-300"><summary className="cursor-pointer">Payload fields</summary><p className="mt-2 leading-6">Optional: <code>source_lead_id</code>, <code>name</code>, <code>phone</code>, <code>email</code>, <code>brand</code>, <code>model</code>, <code>note</code>, <code>campaign</code>, <code>created_at</code>. Labelled details in the note are detected automatically. Duplicate contacts posted within 10 minutes of the last accepted lead are ignored; a later POST starts a new 10-minute window.</p></details>
       </section>
 
       <form className="grid gap-3 border-b border-zinc-800 pb-5" onSubmit={create}>
