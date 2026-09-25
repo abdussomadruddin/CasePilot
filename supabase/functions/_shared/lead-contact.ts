@@ -3,6 +3,7 @@ export type LeadContact = { name: string; phone: string; email: string };
 const missing = new Set(["", "null", "undefined", "no data", "n/a", "-"]);
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 const phonePattern = /(?:\+?60[ \t().-]*|0)1[0-9 \t().-]{7,18}\d/g;
+const negativeAnswerPattern = /^(?:tak(?:\s+ada|de|da)?|tidak|tiada|belum\s+ada|no(?:ne)?)(?:\b|$)/u;
 const formAnswers = new Set([
   "city sedan", "city hatchback", "city hacthback", "civic", "hr-v", "cr-v", "wr-v",
   "secepat yang boleh (asap)", "1-3 bulan", "3-6 bulan", "survey sahaja",
@@ -43,7 +44,7 @@ function validPhone(value: string) {
 function validName(value: string) {
   if (!/^[\p{L}][\p{L} .'’/-]*$/u.test(value)) return false;
   const normalized = normalizedAnswer(value);
-  return !formAnswers.has(normalized) && !vehicleAnswers.has(normalized);
+  return !negativeAnswerPattern.test(normalized) && !formAnswers.has(normalized) && !vehicleAnswers.has(normalized);
 }
 
 function nameFromUnlabelledLines(note: string) {

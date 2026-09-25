@@ -112,6 +112,16 @@ test("No, Tiada, dash and zero are not names when SARASVATI is present", () => {
   assert.equal(extractLeadContact("No\nTiada\n-\n0\n+60 14-807 8900").name, "");
 });
 
+test("negative commitment answers do not become a TikTok lead name", () => {
+  const note = "+60 17-305 3049\nsecepat yang boleh (ASAP)\nCity Sedan\nTak ada commitment\nKerja Swasta\nRM2500 - RM3500\nvenkatesh\nTiada (Nak Full Loan)\nvenkateshswag@gmail.com\nTiada";
+  for (const name of ["Tak ada commitment", "Tak ada komitmen", "tak ada", "takde", "tak", "takda", "tidak", "tiada", "belum ada komitmen", "no commitment", "none"]) {
+    assert.equal(parseIngestPayload({ name, note }).name, "venkatesh", name);
+  }
+  assert.equal(parseIngestPayload({ note }).name, "venkatesh");
+  assert.equal(extractLeadContact("Tak ada commitment\n+60 17-305 3049").name, "");
+  assert.equal(extractLeadContact("Noor\n+60 17-305 3049").name, "Noor");
+});
+
 test("misspelled City Hatchback answer does not become the customer name", () => {
   const note = "+60 18-364 5924\nTiada (Nak Full Loan)\nsyahsjinspire@gmail.com\nsecepat yang boleh (ASAP)\nTiada\nCity Hacthback\nSyahidan\nKerja Swasta\nRM3500 - RM5000\nNak trade-in";
   const lead = parseIngestPayload({ name: "City Hacthback", note });
