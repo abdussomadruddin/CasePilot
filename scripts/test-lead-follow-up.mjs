@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { availableLeadFollowUpStages, isLeadFollowUpDue } from "../src/lib/types.ts";
+import { availableLeadFollowUpStages, canRecordLeadFollowUp, isLeadFollowUpDue, maxLeadFollowUps } from "../src/lib/types.ts";
+
+test("follow-up action stops at six", () => {
+  assert.equal(maxLeadFollowUps, 6);
+  assert.equal(canRecordLeadFollowUp(5), true);
+  assert.equal(canRecordLeadFollowUp(6), false);
+  assert.equal(canRecordLeadFollowUp(7), false);
+});
 
 test("follow-up filter shows only stages containing callable leads", () => {
   const leads = [

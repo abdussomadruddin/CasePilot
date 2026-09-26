@@ -236,6 +236,12 @@ export function latestLeadNote(lead: LeadRecord) {
   return lead.notes[0]?.body || lead.sourceNote;
 }
 
+export const maxLeadFollowUps = 6;
+
+export function canRecordLeadFollowUp(count: number) {
+  return count < maxLeadFollowUps;
+}
+
 export function isLeadFollowUpDue(lead: LeadRecord, nowMs: number): boolean {
   return lead.status === "contacted" && Boolean(lead.followUpActivityAt)
     && nowMs - new Date(lead.followUpActivityAt).getTime() >= 86_400_000;
