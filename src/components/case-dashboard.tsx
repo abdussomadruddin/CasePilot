@@ -21,6 +21,7 @@ import {
   Menu,
   LogIn,
   LogOut,
+  KeyRound,
   MessageCircle,
   MoreVertical,
   Pencil,
@@ -34,6 +35,7 @@ import {
   Trash2,
   Upload,
   UserPlus,
+  UserRound,
   Users,
   X,
   type LucideIcon,
@@ -48,6 +50,8 @@ import {
   sessionExpiredMessage,
   signInWithPassword,
   signOut,
+  updateOwnName,
+  updateOwnPassword,
 } from "@/lib/auth";
 import { createEmptyCase } from "@/lib/case-factory";
 import { AppointmentPanel, LeadPanel } from "@/components/operations-panels";
@@ -65,6 +69,7 @@ import {
 } from "@/lib/case-store";
 import {
   enablePushNotifications,
+  disablePushNotificationsForCurrentDevice,
   getNotificationPermission,
   isNotificationSupported,
 } from "@/lib/notifications";
@@ -740,6 +745,10 @@ export function CaseDashboard() {
   const [pushStatus, setPushStatus] = useState<PushStatus>("default");
   const [pushMessage, setPushMessage] = useState("");
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [accountMode, setAccountMode] = useState<"name" | "password" | null>(null);
+  const [logoutStep, setLogoutStep] = useState<0 | 1 | 2>(0);
+  const [logoutError, setLogoutError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => setOwnerFilter("all"), [profile?.id]);
@@ -1234,6 +1243,7 @@ export function CaseDashboard() {
       setAuthLoading(true);
       setError("");
       const currentProfile = await signInWithPassword(login.email, login.password);
+      setLogin((current) => ({ ...current, password: "" }));
       setProfile(currentProfile);
 
       if (currentProfile) {
@@ -1260,21 +1270,76 @@ export function CaseDashboard() {
   }
 
   async function handleSignOut() {
+    if (!profile || logoutStep !== 2) return;
+    let pushDisabled = false;
     try {
       setIsHeaderMenuOpen(false);
       setAuthLoading(true);
+      setLogoutError("");
+      await disablePushNotificationsForCurrentDevice(profile.id);
+      pushDisabled = true;
       await signOut();
+      setLogoutStep(0);
+      setDrawerOpen(false);
+      setProfileMenuOpen(false);
+      setPushStatus("default");
       setProfile(null);
       setCases([]);
       setTeamMembers([]);
       setLeads([]);
       setAppointments([]);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to sign out.");
+      if (pushDisabled) {
+        try { await enablePushNotifications(profile); } catch { /* Keep the sign-out error visible. */ }
+      }
+      setLogoutError(caught instanceof Error ? caught.message : "Unable to sign out.");
     } finally {
       setAuthLoading(false);
     }
   }
+
+  async function saveOwnName(name: string) {
+    if (!profile) return;
+    const fullName = await updateOwnName(profile.id, name);
+    setProfile((current) => current ? { ...current, fullName } : current);
+    setTeamMembers((current) => current.map((member) => member.id === profile.id ? { ...member, fullName } : member));
+  }
+
+  async function saveOwnPassword(currentPassword: string, newPassword: string) {
+    if (!profile) return;
+    await updateOwnPassword(profile.email, currentPassword, newPassword);
+  }
+
+  function requestSignOut() {
+    setDrawerOpen(false);
+    setProfileMenuOpen(false);
+    setLogoutError("");
+    setLogoutStep(1);
+  }
+
+  const accountOverlays = profile ? (
+    <>
+      {accountMode ? (
+        <AccountSettingsDialog
+          key={accountMode}
+          mode={accountMode}
+          profile={profile}
+          onClose={() => setAccountMode(null)}
+          onSaveName={saveOwnName}
+          onSavePassword={saveOwnPassword}
+        />
+      ) : null}
+      {logoutStep ? (
+        <SignOutConfirmation
+          step={logoutStep}
+          saving={authLoading}
+          error={logoutError}
+          onCancel={() => setLogoutStep(0)}
+          onContinue={() => logoutStep === 1 ? setLogoutStep(2) : void handleSignOut()}
+        />
+      ) : null}
+    </>
+  ) : null;
 
   async function handleEnableAlerts() {
     if (!profile) return;
@@ -1651,13 +1716,11 @@ export function CaseDashboard() {
 
   if (pushStatus !== "enabled") {
     return (
-      <RequiredNotificationSetup
-        status={pushStatus}
-        message={pushMessage}
-        onEnable={handleEnableAlerts}
-        onSignOut={handleSignOut}
-        signingOut={authLoading}
-      />
+      <>
+        <RequiredNotificationSetup status={pushStatus} message={pushMessage} onEnable={handleEnableAlerts} onOpenMenu={() => setDrawerOpen(true)} />
+        {profile ? <AccountDrawer profile={profile} open={drawerOpen} profileMenuOpen={profileMenuOpen} onClose={() => { setDrawerOpen(false); setProfileMenuOpen(false); }} onToggleProfile={() => setProfileMenuOpen((current) => !current)} onEditName={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("name"); }} onEditPassword={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("password"); }} onSignOut={requestSignOut} /> : null}
+        {accountOverlays}
+      </>
     );
   }
 
@@ -1673,7 +1736,6 @@ export function CaseDashboard() {
             </div>
             <span className="mobile-header-icon text-emerald-300" role="status" aria-label="Alerts on" title="Alerts on"><Bell className="h-5 w-5" /></span>
             <button type="button" className="mobile-header-icon" onClick={refreshCases} disabled={loading} aria-label="Refresh" title="Refresh"><RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} /></button>
-            <button type="button" className="mobile-header-icon" onClick={handleSignOut} disabled={authLoading} aria-label="Sign out" title="Sign out"><LogOut className="h-5 w-5" /></button>
           </div>
           <div className="hidden flex-col gap-5 rounded-lg bg-gradient-to-r from-red-950/70 via-zinc-950 to-zinc-950 p-4 sm:flex sm:p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-4">
@@ -1743,19 +1805,6 @@ export function CaseDashboard() {
                           <Bell className="h-4 w-4 shrink-0" aria-hidden="true" />
                           <span className="truncate">Alerts on</span>
                         </div>
-                      ) : null}
-
-                      {profile ? (
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-zinc-100 transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={handleSignOut}
-                          disabled={authLoading}
-                          role="menuitem"
-                        >
-                          <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          <span className="truncate">Sign out</span>
-                        </button>
                       ) : null}
 
                       <button
@@ -2002,7 +2051,7 @@ export function CaseDashboard() {
           type="button"
           className="casepilot-drawer-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm"
           aria-label="Close navigation"
-          onClick={() => setDrawerOpen(false)}
+          onClick={() => { setDrawerOpen(false); setProfileMenuOpen(false); }}
         />
         <nav
           className="casepilot-drawer-panel absolute inset-y-0 left-0 flex w-[min(19rem,84vw)] flex-col gap-2 border-r border-zinc-700 bg-zinc-950 p-5 shadow-2xl"
@@ -2010,7 +2059,7 @@ export function CaseDashboard() {
         >
           <div className="mb-5 flex items-center justify-between">
             <span className="font-bold">CasePilot</span>
-            <button className="icon-button" type="button" onClick={() => setDrawerOpen(false)} aria-label="Close navigation"><X className="h-5 w-5" /></button>
+            <button className="icon-button" type="button" onClick={() => { setDrawerOpen(false); setProfileMenuOpen(false); }} aria-label="Close navigation"><X className="h-5 w-5" /></button>
           </div>
           {([
             { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -2039,6 +2088,7 @@ export function CaseDashboard() {
                   setAppSection("leads");
                 } else setAppSection(id as typeof appSection);
                 setDrawerOpen(false);
+                setProfileMenuOpen(false);
                 window.scrollTo({ top: 0 });
               }}
             >
@@ -2046,7 +2096,7 @@ export function CaseDashboard() {
             </button>
           );
           })}
-          <div className="mt-auto border-t border-zinc-800 pt-4 text-sm text-zinc-400">{profile?.fullName}</div>
+          {profile ? <ProfileMenu profile={profile} open={profileMenuOpen} onToggle={() => setProfileMenuOpen((current) => !current)} onEditName={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("name"); }} onEditPassword={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("password"); }} onSignOut={requestSignOut} /> : null}
         </nav>
       </div>
 
@@ -2083,6 +2133,7 @@ export function CaseDashboard() {
           onConfirm={confirmDelete}
         />
       ) : null}
+      {accountOverlays}
     </main>
   );
 }
@@ -2216,14 +2267,12 @@ function RequiredNotificationSetup({
   status,
   message,
   onEnable,
-  onSignOut,
-  signingOut,
+  onOpenMenu,
 }: {
   status: PushStatus;
   message: string;
   onEnable: () => void;
-  onSignOut: () => void;
-  signingOut: boolean;
+  onOpenMenu: () => void;
 }) {
   const blocked = status === "denied";
   const unsupported = status === "unsupported";
@@ -2237,6 +2286,7 @@ function RequiredNotificationSetup({
         aria-labelledby="notification-setup-title"
       >
         <div className="border-b border-zinc-800 bg-gradient-to-r from-red-950/70 to-zinc-950 p-5">
+          <button type="button" className="icon-button float-right" onClick={onOpenMenu} aria-label="Open navigation menu"><Menu className="h-5 w-5" /></button>
           <div className="grid h-12 w-12 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
             <Bell className="h-6 w-6" aria-hidden="true" />
           </div>
@@ -2274,19 +2324,96 @@ function RequiredNotificationSetup({
             <Bell className="h-4 w-4" aria-hidden="true" />
             {status === "loading" ? "Turning on notifications" : "Allow notifications"}
           </button>
-          <button
-            type="button"
-            className="secondary-button w-full"
-            onClick={onSignOut}
-            disabled={signingOut}
-          >
-            <LogOut className="h-4 w-4" aria-hidden="true" />
-            {signingOut ? "Signing out" : "Sign out"}
-          </button>
         </div>
       </section>
     </main>
   );
+}
+
+type ProfileMenuProps = {
+  profile: Profile;
+  open: boolean;
+  onToggle: () => void;
+  onEditName: () => void;
+  onEditPassword: () => void;
+  onSignOut: () => void;
+};
+
+function ProfileMenu({ profile, open, onToggle, onEditName, onEditPassword, onSignOut }: ProfileMenuProps) {
+  return (
+    <div className="mt-auto border-t border-zinc-800 pt-3">
+      <button type="button" className="flex w-full items-center gap-3 rounded-md px-2 py-3 text-left hover:bg-zinc-900" onClick={onToggle} aria-expanded={open} aria-label="Account options">
+        <UserRound className="h-6 w-6 shrink-0 text-zinc-300" />
+        <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{profile.fullName}</strong><span className="text-xs text-zinc-400">{formatRole(profile.role)}</span></span>
+        <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? <div className="grid gap-1 pt-1">
+        <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-zinc-200 hover:bg-zinc-900" onClick={onEditName}><Pencil className="h-4 w-4" />Edit name</button>
+        <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-zinc-200 hover:bg-zinc-900" onClick={onEditPassword}><KeyRound className="h-4 w-4" />Change password</button>
+        <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-red-200 hover:bg-red-950/50" onClick={onSignOut}><LogOut className="h-4 w-4" />Logout</button>
+      </div> : null}
+    </div>
+  );
+}
+
+function AccountDrawer({ profile, open, profileMenuOpen, onClose, onToggleProfile, onEditName, onEditPassword, onSignOut }: Omit<ProfileMenuProps, "onToggle"> & { profileMenuOpen: boolean; onClose: () => void; onToggleProfile: () => void }) {
+  return <div className={`casepilot-drawer fixed inset-0 z-50 ${open ? "casepilot-drawer-open" : ""}`} role={open ? "dialog" : undefined} aria-modal={open ? "true" : undefined} aria-label="Navigation" aria-hidden={!open} inert={!open}>
+    <button type="button" className="casepilot-drawer-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" aria-label="Close navigation" onClick={onClose} />
+    <nav className="casepilot-drawer-panel absolute inset-y-0 left-0 flex w-[min(19rem,84vw)] flex-col border-r border-zinc-700 bg-zinc-950 p-5 shadow-2xl" aria-label="Main navigation">
+      <div className="flex items-center justify-between"><strong>CasePilot</strong><button type="button" className="icon-button" onClick={onClose} aria-label="Close navigation"><X className="h-5 w-5" /></button></div>
+      <ProfileMenu profile={profile} open={profileMenuOpen} onToggle={onToggleProfile} onEditName={onEditName} onEditPassword={onEditPassword} onSignOut={onSignOut} />
+    </nav>
+  </div>;
+}
+
+function AccountSettingsDialog({ mode, profile, onClose, onSaveName, onSavePassword }: {
+  mode: "name" | "password";
+  profile: Profile;
+  onClose: () => void;
+  onSaveName: (name: string) => Promise<void>;
+  onSavePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+}) {
+  const [name, setName] = useState(profile.fullName);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    if (mode === "password" && newPassword !== confirmPassword) { setError("New passwords do not match."); return; }
+    setBusy(true);
+    try {
+      if (mode === "name") await onSaveName(name);
+      else await onSavePassword(currentPassword, newPassword);
+      onClose();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to save account details."); }
+    finally { setBusy(false); }
+  }
+  return createPortal(<div className="fixed inset-0 z-[70] grid place-items-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label={mode === "name" ? "Edit name" : "Change password"}>
+    <form onSubmit={submit} className="surface-card w-full max-w-md p-5">
+      <div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold">{mode === "name" ? "Edit name" : "Change password"}</h2><button type="button" className="icon-button" onClick={onClose} disabled={busy} aria-label="Close"><X className="h-5 w-5" /></button></div>
+      {mode === "name" ? <label className="mb-4 block text-sm">Name<input className="field mt-2 w-full" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" required maxLength={120} /></label> : <div className="grid gap-4">
+        <label className="text-sm">Current password<input className="field mt-2 w-full" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" required /></label>
+        <label className="text-sm">New password<input className="field mt-2 w-full" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" minLength={8} required /></label>
+        <label className="text-sm">Confirm new password<input className="field mt-2 w-full" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={8} required /></label>
+      </div>}
+      {error ? <p className="mt-4 text-sm text-red-300" role="alert">{error}</p> : null}
+      <div className="mt-6 flex gap-2"><button type="submit" className="primary-button" disabled={busy}><Save className="h-4 w-4" />{busy ? "Saving" : "Save"}</button><button type="button" className="secondary-button" onClick={onClose} disabled={busy}>Cancel</button></div>
+    </form>
+  </div>, document.body);
+}
+
+function SignOutConfirmation({ step, saving, error, onCancel, onContinue }: { step: 1 | 2; saving: boolean; error: string; onCancel: () => void; onContinue: () => void }) {
+  return createPortal(<div className="fixed inset-0 z-[70] grid place-items-center bg-black/75 p-4" role="alertdialog" aria-modal="true" aria-labelledby="logout-title" aria-describedby="logout-warning">
+    <div className="surface-card w-full max-w-md p-5">
+      <h2 id="logout-title" className="text-lg font-semibold">{step === 1 ? "Logout?" : "Final confirmation"}</h2>
+      <p id="logout-warning" className="mt-3 text-sm leading-6 text-zinc-300">Jika logout, anda tidak akan menerima lead baru pada peranti ini. {step === 2 ? "Adakah anda pasti mahu logout?" : ""}</p>
+      {error ? <p className="mt-3 text-sm text-red-300" role="alert">{error}</p> : null}
+      <div className="mt-6 flex gap-2"><button type="button" className="secondary-button" onClick={onCancel} disabled={saving}>Cancel</button><button type="button" className="primary-button" onClick={onContinue} disabled={saving}><LogOut className="h-4 w-4" />{saving ? "Logging out" : "Logout"}</button></div>
+    </div>
+  </div>, document.body);
 }
 
 function DeleteCaseConfirmation({

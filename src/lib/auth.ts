@@ -111,3 +111,26 @@ export async function signOut() {
   const { error } = await supabase.auth.signOut({ scope: "local" });
   if (error) throw error;
 }
+
+export async function updateOwnName(profileId: string, fullName: string) {
+  const name = fullName.trim();
+  if (!name) throw new Error("Name is required.");
+  const { data, error } = await getSupabaseClient()
+    .from("profiles")
+    .update({ full_name: name })
+    .eq("id", profileId)
+    .select("full_name")
+    .single();
+  if (error) throw error;
+  return data.full_name as string;
+}
+
+export async function updateOwnPassword(email: string, currentPassword: string, newPassword: string) {
+  if (newPassword.length < 8) throw new Error("New password must be at least 8 characters.");
+  if (currentPassword === newPassword) throw new Error("Choose a different password.");
+  const supabase = getSupabaseClient();
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+  if (signInError) throw new Error("Current password is incorrect.");
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}

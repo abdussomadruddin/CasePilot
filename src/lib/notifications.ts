@@ -105,6 +105,19 @@ export async function enablePushNotifications(profile: Profile) {
   return subscription;
 }
 
+export async function disablePushNotificationsForCurrentDevice(userId: string) {
+  if (!isNotificationSupported()) return;
+  const registration = await navigator.serviceWorker.getRegistration();
+  const subscription = await registration?.pushManager.getSubscription();
+  if (!subscription) return;
+  const { error } = await getSupabaseClient()
+    .from("push_subscriptions")
+    .update({ active: false })
+    .eq("user_id", userId)
+    .eq("endpoint", subscription.endpoint);
+  if (error) throw error;
+}
+
 export async function notifyCaseStatusChange(input: StatusNotificationInput) {
   if (!input.roles.length && !input.userIds?.length) return true;
 
