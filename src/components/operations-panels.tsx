@@ -33,6 +33,7 @@ import {
   leadSourceLabels,
   latestLeadNote,
   isLeadFollowUpDue,
+  availableLeadFollowUpStages,
   roleLabels,
   type AppointmentKind,
   type AppointmentRecord,
@@ -162,6 +163,7 @@ export function LeadPanel({
   const [inlineNote, setInlineNote] = useState("");
   const [pendingRejectId, setPendingRejectId] = useState("");
   const [filter, setFilter] = useState<LeadStatus | "all">(initialFilter);
+  const [followUpFilter, setFollowUpFilter] = useState<number | "all">("all");
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("all");
   const [view, setView] = useState<"all" | "followup">(initialView);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -179,7 +181,16 @@ export function LeadPanel({
   const scopedLeads = cohortLeadIds ? leads.filter((lead) => cohortLeadIds.includes(lead.id)) : leads;
   const ownerLeads = scopedLeads.filter((lead) => matchesOwnerFilter(lead, ownerFilter, teamMembers));
   const dueLeads = ownerLeads.filter((lead) => isLeadFollowUpDue(lead, nowMs));
-  const shown = view === "followup" ? dueLeads : ownerLeads.filter((lead) => filter === "all" || lead.status === filter);
+  const statusLeads = ownerLeads.filter((lead) => filter === "all" || lead.status === filter);
+  const followUpStages = availableLeadFollowUpStages(statusLeads.map((lead) => ({
+    phoneRevealedAt: lead.phoneRevealedAt,
+    followUpCount: Math.max(lead.followUpCount, followUpCounts[lead.id] ?? 0),
+  })));
+  const activeFollowUpFilter = followUpFilter === "all" || followUpStages.some((stage) => stage.count === followUpFilter) ? followUpFilter : "all";
+  const shown = view === "followup" ? dueLeads : statusLeads.filter((lead) => activeFollowUpFilter === "all" || (lead.phoneRevealedAt && Math.max(lead.followUpCount, followUpCounts[lead.id] ?? 0) === activeFollowUpFilter));
+  useEffect(() => {
+    if (followUpFilter !== activeFollowUpFilter) setFollowUpFilter(activeFollowUpFilter);
+  }, [followUpFilter, activeFollowUpFilter]);
   const brands = [...new Set(catalog.map((item) => item.brand))];
   const models = draft ? catalog.filter((item) => item.brand === draft.carBrand) : [];
 
@@ -362,6 +373,10 @@ export function LeadPanel({
         {view === "all" ? <select className="field min-w-0 sm:max-w-xs" value={filter} onChange={(event) => setFilter(event.target.value as LeadStatus | "all")} aria-label="Filter leads by status">
           <option value="all">All statuses ({ownerLeads.length})</option>
           {leadStatuses.map((status) => <option key={status} value={status}>{leadStatusLabels[status]} ({ownerLeads.filter((lead) => lead.status === status).length})</option>)}
+        </select> : null}
+        {view === "all" && followUpStages.length ? <select className="field min-w-0 sm:max-w-xs" value={activeFollowUpFilter} onChange={(event) => setFollowUpFilter(event.target.value === "all" ? "all" : Number(event.target.value))} aria-label="Filter leads by follow-up count">
+          <option value="all">All follow-ups</option>
+          {followUpStages.map(({ count, total }) => <option key={count} value={count}>{followUpLabel(count)} ({total})</option>)}
         </select> : null}
       </div>
       <div className="grid gap-2">

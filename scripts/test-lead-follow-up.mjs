@@ -1,6 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isLeadFollowUpDue } from "../src/lib/types.ts";
+import { availableLeadFollowUpStages, isLeadFollowUpDue } from "../src/lib/types.ts";
+
+test("follow-up filter shows only stages containing callable leads", () => {
+  const leads = [
+    { phoneRevealedAt: "", followUpCount: 0 },
+    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 0 },
+    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 1 },
+    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 1 },
+    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 3 },
+  ];
+  assert.deepEqual(availableLeadFollowUpStages(leads), [
+    { count: 0, total: 1 },
+    { count: 1, total: 2 },
+    { count: 3, total: 1 },
+  ]);
+  assert.deepEqual(availableLeadFollowUpStages(leads.slice(0, 1)), []);
+});
 import { groupLeadReminders, reminderMessage, reminderTypeAt } from "../supabase/functions/lead-follow-up/reminders.ts";
 
 const now = Date.parse("2026-09-24T01:00:00.000Z");

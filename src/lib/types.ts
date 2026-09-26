@@ -241,6 +241,15 @@ export function isLeadFollowUpDue(lead: LeadRecord, nowMs: number): boolean {
     && nowMs - new Date(lead.followUpActivityAt).getTime() >= 86_400_000;
 }
 
+export function availableLeadFollowUpStages(leads: Pick<LeadRecord, "phoneRevealedAt" | "followUpCount">[]) {
+  const totals = new Map<number, number>();
+  for (const lead of leads) {
+    if (!lead.phoneRevealedAt) continue;
+    totals.set(lead.followUpCount, (totals.get(lead.followUpCount) || 0) + 1);
+  }
+  return [...totals].sort(([a], [b]) => a - b).map(([count, total]) => ({ count, total }));
+}
+
 export type LeadNote = {
   id: string;
   authorId: string;
