@@ -2342,10 +2342,9 @@ type ProfileMenuProps = {
 function ProfileMenu({ profile, open, onToggle, onEditName, onEditPassword, onSignOut }: ProfileMenuProps) {
   return (
     <div className="mt-auto border-t border-zinc-800 pt-3">
-      <button type="button" className="flex w-full items-center gap-3 rounded-md px-2 py-3 text-left hover:bg-zinc-900" onClick={onToggle} aria-expanded={open} aria-label="Account options">
+      <button type="button" className="flex w-full items-center gap-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={onToggle} aria-expanded={open} aria-label="Account options">
         <UserRound className="h-6 w-6 shrink-0 text-zinc-300" />
         <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{profile.fullName}</strong><span className="text-xs text-zinc-400">{formatRole(profile.role)}</span></span>
-        <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open ? <div className="grid gap-1 pt-1">
         <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-zinc-200 hover:bg-zinc-900" onClick={onEditName}><Pencil className="h-4 w-4" />Edit name</button>
