@@ -20,6 +20,7 @@ type LeadRow = {
   customer_phone: string | null;
   phone_revealed_at: string | null;
   follow_up_activity_at: string | null;
+  follow_up_count: number;
   email: string | null;
   car_brand: string | null;
   car_model: string | null;
@@ -36,6 +37,12 @@ type LeadRow = {
     id: string;
     actor_id: string;
     status: LeadStatus;
+    created_at: string;
+  }>;
+  lead_follow_up_actions?: Array<{
+    id: string;
+    actor_id: string;
+    follow_up_number: number;
     created_at: string;
   }>;
 };
@@ -69,6 +76,7 @@ function mapLead(row: LeadRow): LeadRecord {
     customerPhone: row.customer_phone || "",
     phoneRevealedAt: row.phone_revealed_at || "",
     followUpActivityAt: row.follow_up_activity_at || "",
+    followUpCount: row.follow_up_count || 0,
     email: row.email || "",
     carBrand: row.car_brand || "",
     carModel: row.car_model || "",
@@ -91,13 +99,21 @@ function mapLead(row: LeadRow): LeadRecord {
         createdAt: event.created_at,
       }))
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)),
+    followUps: (row.lead_follow_up_actions || [])
+      .map((action) => ({
+        id: action.id,
+        actorId: action.actor_id,
+        number: action.follow_up_number,
+        createdAt: action.created_at,
+      }))
+      .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)),
   };
 }
 
 export async function loadLeads(): Promise<LeadRecord[]> {
   const { data, error } = await getSupabaseClient()
     .from("leads")
-    .select("*,lead_notes(*),lead_events(*)")
+    .select("*,lead_notes(*),lead_events(*),lead_follow_up_actions(*)")
     .is("deleted_at", null)
     .order("updated_at", { ascending: false });
   if (error) throw error;
@@ -154,6 +170,13 @@ export async function addLeadNote(leadId: string, actorId: string, body: string)
     body: body.trim(),
   });
   if (error) throw error;
+}
+
+export async function recordLeadFollowUp(leadId: string): Promise<number> {
+  const { data, error } = await getSupabaseClient().rpc("record_lead_follow_up", { p_lead_id: leadId });
+  if (error) throw error;
+  if (typeof data !== "number" || data < 1) throw new Error("Follow-up was not saved. Please try again.");
+  return data;
 }
 
 export async function revealLeadPhone(leadId: string, actorId: string) {

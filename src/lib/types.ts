@@ -214,6 +214,7 @@ export type LeadRecord = {
   customerPhone: string;
   phoneRevealedAt: string;
   followUpActivityAt: string;
+  followUpCount: number;
   email: string;
   carBrand: string;
   carModel: string;
@@ -222,6 +223,7 @@ export type LeadRecord = {
   updatedAt: string;
   notes: LeadNote[];
   events: LeadEvent[];
+  followUps: LeadFollowUpAction[];
 };
 
 export const leadSourceLabels: Record<LeadRecord["source"], string> = {
@@ -250,6 +252,13 @@ export type LeadEvent = {
   id: string;
   actorId: string;
   status: LeadStatus;
+  createdAt: string;
+};
+
+export type LeadFollowUpAction = {
+  id: string;
+  actorId: string;
+  number: number;
   createdAt: string;
 };
 

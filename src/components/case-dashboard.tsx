@@ -992,7 +992,7 @@ export function CaseDashboard() {
       channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => { void refreshCasesNow(); });
     }
     if (canUseOperations) {
-      for (const table of ["leads", "lead_notes", "lead_events"]) {
+      for (const table of ["leads", "lead_notes", "lead_events", "lead_follow_up_actions"]) {
         channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => { void refreshLeadsNow(); });
       }
       channel = channel.on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => { void refreshAppointmentsNow(); });

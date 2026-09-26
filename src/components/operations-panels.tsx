@@ -25,6 +25,7 @@ import {
   saveAppointment,
   saveLead,
   revealLeadPhone,
+  recordLeadFollowUp,
 } from "@/lib/operations-store";
 import {
   leadStatuses,
@@ -74,6 +75,10 @@ function leadName(lead: LeadRecord) {
   return lead.customerName || "Unnamed lead";
 }
 
+function followUpLabel(count: number) {
+  return count > 0 ? `Follow Up ${count}` : "Follow Up";
+}
+
 function Modal({
   title,
   onClose,
@@ -110,6 +115,7 @@ function newLead(profile: Profile): LeadRecord {
     customerPhone: "",
     phoneRevealedAt: "",
     followUpActivityAt: "",
+    followUpCount: 0,
     email: "",
     carBrand: "",
     carModel: "",
@@ -118,6 +124,7 @@ function newLead(profile: Profile): LeadRecord {
     updatedAt: now,
     notes: [],
     events: [],
+    followUps: [],
   };
 }
 
@@ -160,6 +167,8 @@ export function LeadPanel({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [saving, setSaving] = useState(false);
   const [copiedId, setCopiedId] = useState("");
+  const [followingUpId, setFollowingUpId] = useState("");
+  const [followUpCounts, setFollowUpCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState("");
   const selected = leads.find((lead) => lead.id === selectedId);
   useEffect(() => {
@@ -288,6 +297,21 @@ export function LeadPanel({
     }
   }
 
+  async function followUpLead(lead: LeadRecord) {
+    if (!lead.phoneRevealedAt || !lead.customerPhone || followingUpId) return;
+    setFollowingUpId(lead.id);
+    setError("");
+    try {
+      const count = await recordLeadFollowUp(lead.id);
+      setFollowUpCounts((current) => ({ ...current, [lead.id]: count }));
+      window.location.assign(`https://wa.me/${lead.customerPhone.replace(/\D/g, "")}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to record follow-up.");
+    } finally {
+      setFollowingUpId("");
+    }
+  }
+
   async function copyLead(lead: LeadRecord) {
     try {
       const details = formatLeadCopy(lead, Boolean(lead.phoneRevealedAt));
@@ -360,6 +384,7 @@ export function LeadPanel({
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
               {lead.customerPhone ? <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" disabled={saving} onClick={() => void callLead(lead)}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(lead); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
               {lead.phoneRevealedAt ? <a className="secondary-button text-emerald-200" href={`https://wa.me/${lead.customerPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /> WhatsApp</a> : null}
+              {lead.phoneRevealedAt ? <button className="secondary-button" type="button" disabled={Boolean(followingUpId)} onClick={() => void followUpLead(lead)}><CalendarClock className="h-4 w-4" /> {followUpLabel(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount))}</button> : null}
               {lead.phoneRevealedAt ? <select className="field min-w-0 flex-1 basis-36" aria-label={`Status for ${lead.customerName}`} value={lead.status} disabled={saving} onChange={(event) => void updateStatus(lead, event.target.value as LeadStatus, inlineNoteId === lead.id ? inlineNote : "")}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || lead.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select> : null}
               {lead.phoneRevealedAt ? <button className="icon-button" type="button" aria-label={`Add note for ${lead.customerName}`} title="Add note" onClick={() => { setError(""); setInlineNoteId(inlineNoteId === lead.id ? "" : lead.id); setInlineNote(""); setPendingRejectId(""); }}><Pencil className="h-4 w-4" /></button> : null}
             </div>
@@ -376,12 +401,14 @@ export function LeadPanel({
             <div className="grid gap-2 sm:grid-cols-2">
               {selected.customerPhone ? <button className={selected.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white"} type="button" onClick={() => void callLead(selected)}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
               {selected.phoneRevealedAt ? <a className="secondary-button text-emerald-200" href={`https://wa.me/${selected.customerPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /> WhatsApp</a> : null}
+              {selected.phoneRevealedAt ? <button className="secondary-button" type="button" disabled={Boolean(followingUpId)} onClick={() => void followUpLead(selected)}><CalendarClock className="h-4 w-4" /> {followUpLabel(Math.max(followUpCounts[selected.id] ?? 0, selected.followUpCount))}</button> : null}
               {selected.phoneRevealedAt ? <select className="field" aria-label="Lead status" value={selected.status} disabled={saving} onChange={(event) => void updateStatus(selected, event.target.value as LeadStatus)}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || selected.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select> : null}
             </div>
             {selected.phoneRevealedAt ? <form className="grid gap-2" onSubmit={submitNote}><label className="text-sm font-medium">Note</label><textarea className="field min-h-20" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add follow-up note or rejection reason" /><button className="secondary-button w-fit" disabled={saving || !note.trim()}><Save className="h-4 w-4" /> Save note</button></form> : null}
-            {selected.notes.length || selected.events.length ? <div className="grid max-h-48 gap-2 overflow-y-auto border-t border-zinc-800 pt-3 text-sm"><p className="font-semibold">History</p>{[
+            {selected.notes.length || selected.events.length || selected.followUps.length ? <div className="grid max-h-48 gap-2 overflow-y-auto border-t border-zinc-800 pt-3 text-sm"><p className="font-semibold">History</p>{[
               ...selected.notes.map((entry) => ({ id: entry.id, time: entry.createdAt, text: hideLeadPhoneInNote(entry.body, Boolean(selected.phoneRevealedAt)) })),
               ...selected.events.map((entry) => ({ id: entry.id, time: entry.createdAt, text: `Status: ${leadStatusLabels[entry.status]}` })),
+              ...selected.followUps.map((entry) => ({ id: entry.id, time: entry.createdAt, text: `Follow Up ${entry.number}` })),
             ].sort((a, b) => +new Date(b.time) - +new Date(a.time)).map((entry) => <p key={entry.id} className="rounded-md bg-zinc-900 p-2"><span className="text-xs text-zinc-500">{displayTime(entry.time)}</span><br />{entry.text}</p>)}</div> : null}
             <div className="grid gap-2 border-t border-zinc-800 pt-3 sm:grid-cols-2">
               {selected.phoneRevealedAt ? <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Edit</button> : null}
