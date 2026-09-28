@@ -136,13 +136,6 @@ type TabDefinition = {
 
 const uploadTimeoutMs = 5 * 60 * 1000;
 
-type WhatsAppRecipient = {
-  id: string;
-  name: string;
-  phone: string;
-  subtitle: string;
-};
-
 type PushStatus = "unsupported" | "default" | "denied" | "enabled" | "loading" | "error";
 
 type InstallPromptEvent = Event & {
@@ -661,8 +654,8 @@ function whatsappPhone(phone: string) {
   return digits;
 }
 
-function buildWhatsAppUrl(phone: string, message: string) {
-  return `https://wa.me/${whatsappPhone(phone)}?text=${encodeURIComponent(message)}`;
+function buildWhatsAppUrl(phone: string) {
+  return `https://wa.me/${whatsappPhone(phone)}`;
 }
 
 function buildTelUrl(phone: string) {
@@ -695,16 +688,6 @@ function previousCaseMonth(value: string) {
   const previousYear = month === 1 ? year - 1 : year;
   const previousMonth = month === 1 ? 12 : month - 1;
   return `${previousYear}-${String(previousMonth).padStart(2, "0")}`;
-}
-
-function defaultWhatsAppMessage(record: CaseRecord) {
-  return [
-    `Hi, sharing case update for ${record.customerName}.`,
-    "",
-    `Car: ${record.carModel} ${record.carVariant}`,
-    `Status: ${statusLabels[record.status]}`,
-    `Remark: ${getLatestRemark(record)}`,
-  ].join("\n");
 }
 
 export function CaseDashboard() {
@@ -2858,8 +2841,6 @@ function CaseCard({
   const allowDelete = canDeleteCase(role);
   const showContactLists = role !== "sales_manager";
   const [isExpanded, setIsExpanded] = useState(false);
-  const [whatsAppRecipient, setWhatsAppRecipient] =
-    useState<WhatsAppRecipient | null>(null);
   const hasCustomerPhone = Boolean(record.customerPhone.trim());
   const activeTeamMembers = showContactLists
     ? teamMembers.filter((member) => member.active !== false && member.phone?.trim())
@@ -2867,13 +2848,6 @@ function CaseCard({
   const visibleTimelineActivities = record.activities
     .filter(isVisibleTimelineActivity)
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-  const customerRecipient: WhatsAppRecipient = {
-    id: `${record.id}-customer`,
-    name: record.customerName || "Customer",
-    phone: record.customerPhone,
-    subtitle: "Customer",
-  };
-
   function toggleExpanded() {
     setIsExpanded((current) => !current);
   }
@@ -2932,16 +2906,15 @@ function CaseCard({
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
         >
-          <button
-            type="button"
-            className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/15 px-2.5 text-xs font-semibold text-emerald-100 shadow-sm transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto lg:min-h-9"
-            disabled={!hasCustomerPhone}
-            onClick={() => setWhatsAppRecipient(customerRecipient)}
+          <a
+            className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/15 px-2.5 text-xs font-semibold text-emerald-100 shadow-sm transition hover:bg-emerald-500/25 lg:w-auto lg:min-h-9 ${hasCustomerPhone ? "" : "pointer-events-none opacity-50"}`}
+            href={hasCustomerPhone ? buildWhatsAppUrl(record.customerPhone) : undefined}
+            aria-disabled={!hasCustomerPhone}
             aria-label={`WhatsApp ${record.customerName || "customer"}`}
           >
             <MessageCircle className="h-4 w-4" aria-hidden="true" />
             WhatsApp
-          </button>
+          </a>
           <a
             className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold shadow-sm transition lg:w-auto lg:min-h-9 ${
               hasCustomerPhone
@@ -3134,21 +3107,13 @@ function CaseCard({
                               </p>
                             </div>
                             {bank.bankerPhone.trim() ? (
-                              <button
-                                type="button"
+                              <a
                                 className="icon-button h-8 w-8 text-emerald-300"
-                                onClick={() =>
-                                  setWhatsAppRecipient({
-                                    id: bank.id,
-                                    name: bank.bankerName || bank.bankName,
-                                    phone: bank.bankerPhone,
-                                    subtitle: bank.bankName,
-                                  })
-                                }
+                                href={buildWhatsAppUrl(bank.bankerPhone)}
                                 aria-label={`WhatsApp ${bank.bankerName || bank.bankName}`}
                               >
                                 <MessageCircle className="h-4 w-4" aria-hidden="true" />
-                              </button>
+                              </a>
                             ) : null}
                           </li>
                         ))}
@@ -3176,21 +3141,13 @@ function CaseCard({
                                   {roleLabels[member.role]} · {member.phone}
                                 </p>
                               </div>
-                              <button
-                                type="button"
+                              <a
                                 className="icon-button h-8 w-8 text-emerald-300"
-                                onClick={() =>
-                                  setWhatsAppRecipient({
-                                    id: member.id,
-                                    name: member.fullName,
-                                    phone: member.phone || "",
-                                    subtitle: roleLabels[member.role],
-                                  })
-                                }
+                                href={buildWhatsAppUrl(member.phone || "")}
                                 aria-label={`WhatsApp ${member.fullName}`}
                               >
                                 <MessageCircle className="h-4 w-4" aria-hidden="true" />
-                              </button>
+                              </a>
                             </li>
                           ))}
                         </ul>
@@ -3237,13 +3194,6 @@ function CaseCard({
         </>
       ) : null}
 
-      {whatsAppRecipient ? (
-        <WhatsAppComposer
-          record={record}
-          recipient={whatsAppRecipient}
-          onClose={() => setWhatsAppRecipient(null)}
-        />
-      ) : null}
     </article>
   );
 }
@@ -3258,138 +3208,6 @@ function CompactInfoItem({ label, value }: { label: string; value: string }) {
         {value || "None"}
       </dd>
     </div>
-  );
-}
-
-function WhatsAppComposer({
-  record,
-  recipient,
-  onClose,
-}: {
-  record: CaseRecord;
-  recipient: WhatsAppRecipient;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, []);
-
-  const caseFolderUrl = getCaseDriveFolderUrl(record.documents);
-  const [message, setMessage] = useState(defaultWhatsAppMessage(record));
-  const [isPreparingWhatsApp, setIsPreparingWhatsApp] = useState(false);
-  const canSend = whatsappPhone(recipient.phone) && message.trim();
-
-  async function messageWithCaseFolder() {
-    const trimmed = message.trim();
-    if (!record.documents.length) return trimmed;
-    const documentLinks = caseFolderUrl
-      ? [`Case Folder : ${caseFolderUrl}`]
-      : record.documents.map((document) => `${document.name}: ${document.url}`);
-    return [trimmed, "", "Documents:", "", ...documentLinks].join("\n");
-  }
-
-  async function sendWhatsApp() {
-    if (!canSend) return;
-
-    const pendingWindow = window.open("about:blank", "_blank");
-    if (pendingWindow) {
-      pendingWindow.opener = null;
-    }
-
-    try {
-      setIsPreparingWhatsApp(true);
-      const whatsAppUrl = buildWhatsAppUrl(recipient.phone, await messageWithCaseFolder());
-
-      if (pendingWindow) {
-        pendingWindow.location.href = whatsAppUrl;
-      } else {
-        window.location.href = whatsAppUrl;
-      }
-
-      onClose();
-    } catch {
-      pendingWindow?.close();
-    } finally {
-      setIsPreparingWhatsApp(false);
-    }
-  }
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/80 p-3 backdrop-blur-sm sm:p-4">
-      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-lift sm:max-w-2xl">
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-800 bg-gradient-to-r from-red-950/60 via-zinc-950 to-zinc-950 p-3 sm:p-4">
-          <div className="min-w-0">
-            <h2 className="line-clamp-2 break-words text-lg font-semibold text-ink">
-              WhatsApp {recipient.name}
-            </h2>
-            <p className="break-words text-sm text-muted">
-              {recipient.subtitle} · {recipient.phone}
-            </p>
-          </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close">
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="grid flex-1 gap-3 overflow-y-auto p-3 sm:gap-4 sm:p-4">
-          <Field label="Message">
-            <textarea
-              className="field min-h-28 resize-y sm:min-h-36"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-            />
-          </Field>
-
-          <section className="grid gap-2 rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-muted" aria-hidden="true" />
-              <h3 className="text-sm font-semibold text-ink">Documents to forward</h3>
-            </div>
-
-            {caseFolderUrl ? (
-              <a
-                className="touch-tile flex min-h-12 items-center justify-between gap-3 rounded-md bg-zinc-950 px-3 py-2 text-sm ring-1 ring-zinc-800 transition hover:bg-zinc-900"
-                href={caseFolderUrl}
-                target="_blank"
-                rel="noopener"
-              >
-                <span className="min-w-0">
-                  <span className="block font-medium text-ink">Case folder</span>
-                  <span className="block text-xs text-muted">
-                    Google Drive · {record.documents.length} file
-                    {record.documents.length === 1 ? "" : "s"}
-                  </span>
-                </span>
-                <ExternalLink className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
-              </a>
-            ) : (
-              <p className="text-sm text-muted">{record.documents.length ? "Individual document links will be included." : "No documents available."}</p>
-            )}
-          </section>
-        </div>
-
-        <div className="grid shrink-0 gap-2 border-t border-zinc-800 bg-zinc-950 p-3 sm:flex sm:flex-row-reverse sm:justify-start sm:p-4">
-          <button
-            type="button"
-            className="primary-button bg-emerald-600 hover:bg-emerald-700"
-            onClick={sendWhatsApp}
-            disabled={!canSend || isPreparingWhatsApp}
-          >
-            <MessageCircle className="h-4 w-4" aria-hidden="true" />
-            {isPreparingWhatsApp ? "Preparing link" : "Send WhatsApp"}
-          </button>
-          <button type="button" className="secondary-button" onClick={onClose}>
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
   );
 }
 
