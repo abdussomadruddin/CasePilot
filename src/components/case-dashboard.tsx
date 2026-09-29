@@ -1167,13 +1167,13 @@ export function CaseDashboard() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function openCaseMetric(tab: "potential" | "delivered" | "cancelled_rejected") {
+  function openCaseMetric(tab: "potential" | "delivered" | "cancelled_rejected", month = "") {
     setFunnelSelection(null);
     setActiveTab(tab);
     setStatusFilter("all");
     setDealerFilter("all");
     setOwnerFilter("all");
-    setMonthFilter("");
+    setMonthFilter(month);
     setAppSection("cases");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1186,6 +1186,11 @@ export function CaseDashboard() {
           )
         : visibleCases,
     [monthFilter, monthFilterActive, visibleCases],
+  );
+
+  const dashboardMonthCases = useMemo(
+    () => visibleCases.filter((record) => caseMonthKey(record.createdAt) === currentMonth),
+    [currentMonth, visibleCases],
   );
 
   const metrics = useMemo(
@@ -1850,7 +1855,6 @@ export function CaseDashboard() {
         {appSection === "dashboard" ? (
           <section className="grid gap-4">
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-              <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("all"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(""); setAppSection("cases"); }}><FolderKanban className="mb-3 h-5 w-5 text-red-400" /><span className="block text-sm text-zinc-400">Cases</span><strong className="text-2xl">{visibleCases.length}</strong></button>
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("this_month"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(currentMonth); setAppSection("cases"); }}><CalendarDays className="mb-3 h-5 w-5 text-violet-400" /><span className="block text-sm text-zinc-400">This Month Cases</span><strong className="text-2xl">{metrics.this_month}</strong></button>
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("last_month"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(lastMonth); setAppSection("cases"); }}><CalendarRange className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Last Month Cases</span><strong className="text-2xl">{metrics.last_month}</strong></button>
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("tasks"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(""); setAppSection("cases"); }}><ListChecks className="mb-3 h-5 w-5 text-blue-400" /><span className="block text-sm text-zinc-400">My Tasks</span><strong className="text-2xl">{visibleCases.filter((record) => isMyTask(record, role, profile?.id)).length}</strong></button>
@@ -1859,9 +1863,9 @@ export function CaseDashboard() {
                 <button type="button" className="surface-card p-4 text-left" onClick={() => { setLeadStatusJump("all"); setLeadViewJump("all"); setAppSection("leads"); }}><Users className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Leads</span><strong className="text-2xl">{leads.length}</strong></button>
                 <button type="button" className="surface-card p-4 text-left" onClick={() => { setLeadStatusJump("all"); setLeadViewJump("followup"); setAppSection("leads"); }}><Clock3 className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Lead Follow Up</span><strong className="text-2xl">{leads.filter((lead) => isLeadFollowUpDue(lead, leadNowMs)).length}</strong></button>
               </> : null}
-              <button type="button" className="surface-card p-4 text-left" onClick={() => openCaseMetric("potential")}><TrendingUp className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Potential Cases</span><strong className="text-2xl">{metrics.potential}</strong></button>
-              <button type="button" className="surface-card p-4 text-left" onClick={() => openCaseMetric("delivered")}><CheckCircle2 className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Delivered</span><strong className="text-2xl">{metrics.delivered}</strong></button>
-              <button type="button" className="surface-card p-4 text-left" onClick={() => openCaseMetric("cancelled_rejected")}><XCircle className="mb-3 h-5 w-5 text-rose-400" /><span className="block text-sm text-zinc-400">Cancelled/Rejected</span><strong className="text-2xl">{metrics.cancelled_rejected}</strong></button>
+              <button type="button" className="surface-card p-4 text-left" onClick={() => openCaseMetric("potential", currentMonth)}><TrendingUp className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Potential Cases</span><strong className="text-2xl">{dashboardMonthCases.filter((record) => potentialCaseStatuses.includes(record.status)).length}</strong></button>
+              <button type="button" className="surface-card p-4 text-left" onClick={() => openCaseMetric("delivered", currentMonth)}><CheckCircle2 className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Delivered</span><strong className="text-2xl">{dashboardMonthCases.filter((record) => record.status === "car_delivery").length}</strong></button>
+              <button type="button" className="surface-card p-4 text-left" onClick={() => openCaseMetric("cancelled_rejected", currentMonth)}><XCircle className="mb-3 h-5 w-5 text-rose-400" /><span className="block text-sm text-zinc-400">Cancelled/Rejected</span><strong className="text-2xl">{dashboardMonthCases.filter((record) => record.status === "cancelled" || record.status === "rejected").length}</strong></button>
               {["admin", "customer_service", "broker"].includes(role) ? <button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("appointments")}><CalendarDays className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Upcoming appointments</span><strong className="text-2xl">{appointments.filter((item) => item.status === "scheduled" && +new Date(item.startsAt) >= Date.now()).length}</strong></button> : null}
             </div>
             {role === "customer_service" || role === "broker" ? (
