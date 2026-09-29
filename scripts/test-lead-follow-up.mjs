@@ -4,18 +4,21 @@ import { availableLeadFollowUpStages, canRecordLeadFollowUp, isLeadFollowUpDue, 
 
 test("follow-up action stops at six", () => {
   assert.equal(maxLeadFollowUps, 6);
-  assert.equal(canRecordLeadFollowUp(5), true);
-  assert.equal(canRecordLeadFollowUp(6), false);
-  assert.equal(canRecordLeadFollowUp(7), false);
+  assert.equal(canRecordLeadFollowUp(5, "contacted"), true);
+  assert.equal(canRecordLeadFollowUp(6, "contacted"), false);
+  assert.equal(canRecordLeadFollowUp(7, "contacted"), false);
+  assert.equal(canRecordLeadFollowUp(2, "rejected"), false);
+  assert.equal(canRecordLeadFollowUp(2, "potential"), true);
 });
 
 test("follow-up filter shows only stages containing callable leads", () => {
   const leads = [
-    { phoneRevealedAt: "", followUpCount: 0 },
-    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 0 },
-    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 1 },
-    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 1 },
-    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 3 },
+    { phoneRevealedAt: "", followUpCount: 0, status: "new" },
+    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 0, status: "contacted" },
+    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 1, status: "potential" },
+    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 1, status: "contacted" },
+    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 3, status: "all_offer_presented" },
+    { phoneRevealedAt: "2026-09-26T00:00:00Z", followUpCount: 2, status: "rejected" },
   ];
   assert.deepEqual(availableLeadFollowUpStages(leads), [
     { count: 0, total: 1 },
@@ -23,6 +26,7 @@ test("follow-up filter shows only stages containing callable leads", () => {
     { count: 3, total: 1 },
   ]);
   assert.deepEqual(availableLeadFollowUpStages(leads.slice(0, 1)), []);
+  assert.deepEqual(availableLeadFollowUpStages(leads.slice(-1)), []);
 });
 import { groupLeadReminders, reminderMessage, reminderTypeAt } from "../supabase/functions/lead-follow-up/reminders.ts";
 
