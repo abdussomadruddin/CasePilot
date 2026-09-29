@@ -13,14 +13,14 @@ test("TikTok lead copies the exact heading and original answer order without a s
   assert.equal(result.includes("==="), false);
 });
 
-test("missing contact details and later notes are included once", () => {
+test("missing contact details are included once, but later remarks are omitted", () => {
   const result = formatLeadCopy({
     source: "meta_ads", sourceNote: "Looking for an SUV",
     customerName: "Farah", customerPhone: "0123456789", email: "farah@example.com",
     carBrand: "JAECOO", carModel: "JAECOO J7",
     notes: [{ id: "1", authorId: "a", body: "Call back tomorrow", createdAt: "2026-09-24T00:00:00Z" }],
   });
-  assert.equal(result, "*New Car Sales Inquiry From Meta*\n\nFarah\n0123456789\nfarah@example.com\nLooking for an SUV\n\nFollow-up notes:\nCall back tomorrow");
+  assert.equal(result, "*New Car Sales Inquiry From Meta*\n\nFarah\n0123456789\nfarah@example.com\nLooking for an SUV");
 });
 
 test("manual lead copies available details without a trailing delimiter", () => {

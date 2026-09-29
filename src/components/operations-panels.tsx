@@ -17,6 +17,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { OwnerFilterSelect } from "@/components/owner-filter-select";
 import { formatLeadCopy } from "@/lib/lead-copy";
+import { getSupabaseClient } from "@/lib/supabase";
 import { matchesOwnerFilter, type OwnerFilter } from "@/lib/owner-filter";
 import { hideLeadPhoneInNote } from "../../supabase/functions/_shared/lead-contact";
 import {
@@ -219,6 +220,12 @@ export function LeadPanel({
     try {
       const previous = leads.find((lead) => lead.id === draft.id);
       await saveLead(draft, profile.id, initialNote, previous?.status, profile.role !== "admin");
+      if (!previous && draft.status === "new") {
+        const { error: notificationError } = await getSupabaseClient().functions.invoke("notify-manual-lead", {
+          body: { leadId: draft.id },
+        });
+        if (notificationError) console.warn("Manual lead saved but push notification failed", notificationError);
+      }
       await onRefresh();
       setSelectedId(draft.id);
       setDraft(null);
