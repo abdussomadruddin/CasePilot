@@ -17,6 +17,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { OwnerFilterSelect } from "@/components/owner-filter-select";
 import { formatLeadCopy } from "@/lib/lead-copy";
+import { followUpWhatsAppUrls, openFollowUpWhatsApp } from "@/lib/follow-up-whatsapp";
 import { getSupabaseClient } from "@/lib/supabase";
 import { matchesOwnerFilter, type OwnerFilter } from "@/lib/owner-filter";
 import { hideLeadPhoneInNote } from "../../supabase/functions/_shared/lead-contact";
@@ -344,9 +345,10 @@ export function LeadPanel({
     setFollowingUpId(lead.id);
     setError("");
     try {
+      followUpWhatsAppUrls(lead.customerPhone);
       const count = await recordLeadFollowUp(lead.id);
       setFollowUpCounts((current) => ({ ...current, [lead.id]: count }));
-      window.location.assign(`https://wa.me/${lead.customerPhone.replace(/\D/g, "")}`);
+      await openFollowUpWhatsApp(lead.customerPhone);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to record follow-up.");
     } finally {
