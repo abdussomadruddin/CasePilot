@@ -185,6 +185,7 @@ export function LeadPanel({
   const [saving, setSaving] = useState(false);
   const [copiedId, setCopiedId] = useState("");
   const [followingUpId, setFollowingUpId] = useState("");
+  const [contactingLeadId, setContactingLeadId] = useState("");
   const [followUpCounts, setFollowUpCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState("");
   const selected = leads.find((lead) => lead.id === selectedId);
@@ -307,20 +308,27 @@ export function LeadPanel({
     }
   }
 
-  async function callLead(lead: LeadRecord) {
+  async function contactLead(lead: LeadRecord, channel: "call" | "whatsapp") {
     if (!lead.customerPhone) {
-      setError("This lead has no phone number yet. Add one before calling.");
+      setError("This lead has no phone number yet. Add one before contacting.");
       return;
     }
+    if (contactingLeadId) return;
+    setContactingLeadId(lead.id);
     setError("");
     try {
-      if (!lead.phoneRevealedAt) {
+      if (!lead.phoneRevealedAt || lead.status === "new") {
         await revealLeadPhone(lead.id, profile.id);
         await onRefresh();
       }
-      window.location.href = `tel:${lead.customerPhone.replace(/[^\d+]/g, "")}`;
+      const digits = lead.customerPhone.replace(/\D/g, "");
+      window.location.href = channel === "call"
+        ? `tel:${lead.customerPhone.replace(/[^\d+]/g, "")}`
+        : `https://wa.me/${digits.startsWith("0") ? `60${digits.slice(1)}` : digits}`;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to open phone number.");
+      setError(caught instanceof Error ? caught.message : "Unable to contact lead.");
+    } finally {
+      setContactingLeadId("");
     }
   }
 
@@ -413,7 +421,8 @@ export function LeadPanel({
             </div>
             {latestLeadNote(lead) ? <p className="mt-3 break-words whitespace-pre-wrap border-t border-zinc-800 pt-3 text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{hideLeadPhoneInNote(latestLeadNote(lead), Boolean(lead.phoneRevealedAt))}</p> : null}
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
-              {lead.customerPhone ? <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" disabled={saving} onClick={() => void callLead(lead)}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(lead); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
+              {lead.customerPhone ? <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(lead, "call")}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(lead); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
+              {lead.status === "new" && lead.customerPhone ? <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:opacity-60" type="button" disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(lead, "whatsapp")}><MessageCircle className="h-4 w-4" /> WhatsApp</button> : null}
               {view === "all" && lead.status !== "rejected" && lead.phoneRevealedAt && lead.customerPhone ? <button className={followUpButtonClass(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount))} type="button" disabled={Boolean(followingUpId) || !canRecordLeadFollowUp(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount), lead.status)} title={canRecordLeadFollowUp(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount), lead.status) ? "Record follow-up and open WhatsApp" : "Maximum 6 follow-ups reached"} onClick={() => void followUpLead(lead)}><MessageCircle className="h-4 w-4" /> {followUpLabel(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount))}</button> : null}
               {lead.phoneRevealedAt ? <select className="field min-w-0 flex-1 basis-36" aria-label={`Status for ${lead.customerName}`} value={lead.status} disabled={saving} onChange={(event) => void updateStatus(lead, event.target.value as LeadStatus, inlineNoteId === lead.id ? inlineNote : "")}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || lead.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select> : null}
               {lead.phoneRevealedAt ? <button className="icon-button" type="button" aria-label={`Add note for ${lead.customerName}`} title="Add note" onClick={() => { setError(""); setInlineNoteId(inlineNoteId === lead.id ? "" : lead.id); setInlineNote(""); setPendingRejectId(""); }}><Pencil className="h-4 w-4" /></button> : null}
@@ -429,7 +438,8 @@ export function LeadPanel({
           <div className="grid gap-4 p-4">
             <div className="grid gap-1 text-sm"><p className="text-zinc-400">{selected.customerPhone ? selected.phoneRevealedAt ? selected.customerPhone : "Phone hidden" : "No phone number"}{selected.email ? ` · ${selected.email}` : ""}</p>{selected.carBrand || selected.carModel ? <p>{[selected.carBrand, selected.carModel].filter(Boolean).join(" · ")}</p> : null}<p className="text-zinc-400">{ownerLabel(selected.ownerId, teamMembers)}</p><p className="text-zinc-300">Source: {leadSourceLabels[selected.source]}{selected.sourceDetail ? ` · ${selected.sourceDetail}` : ""}</p>{selected.sourceNote ? <p className="whitespace-pre-wrap text-zinc-300">Inquiry: {hideLeadPhoneInNote(selected.sourceNote, Boolean(selected.phoneRevealedAt))}</p> : null}<p className="text-xs text-zinc-500">Created {displayTime(selected.createdAt)}</p></div>
             <div className="grid gap-2 sm:grid-cols-2">
-              {selected.customerPhone ? <button className={selected.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white"} type="button" onClick={() => void callLead(selected)}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
+              {selected.customerPhone ? <button className={selected.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white"} type="button" disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(selected, "call")}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
+              {selected.status === "new" && selected.customerPhone ? <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:opacity-60" type="button" disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(selected, "whatsapp")}><MessageCircle className="h-4 w-4" /> WhatsApp</button> : null}
               {selected.status !== "rejected" && selected.phoneRevealedAt && selected.customerPhone ? <button className={followUpButtonClass(Math.max(followUpCounts[selected.id] ?? 0, selected.followUpCount))} type="button" disabled={Boolean(followingUpId) || !canRecordLeadFollowUp(Math.max(followUpCounts[selected.id] ?? 0, selected.followUpCount), selected.status)} title={canRecordLeadFollowUp(Math.max(followUpCounts[selected.id] ?? 0, selected.followUpCount), selected.status) ? "Record follow-up and open WhatsApp" : "Maximum 6 follow-ups reached"} onClick={() => void followUpLead(selected)}><MessageCircle className="h-4 w-4" /> {followUpLabel(Math.max(followUpCounts[selected.id] ?? 0, selected.followUpCount))}</button> : null}
               {selected.phoneRevealedAt ? <select className="field" aria-label="Lead status" value={selected.status} disabled={saving} onChange={(event) => void updateStatus(selected, event.target.value as LeadStatus)}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || selected.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select> : null}
             </div>

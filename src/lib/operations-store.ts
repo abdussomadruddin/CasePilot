@@ -184,7 +184,7 @@ export async function revealLeadPhone(leadId: string, actorId: string) {
     .from("leads")
     .update({ phone_revealed_at: new Date().toISOString(), status: "contacted" })
     .eq("id", leadId)
-    .is("phone_revealed_at", null)
+    .or("status.eq.new,phone_revealed_at.is.null")
     .select("id");
   if (error) throw error;
   if (!data?.length) throw new Error("Lead could not be contacted. Please refresh and try again.");

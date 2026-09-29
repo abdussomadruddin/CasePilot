@@ -1204,16 +1204,18 @@ export function CaseDashboard() {
     }
   }
 
-  async function callNewLead(lead: LeadRecord) {
-    if (!profile || !lead.customerPhone || lead.ownerId !== profile.id || lead.status !== "new" || lead.phoneRevealedAt) return;
+  async function contactNewLead(lead: LeadRecord, channel: "call" | "whatsapp") {
+    if (!profile || !lead.customerPhone || lead.ownerId !== profile.id || lead.status !== "new" || lead.phoneRevealedAt || callingLeadId) return;
     setCallingLeadId(lead.id);
     setError("");
     try {
       await revealLeadPhone(lead.id, profile.id);
       await refreshCases();
-      window.location.href = `tel:${lead.customerPhone.replace(/[^\d+]/g, "")}`;
+      window.location.href = channel === "call"
+        ? `tel:${lead.customerPhone.replace(/[^\d+]/g, "")}`
+        : buildWhatsAppUrl(lead.customerPhone);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to call lead.");
+      setError(caught instanceof Error ? caught.message : "Unable to contact lead.");
     } finally {
       setCallingLeadId("");
     }
@@ -1839,14 +1841,14 @@ export function CaseDashboard() {
               <section className="grid gap-2">
                 <h2 className="text-sm font-semibold text-zinc-300">New leads ({newOwnLeads.length})</h2>
                 {newOwnLeads.length ? newOwnLeads.map((lead) => (
-                  <article key={lead.id} className="surface-card flex min-w-0 items-start justify-between gap-3 p-4">
+                  <article key={lead.id} className="surface-card flex min-w-0 flex-col items-start justify-between gap-3 p-4 sm:flex-row">
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold text-white">{lead.customerName || "Unnamed lead"}</p>
                       {lead.carBrand || lead.carModel ? <p className="truncate text-sm text-zinc-400">{[lead.carBrand, lead.carModel].filter(Boolean).join(" · ")}</p> : null}
                       <p className="truncate text-xs text-zinc-400">{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</p>
                       {latestLeadNote(lead) ? <p className="mt-2 break-words whitespace-pre-wrap text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{hideLeadPhoneInNote(latestLeadNote(lead), Boolean(lead.phoneRevealedAt))}</p> : null}
                     </div>
-                    {lead.customerPhone ? <button type="button" className="lead-call-pending inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void callNewLead(lead)}><PhoneCall className="h-4 w-4" />{callingLeadId === lead.id ? "Calling..." : "Call"}</button> : <button type="button" className="secondary-button shrink-0" onClick={() => { setLeadStatusJump("new"); setLeadViewJump("all"); setAppSection("leads"); }}>Add phone</button>}
+                    {lead.customerPhone ? <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0"><button type="button" className="lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void contactNewLead(lead, "call")}><PhoneCall className="h-4 w-4" />Call</button><button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void contactNewLead(lead, "whatsapp")}><MessageCircle className="h-4 w-4" />WhatsApp</button></div> : <button type="button" className="secondary-button shrink-0" onClick={() => { setLeadStatusJump("new"); setLeadViewJump("all"); setAppSection("leads"); }}>Add phone</button>}
                   </article>
                 )) : <p className="text-sm text-zinc-500">No new leads to contact.</p>}
               </section>
