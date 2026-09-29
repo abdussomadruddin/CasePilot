@@ -315,7 +315,9 @@ export type DashboardTab =
   | "tasks"
   | "last_month"
   | "followup"
-  | "completed"
+  | "potential"
+  | "delivered"
+  | "cancelled_rejected"
   | "team";
 
 export type Profile = {

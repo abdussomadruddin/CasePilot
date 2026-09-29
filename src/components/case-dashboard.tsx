@@ -33,11 +33,13 @@ import {
   Shield,
   Smartphone,
   Trash2,
+  TrendingUp,
   Upload,
   UserPlus,
   UserRound,
   Users,
   X,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -183,7 +185,14 @@ const metricTabs: TabDefinition[] = [
   { id: "last_month", label: "Last Month Cases", icon: CalendarRange, toneClass: "bg-amber-500 text-white" },
   { id: "tasks", label: "My Tasks", icon: ListChecks, toneClass: "bg-blue-600 text-white" },
   { id: "followup", label: "Follow Up Due", icon: CalendarClock, toneClass: "bg-cyan-600 text-white" },
-  { id: "completed", label: "Completed", icon: CheckCircle2, toneClass: "bg-emerald-600 text-white" },
+  { id: "potential", label: "Potential Cases", icon: TrendingUp, toneClass: "bg-cyan-600 text-white" },
+  { id: "delivered", label: "Delivered", icon: CheckCircle2, toneClass: "bg-emerald-600 text-white" },
+  { id: "cancelled_rejected", label: "Cancelled/Rejected", icon: XCircle, toneClass: "bg-rose-600 text-white" },
+];
+
+const potentialCaseStatuses: CaseStatus[] = [
+  "lou_received", "pending_sign_agreement", "pending_allocation", "waiting_ehakmilik",
+  "registered", "grant_roadtax_collected", "prepare_delivery",
 ];
 
 const carCatalog: CarCatalogItem[] = [
@@ -1028,8 +1037,12 @@ export function CaseDashboard() {
         return visibleCases.filter((record) => isMyTask(record, role, profile?.id));
       case "followup":
         return visibleCases.filter((record) => isFollowUpDue(record));
-      case "completed":
-        return visibleCases.filter((record) => isTerminalStatus(record.status));
+      case "potential":
+        return visibleCases.filter((record) => potentialCaseStatuses.includes(record.status));
+      case "delivered":
+        return visibleCases.filter((record) => record.status === "car_delivery");
+      case "cancelled_rejected":
+        return visibleCases.filter((record) => record.status === "cancelled" || record.status === "rejected");
       case "all":
       default:
         return visibleCases;
@@ -1154,6 +1167,17 @@ export function CaseDashboard() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function openCaseMetric(tab: "potential" | "delivered" | "cancelled_rejected") {
+    setFunnelSelection(null);
+    setActiveTab(tab);
+    setStatusFilter("all");
+    setDealerFilter("all");
+    setOwnerFilter("all");
+    setMonthFilter("");
+    setAppSection("cases");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   const metricCases = useMemo(
     () =>
       monthFilterActive
@@ -1175,8 +1199,9 @@ export function CaseDashboard() {
       ).length,
       tasks: metricCases.filter((record) => isMyTask(record, role, profile?.id)).length,
       followup: metricCases.filter((record) => isFollowUpDue(record)).length,
-      completed: metricCases.filter((record) => isTerminalStatus(record.status))
-        .length,
+      potential: metricCases.filter((record) => potentialCaseStatuses.includes(record.status)).length,
+      delivered: metricCases.filter((record) => record.status === "car_delivery").length,
+      cancelled_rejected: metricCases.filter((record) => record.status === "cancelled" || record.status === "rejected").length,
     }),
     [currentMonth, lastMonth, metricCases, profile?.id, role, visibleCases],
   );
@@ -1834,7 +1859,9 @@ export function CaseDashboard() {
                 <button type="button" className="surface-card p-4 text-left" onClick={() => { setLeadStatusJump("all"); setLeadViewJump("all"); setAppSection("leads"); }}><Users className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Leads</span><strong className="text-2xl">{leads.length}</strong></button>
                 <button type="button" className="surface-card p-4 text-left" onClick={() => { setLeadStatusJump("all"); setLeadViewJump("followup"); setAppSection("leads"); }}><Clock3 className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Lead Follow Up</span><strong className="text-2xl">{leads.filter((lead) => isLeadFollowUpDue(lead, leadNowMs)).length}</strong></button>
               </> : null}
-              {role === "sales_manager" ? <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("completed"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(""); setAppSection("cases"); }}><CheckCircle2 className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Completed</span><strong className="text-2xl">{visibleCases.filter((record) => isTerminalStatus(record.status)).length}</strong></button> : null}
+              <button type="button" className="surface-card p-4 text-left" onClick={() => openCaseMetric("potential")}><TrendingUp className="mb-3 h-5 w-5 text-cyan-400" /><span className="block text-sm text-zinc-400">Potential Cases</span><strong className="text-2xl">{metrics.potential}</strong></button>
+              <button type="button" className="surface-card p-4 text-left" onClick={() => openCaseMetric("delivered")}><CheckCircle2 className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Delivered</span><strong className="text-2xl">{metrics.delivered}</strong></button>
+              <button type="button" className="surface-card p-4 text-left" onClick={() => openCaseMetric("cancelled_rejected")}><XCircle className="mb-3 h-5 w-5 text-rose-400" /><span className="block text-sm text-zinc-400">Cancelled/Rejected</span><strong className="text-2xl">{metrics.cancelled_rejected}</strong></button>
               {["admin", "customer_service", "broker"].includes(role) ? <button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("appointments")}><CalendarDays className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Upcoming appointments</span><strong className="text-2xl">{appointments.filter((item) => item.status === "scheduled" && +new Date(item.startsAt) >= Date.now()).length}</strong></button> : null}
             </div>
             {role === "customer_service" || role === "broker" ? (
