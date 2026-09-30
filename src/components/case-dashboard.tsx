@@ -1641,37 +1641,31 @@ export function CaseDashboard() {
 
   if (!appEnvironment.checked || (!profile && loading)) {
     return (
-      <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
-        <section className="surface-card mx-auto max-w-md overflow-hidden p-6">
-          <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
-              <Shield className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-ink">
-                Case Operation System
-              </h1>
-              <p className="text-sm text-muted">Checking Supabase session</p>
-            </div>
+      <main className="grid min-h-[100dvh] place-items-center px-4 py-6" role="status" aria-live="polite">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="grid h-16 w-16 place-items-center rounded-lg bg-honda text-white shadow-lg shadow-red-950/40">
+            <FolderKanban className="h-8 w-8" aria-hidden="true" />
           </div>
-        </section>
+          <div><h1 className="text-xl font-semibold text-white">CasePilot</h1><p className="mt-1 text-sm text-zinc-400">Loading your workspace...</p></div>
+          <RefreshCw className="h-4 w-4 animate-spin text-zinc-500" aria-hidden="true" />
+        </div>
       </main>
     );
   }
 
   if (!profile && !loading) {
     return (
-      <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
-        <section className="surface-card mx-auto max-w-md overflow-hidden p-6">
+      <main className="grid min-h-[100dvh] place-items-center px-4 py-6 sm:px-6 lg:px-8">
+        <section className="surface-card mx-auto w-full max-w-md overflow-hidden p-6">
           <div className="mb-6 flex items-center gap-3">
             <div className="grid h-11 w-11 place-items-center rounded-md bg-honda text-white shadow-sm shadow-red-950/60">
               <Shield className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-xl font-semibold text-ink">
-                Case Operation System
+                CasePilot
               </h1>
-              <p className="text-sm text-muted">Supabase sign in</p>
+              <p className="text-sm text-muted">Sign in to your account</p>
             </div>
           </div>
 
@@ -1743,7 +1737,7 @@ export function CaseDashboard() {
     <main className="mobile-dashboard min-h-screen px-3 py-3 sm:px-5 sm:py-5 lg:px-8">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-5">
         <header className="dashboard-header surface-card relative z-20">
-          <div className="mobile-header flex items-center gap-2 px-1 py-1 sm:hidden">
+          <div className="mobile-header flex items-center gap-2 sm:hidden">
             <button type="button" className="mobile-header-icon" onClick={() => setDrawerOpen(true)} aria-label="Open navigation menu" aria-expanded={drawerOpen}><Menu className="h-5 w-5" /></button>
             <div className="min-w-0 flex-1 leading-tight">
               <span className="block text-xs text-zinc-400">Selamat datang,</span>
@@ -1853,8 +1847,8 @@ export function CaseDashboard() {
         ) : null}
 
         {appSection === "dashboard" ? (
-          <section className="grid gap-4">
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <section className="screen-enter grid gap-4">
+            <div className="dashboard-stats grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("this_month"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(currentMonth); setAppSection("cases"); }}><CalendarDays className="mb-3 h-5 w-5 text-violet-400" /><span className="block text-sm text-zinc-400">This Month Cases</span><strong className="text-2xl">{metrics.this_month}</strong></button>
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("last_month"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(lastMonth); setAppSection("cases"); }}><CalendarRange className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Last Month Cases</span><strong className="text-2xl">{metrics.last_month}</strong></button>
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("tasks"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(""); setAppSection("cases"); }}><ListChecks className="mb-3 h-5 w-5 text-blue-400" /><span className="block text-sm text-zinc-400">My Tasks</span><strong className="text-2xl">{visibleCases.filter((record) => isMyTask(record, role, profile?.id)).length}</strong></button>
@@ -1891,7 +1885,7 @@ export function CaseDashboard() {
         {appSection === "cases" ? <>
         {funnelSelection?.section === "cases" ? <div className="flex items-center justify-between gap-3 border-b border-cyan-800 py-2 text-sm"><span className="text-cyan-200">{funnelSelection.label}</span><button type="button" className="secondary-button" onClick={() => setFunnelSelection(null)}>All cases</button></div> : null}
         {canCreateCase(role) ? <button type="button" className="primary-button w-full sm:hidden" onClick={openCreateForm}><Plus className="h-4 w-4" aria-hidden="true" />New Case</button> : null}
-        <section className="dashboard-metrics grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        <section className="dashboard-metrics screen-enter grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {metricTabs.map((tab) => (
             <MetricCard
               key={tab.id}
@@ -2074,7 +2068,7 @@ export function CaseDashboard() {
           aria-label="Main navigation"
         >
           <div className="mb-5 flex items-center justify-between">
-            <span className="font-bold">CasePilot</span>
+            <span className="flex items-center gap-3 font-bold"><span className="grid h-9 w-9 place-items-center rounded-md bg-honda text-white"><FolderKanban className="h-5 w-5" /></span>CasePilot</span>
             <button className="icon-button" type="button" onClick={() => { setDrawerOpen(false); setProfileMenuOpen(false); }} aria-label="Close navigation"><X className="h-5 w-5" /></button>
           </div>
           {([
@@ -2094,7 +2088,7 @@ export function CaseDashboard() {
             <button
               key={id}
               type="button"
-              className={`flex items-center gap-3 rounded-md px-4 py-3 text-left ${active ? "bg-red-950 text-white" : "text-zinc-300 hover:bg-zinc-900"}`}
+              className={`drawer-item flex items-center gap-3 rounded-md px-4 py-3 text-left ${active ? "drawer-item-active text-white" : "text-zinc-300 hover:bg-white/5"}`}
               aria-current={active ? "page" : undefined}
               onClick={() => {
                 setFunnelSelection(null);
@@ -2543,7 +2537,7 @@ function MetricCard({
           <p className={`text-xs font-semibold leading-tight sm:text-sm ${
             active ? "text-white" : "text-zinc-400"
           }`}>
-            {label}
+            {label === "Cancelled/Rejected" ? <>Cancelled/<wbr />Rejected</> : label}
           </p>
           <p className="mt-1 text-xl font-bold leading-none text-white sm:text-2xl">
             {value}

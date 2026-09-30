@@ -1,12 +1,12 @@
 {
-  "name": "Case Operation System",
+  "name": "CasePilot",
   "short_name": "CasePilot",
-  "description": "Honda car buying case operation dashboard.",
+  "description": "Manage car sales, leads and appointments with CasePilot.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f6f8fb",
-  "theme_color": "#111827",
+  "background_color": "#101114",
+  "theme_color": "#101114",
   "icons": [
     {
       "src": "/icon-192.png",

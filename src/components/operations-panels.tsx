@@ -14,7 +14,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { OwnerFilterSelect } from "@/components/owner-filter-select";
 import { formatLeadCopy } from "@/lib/lead-copy";
 import { followUpWhatsAppUrls, openFollowUpWhatsApp } from "@/lib/follow-up-whatsapp";
@@ -106,16 +107,50 @@ function Modal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="mx-auto w-full max-w-xl min-w-0 rounded-md border border-zinc-700 bg-zinc-950 shadow-2xl">
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+      }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex='0']") || []).filter((element) => element.getClientRects().length);
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKey);
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, []);
+
+  return createPortal(
+    <div ref={dialogRef} className="app-modal fixed inset-0 z-50 overflow-y-auto bg-black/80 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="app-modal-panel mx-auto w-full max-w-xl min-w-0 rounded-md border border-zinc-700 bg-zinc-950 shadow-2xl">
         <div className="flex items-center justify-between border-b border-zinc-800 p-4">
           <h2 className="text-lg font-semibold">{title}</h2>
           <button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
         {children}
       </div>
-    </div>
+    </div>, document.body,
   );
 }
 
@@ -390,14 +425,14 @@ export function LeadPanel({
   }
 
   return (
-    <section className="grid gap-4">
+    <section className="screen-enter grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="text-xl font-bold text-white">Lead</h2><p className="text-sm text-zinc-400">{scopedLeads.length} leads</p></div>
         <button type="button" className="primary-button" onClick={() => { const lead = newLead(profile); if (profile.role === "admin") lead.ownerId = teamMembers.find((member) => member.active && ["customer_service", "broker"].includes(member.role))?.id || ""; setDraft(lead); setInitialNote(""); }}><Plus className="h-4 w-4" /> New Lead</button>
       </div>
       {error ? <p className="rounded-md border border-red-800 bg-red-950/50 p-3 text-sm text-red-100" role="alert">{error}</p> : null}
       {cohortLeadIds ? <div className="flex items-center justify-between gap-3 border-b border-cyan-800 py-2 text-sm"><span className="text-cyan-200">{cohortLabel}</span><button type="button" className="secondary-button" onClick={onClearCohort}>All leads</button></div> : null}
-      <div className="flex gap-2 border-b border-zinc-800 pb-2" role="tablist" aria-label="Lead views">
+      <div className="lead-view-tabs flex gap-2 border-b border-zinc-800 pb-2" role="tablist" aria-label="Lead views">
         <button type="button" role="tab" aria-selected={view === "all"} className={view === "all" ? "primary-button" : "secondary-button"} onClick={() => { setView("all"); onViewChange?.("all"); }}>All Leads <span>{ownerLeads.length}</span></button>
         <button type="button" role="tab" aria-selected={view === "followup"} className={view === "followup" ? "primary-button" : "secondary-button"} onClick={() => { setView("followup"); onViewChange?.("followup"); }}>Follow Up Due <span>{dueLeads.length}</span></button>
       </div>
@@ -414,7 +449,7 @@ export function LeadPanel({
       </div>
       <div className="grid gap-2">
         {shown.map((lead) => (
-          <article key={lead.id} className="surface-card min-w-0 p-4">
+          <article key={lead.id} className="mobile-lead-card surface-card min-w-0 p-4">
             <div className="flex items-start justify-between gap-3">
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }} aria-label={`Open ${lead.customerName} details`}>
                 <span className="block truncate font-semibold text-white">{leadName(lead)}</span>
@@ -601,8 +636,8 @@ export function AppointmentPanel({
     </div>;
   }
 
-  return <section className="grid gap-4">
-    <div className="flex items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">Appointment</h2><p className="text-sm text-zinc-400">{upcoming.length} upcoming</p></div><button className="primary-button" onClick={openNew}><Plus className="h-4 w-4" /> New Appointment</button></div>
+  return <section className="screen-enter grid gap-4">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">Appointment</h2><p className="text-sm text-zinc-400">{upcoming.length} upcoming</p></div><button className="primary-button" onClick={openNew}><Plus className="h-4 w-4" /> New Appointment</button></div>
     {error ? <p className="rounded-md border border-red-800 bg-red-950/50 p-3 text-sm text-red-100" role="alert">{error}</p> : null}
     {profile.role === "admin" ? <OwnerFilterSelect value={ownerFilter} onChange={setOwnerFilter} members={teamMembers} records={appointments} className="sm:max-w-xs" /> : null}
     <h3 className="text-sm font-semibold text-zinc-300">Upcoming</h3>

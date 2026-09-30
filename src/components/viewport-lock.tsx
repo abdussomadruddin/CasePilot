@@ -13,10 +13,13 @@ export function ViewportLock() {
     };
 
     let lastTouchEnd = 0;
+    let lastTouchTarget: EventTarget | null = null;
     const preventDoubleTapZoom = (event: TouchEvent) => {
       const now = Date.now();
-      if (now - lastTouchEnd <= 300) event.preventDefault();
+      const interactive = event.target instanceof Element && event.target.closest("button, a, input, select, textarea, label, [role='button']");
+      if (!interactive && event.target === lastTouchTarget && now - lastTouchEnd <= 300) event.preventDefault();
       lastTouchEnd = now;
+      lastTouchTarget = event.target;
     };
 
     const options: AddEventListenerOptions = { passive: false };

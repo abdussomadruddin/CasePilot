@@ -3,8 +3,8 @@ import { ViewportLock } from "@/components/viewport-lock";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Case Operation System",
-  description: "Role-based Honda car buying case operation dashboard.",
+  title: "CasePilot",
+  description: "Manage car sales, leads and appointments with CasePilot.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -12,6 +12,11 @@ export const metadata: Metadata = {
       { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "CasePilot",
   },
 };
 
@@ -22,7 +27,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#050505",
+  themeColor: "#101114",
 };
 
 export default function RootLayout({
