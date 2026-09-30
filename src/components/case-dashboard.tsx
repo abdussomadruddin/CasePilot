@@ -58,6 +58,7 @@ import {
 import { createEmptyCase } from "@/lib/case-factory";
 import { AppointmentPanel, LeadPanel } from "@/components/operations-panels";
 import { FunnelChart } from "@/components/funnel-chart";
+import { FloatingNavigation } from "@/components/floating-navigation";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { OwnerFilterSelect } from "@/components/owner-filter-select";
 import { matchesOwnerFilter, type OwnerFilter } from "@/lib/owner-filter";
@@ -871,7 +872,7 @@ export function CaseDashboard() {
     const touchStart = (event: TouchEvent) => {
       const target = event.target;
       ignoreGesture = event.touches.length !== 1 ||
-        (target instanceof Element && Boolean(target.closest("input, textarea, select, [role='dialog']:not(.casepilot-drawer)")));
+        (target instanceof Element && Boolean(target.closest("input, textarea, select, .floating-navigation, [role='dialog']:not(.casepilot-drawer)")));
       startX = event.touches[0]?.clientX ?? 0;
       startY = event.touches[0]?.clientY ?? 0;
     };
@@ -1022,6 +1023,29 @@ export function CaseDashboard() {
   const newOwnLeads = role === "customer_service" || role === "broker"
     ? leads.filter((lead) => lead.ownerId === profile?.id && lead.status === "new" && !lead.phoneRevealedAt)
     : [];
+
+  const navigationLeads = leads.filter((lead) => role === "admin" || lead.ownerId === profile?.id);
+  const navigationAppointments = appointments.filter((item) => (role === "admin" || item.ownerId === profile?.id) && item.status === "scheduled" && +new Date(item.startsAt) >= leadNowMs);
+  const navigationCounts: Record<string, number> = {
+    dashboard: visibleCases.filter((record) => isFollowUpDue(record)).length + navigationLeads.filter((lead) => lead.status === "new" || isLeadFollowUpDue(lead, leadNowMs)).length + navigationAppointments.length,
+    cases: visibleCases.length,
+    leads: navigationLeads.length,
+    lead_followup: navigationLeads.filter((lead) => isLeadFollowUpDue(lead, leadNowMs)).length,
+    appointments: navigationAppointments.length,
+    team: teamMembers.length,
+    integration: new Set(navigationLeads.map((lead) => lead.source).filter((source) => source === "meta_ads" || source === "tiktok_ads")).size,
+  };
+  const navigateSection = (id: string) => {
+    setFunnelSelection(null);
+    if (id === "lead_followup" || id === "leads") {
+      setLeadStatusJump("all");
+      setLeadViewJump(id === "lead_followup" ? "followup" : "all");
+      setAppSection("leads");
+    } else setAppSection(id as typeof appSection);
+    setDrawerOpen(false);
+    setProfileMenuOpen(false);
+    window.scrollTo({ top: 0 });
+  };
 
   const tabCases = useMemo(() => {
     switch (activeTab) {
@@ -1878,6 +1902,7 @@ export function CaseDashboard() {
                 )) : <p className="text-sm text-zinc-500">No new leads to contact.</p>}
               </section>
             ) : null}
+            {profile && (role === "customer_service" || role === "broker") ? <LeadPanel dashboardFollowUp initialView="followup" profile={profile} teamMembers={teamMembers} leads={leads.filter((lead) => lead.ownerId === profile.id)} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
             {role === "admin" || role === "sales_manager" ? <FunnelChart role={role} leads={role === "admin" ? leads : []} cases={visibleCases} nowMs={leadNowMs} onOpenStage={openFunnelStage} /> : null}
           </section>
         ) : null}
@@ -2102,13 +2127,23 @@ export function CaseDashboard() {
                 window.scrollTo({ top: 0 });
               }}
             >
-              <Icon className="h-5 w-5" />{label}
+              <Icon className="h-5 w-5 shrink-0" /><span className="flex-1">{label}</span><span className="drawer-count">{navigationCounts[id] > 99 ? "99+" : navigationCounts[id]}</span>
             </button>
           );
           })}
           {profile ? <ProfileMenu profile={profile} open={profileMenuOpen} onToggle={() => setProfileMenuOpen((current) => !current)} onEditName={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("name"); }} onEditPassword={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("password"); }} onSignOut={requestSignOut} /> : null}
         </nav>
       </div>
+
+      <FloatingNavigation items={[
+        { id: "dashboard", label: "Home", icon: LayoutDashboard, count: navigationCounts.dashboard },
+        ...(["admin", "customer_service", "broker"].includes(role) ? [
+          { id: "leads", label: "Lead", icon: Users, count: navigationCounts.leads },
+          { id: "lead_followup", label: "Follow Up", icon: Clock3, count: navigationCounts.lead_followup },
+        ] : []),
+        { id: "cases", label: "Case", icon: FolderKanban, count: navigationCounts.cases },
+        ...(["admin", "customer_service", "broker"].includes(role) ? [{ id: "appointments", label: "Appointment", icon: CalendarDays, count: navigationCounts.appointments }] : []),
+      ]} activeId={appSection === "leads" && leadViewJump === "followup" ? "lead_followup" : appSection} onNavigate={navigateSection} disabled={drawerOpen || isFormOpen || Boolean(accountMode)} />
 
       {isFormOpen ? (
         <CaseForm

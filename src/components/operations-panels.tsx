@@ -196,6 +196,7 @@ export function LeadPanel({
   cohortLeadIds,
   cohortLabel,
   onClearCohort,
+  dashboardFollowUp = false,
 }: CommonProps & {
   catalog: VehicleOption[];
   onCreateCase: (lead: LeadRecord) => void;
@@ -206,6 +207,7 @@ export function LeadPanel({
   cohortLeadIds?: string[];
   cohortLabel?: string;
   onClearCohort?: () => void;
+  dashboardFollowUp?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<LeadRecord | null>(null);
@@ -426,16 +428,16 @@ export function LeadPanel({
 
   return (
     <section className="screen-enter grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {dashboardFollowUp ? <h2 className="text-sm font-semibold text-zinc-300">Lead Follow Up Due ({dueLeads.length})</h2> : <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="text-xl font-bold text-white">Lead</h2><p className="text-sm text-zinc-400">{scopedLeads.length} leads</p></div>
         <button type="button" className="primary-button" onClick={() => { const lead = newLead(profile); if (profile.role === "admin") lead.ownerId = teamMembers.find((member) => member.active && ["customer_service", "broker"].includes(member.role))?.id || ""; setDraft(lead); setInitialNote(""); }}><Plus className="h-4 w-4" /> New Lead</button>
-      </div>
+      </div>}
       {error ? <p className="rounded-md border border-red-800 bg-red-950/50 p-3 text-sm text-red-100" role="alert">{error}</p> : null}
       {cohortLeadIds ? <div className="flex items-center justify-between gap-3 border-b border-cyan-800 py-2 text-sm"><span className="text-cyan-200">{cohortLabel}</span><button type="button" className="secondary-button" onClick={onClearCohort}>All leads</button></div> : null}
-      <div className="lead-view-tabs flex gap-2 border-b border-zinc-800 pb-2" role="tablist" aria-label="Lead views">
+      {!dashboardFollowUp ? <div className="lead-view-tabs flex gap-2 border-b border-zinc-800 pb-2" role="tablist" aria-label="Lead views">
         <button type="button" role="tab" aria-selected={view === "all"} className={view === "all" ? "primary-button" : "secondary-button"} onClick={() => { setView("all"); onViewChange?.("all"); }}>All Leads <span>{ownerLeads.length}</span></button>
         <button type="button" role="tab" aria-selected={view === "followup"} className={view === "followup" ? "primary-button" : "secondary-button"} onClick={() => { setView("followup"); onViewChange?.("followup"); }}>Follow Up Due <span>{dueLeads.length}</span></button>
-      </div>
+      </div> : null}
       <div className="grid gap-2 sm:flex sm:flex-wrap">
         {profile.role === "admin" ? <OwnerFilterSelect value={ownerFilter} onChange={setOwnerFilter} members={teamMembers} records={scopedLeads} className="sm:max-w-xs" /> : null}
         {view === "all" ? <select className="field min-w-0 sm:max-w-xs" value={filter} onChange={(event) => setFilter(event.target.value as LeadStatus | "all")} aria-label="Filter leads by status">
