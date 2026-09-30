@@ -12,7 +12,7 @@ type Appointment = {
   case?: { customer_name: string; car_model: string } | null;
 };
 
-const offsets = [4320, 1440, 240, 60] as const;
+const offsets = [4320, 1440, 240, 60, -120, -180, -240, -300, -360, -420] as const;
 const minuteMs = 60_000;
 
 function appointmentLabel(appointment: Appointment) {
@@ -34,7 +34,8 @@ Deno.serve(async () => {
     .from("appointments")
     .select("id,owner_id,kind,starts_at,updated_at,customer_name,lead:leads(customer_name,car_model),case:cases(customer_name,car_model)")
     .eq("status", "scheduled")
-    .gt("starts_at", now.toISOString())
+    .is("deleted_at", null)
+    .gt("starts_at", new Date(+now - 480 * minuteMs).toISOString())
     .lte("starts_at", new Date(+now + 4320 * minuteMs + 90_000).toISOString());
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
@@ -51,7 +52,7 @@ Deno.serve(async () => {
     const startsAt = +new Date(appointment.starts_at);
     for (const offset of offsets) {
       const dueAt = startsAt - offset * minuteMs;
-      if (dueAt > +now || dueAt < +now - 90_000 || dueAt < +new Date(appointment.updated_at)) continue;
+      if (dueAt > +now || dueAt < +now - 90_000 || (offset > 0 && dueAt < +new Date(appointment.updated_at))) continue;
 
       const recipients = new Set([appointment.owner_id]);
       if (offset === 1440) {
@@ -79,9 +80,11 @@ Deno.serve(async () => {
         }
         if (!delivery || delivery.sent_at) continue;
 
+        const { data: current, error: currentError } = await supabase.from("appointments").select("status,starts_at").eq("id", appointment.id).is("deleted_at", null).single();
+        if (currentError || current?.status !== "scheduled" || current.starts_at !== appointment.starts_at) continue;
         const result = await sendPushesForUsers(supabase, [recipientId], {
-          title: `CasePilot • ${appointment.kind === "test_drive" ? "Test Drive" : "Delivery"} appointment`,
-          body: `${appointmentLabel(appointment)}\n${offset === 4320 ? "3 days" : offset === 1440 ? "1 day" : offset === 240 ? "4 hours" : "1 hour"} remaining.`,
+          title: offset < 0 ? "CasePilot • Update appointment attendance" : `CasePilot • ${appointment.kind === "test_drive" ? "Test Drive" : "Delivery"} appointment`,
+          body: offset < 0 ? `${appointmentLabel(appointment)}\nSila kemas kini Show Up atau Tidak Hadir. Reminder ${Math.abs(offset) / 60 - 1}/6.` : `${appointmentLabel(appointment)}\n${offset === 4320 ? "3 days" : offset === 1440 ? "1 day" : offset === 240 ? "4 hours" : "1 hour"} remaining.`,
           url: "/?section=appointments",
         });
         const successful = result.sent > 0;

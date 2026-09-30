@@ -26,6 +26,7 @@ import {
   addLeadNote,
   deleteLead,
   saveAppointment,
+  deleteAppointment,
   saveLead,
   revealLeadPhone,
   recordLeadFollowUp,
@@ -618,7 +619,7 @@ export function AppointmentPanel({
     }
   }
 
-  async function updateStatus(appointment: AppointmentRecord, status: "completed" | "cancelled") {
+  async function updateStatus(appointment: AppointmentRecord, status: AppointmentRecord["status"]) {
     setSaving(true);
     setError("");
     try {
@@ -634,8 +635,9 @@ export function AppointmentPanel({
   function appointmentItem(appointment: AppointmentRecord) {
     const subject = subjectOptions.find((item) => item.value === (appointment.leadId ? `lead:${appointment.leadId}` : `case:${appointment.caseId}`));
     return <div key={appointment.id} className="surface-card grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      {profile.role === "admin" ? <button type="button" className="secondary-button justify-self-end text-red-300 sm:col-span-2" disabled={saving} onClick={async () => { if (!window.confirm("Padam appointment ini? Reminder akan dihentikan.")) return; setSaving(true); setError(""); try { await deleteAppointment(appointment.id); await onRefresh(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to delete appointment."); } finally { setSaving(false); } }}><Trash2 className="h-4 w-4" />Delete</button> : null}
       <div className="min-w-0"><p className="font-semibold text-white">{appointment.kind === "test_drive" ? "Test Drive" : "Delivery"} · {subject?.label || appointment.customerName}</p><p className="text-sm text-zinc-300">{displayTime(appointment.startsAt)}</p>{appointment.customerPhone ? <a className="text-sm text-emerald-200" href={`tel:${appointment.customerPhone.replace(/[^\d+]/g, "")}`}>{appointment.customerPhone}</a> : null}<p className="text-xs text-zinc-500">{ownerLabel(appointment.ownerId, teamMembers)}{appointment.location ? ` · ${appointment.location}` : ""}</p>{appointment.notes ? <p className="mt-2 break-words text-sm text-zinc-400">{appointment.notes}</p> : null}</div>
-      {appointment.status === "scheduled" ? <div className="flex flex-wrap gap-2"><button type="button" className="secondary-button" onClick={() => openEdit(appointment)}><Pencil className="h-4 w-4" /> Edit</button><button type="button" className="secondary-button" disabled={saving} onClick={() => void updateStatus(appointment, "completed")}><CheckCircle2 className="h-4 w-4" /> Done</button><button type="button" className="secondary-button border-red-900 text-red-200" disabled={saving} onClick={() => void updateStatus(appointment, "cancelled")}><X className="h-4 w-4" /> Cancel</button></div> : <span className="text-sm text-zinc-500">{appointment.status === "completed" ? "Completed" : "Cancelled"}</span>}
+      {appointment.status === "scheduled" ? <div className="flex flex-wrap gap-2"><button type="button" className="secondary-button" onClick={() => openEdit(appointment)}><Pencil className="h-4 w-4" /> Edit</button>{+new Date(appointment.startsAt) <= now ? <><button type="button" className="secondary-button text-emerald-200" disabled={saving} onClick={() => void updateStatus(appointment, "show_up")}><CheckCircle2 className="h-4 w-4" /> Show Up</button><button type="button" className="secondary-button text-amber-200" disabled={saving} onClick={() => void updateStatus(appointment, "no_show")}><X className="h-4 w-4" /> Tidak Hadir</button></> : null}<button type="button" className="secondary-button" disabled={saving} onClick={() => void updateStatus(appointment, "completed")}><CheckCircle2 className="h-4 w-4" /> Done</button><button type="button" className="secondary-button border-red-900 text-red-200" disabled={saving} onClick={() => void updateStatus(appointment, "cancelled")}><X className="h-4 w-4" /> Cancel</button></div> : <span className="text-sm text-zinc-500">{{ completed: "Done", cancelled: "Cancelled", show_up: "Show Up", no_show: "Tidak Hadir" }[appointment.status]}</span>}
     </div>;
   }
 

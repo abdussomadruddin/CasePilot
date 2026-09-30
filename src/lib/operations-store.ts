@@ -229,9 +229,15 @@ export async function loadAppointments(): Promise<AppointmentRecord[]> {
   const { data, error } = await getSupabaseClient()
     .from("appointments")
     .select("*")
+    .is("deleted_at", null)
     .order("starts_at", { ascending: true });
   if (error) throw error;
   return ((data || []) as AppointmentRow[]).map(mapAppointment);
+}
+
+export async function deleteAppointment(appointmentId: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("delete_appointment", { p_appointment_id: appointmentId });
+  if (error) throw error;
 }
 
 export async function saveAppointment(appointment: AppointmentRecord): Promise<void> {

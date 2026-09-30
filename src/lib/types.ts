@@ -278,7 +278,7 @@ export type LeadFollowUpAction = {
 };
 
 export type AppointmentKind = "test_drive" | "delivery";
-export type AppointmentStatus = "scheduled" | "completed" | "cancelled";
+export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "show_up" | "no_show";
 
 export type AppointmentRecord = {
   id: string;
