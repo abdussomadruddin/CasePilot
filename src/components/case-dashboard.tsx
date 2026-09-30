@@ -1038,7 +1038,7 @@ export function CaseDashboard() {
   const navigateSection = (id: string) => {
     setFunnelSelection(null);
     if (id === "cases") {
-      setActiveTab("tasks"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter("");
+      setActiveTab(role === "sales_manager" ? "this_month" : "tasks"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(role === "sales_manager" ? currentMonth : "");
     }
     if (id === "lead_followup" || id === "leads") {
       setLeadStatusJump("all");
@@ -1077,7 +1077,7 @@ export function CaseDashboard() {
   }, [activeTab, currentMonth, lastMonth, profile?.id, role, visibleCases]);
 
   const dealerFilterActive = role !== "sales_manager" && dealerFilter !== "all";
-  const ownerFilterActive = role !== "broker" && ownerFilter !== "all";
+  const ownerFilterActive = role !== "broker" && role !== "sales_manager" && ownerFilter !== "all";
   const monthFilterActive = monthFilter !== "";
   const filtersActive =
     statusFilter !== "all" || dealerFilterActive || ownerFilterActive || monthFilterActive;
@@ -1955,7 +1955,7 @@ export function CaseDashboard() {
                   aria-label="Case filters"
                   className={`${filtersOpen ? "mobile-filter-sheet grid" : "hidden sm:grid"} min-w-0 gap-3 sm:grid-cols-2 lg:w-auto ${
                     role === "sales_manager"
-                      ? "xl:grid-cols-[14rem_17rem_12rem_auto]"
+                      ? "xl:grid-cols-[17rem_12rem_auto]"
                       : role === "broker"
                         ? "xl:grid-cols-[14rem_18rem_12rem_auto]"
                         : "xl:grid-cols-[12rem_14rem_17rem_12rem_auto]"
@@ -1979,7 +1979,7 @@ export function CaseDashboard() {
                       ))}
                     </select>
                   ) : null}
-                  {role !== "broker" ? <OwnerFilterSelect value={ownerFilter} onChange={setOwnerFilter} members={teamMembers} records={visibleCases} /> : null}
+                  {role !== "broker" && role !== "sales_manager" ? <OwnerFilterSelect value={ownerFilter} onChange={setOwnerFilter} members={teamMembers} records={visibleCases} /> : null}
                   <select
                     className="field min-w-0"
                     value={statusFilter}
