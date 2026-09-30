@@ -7,9 +7,9 @@ export type NavigationItem = { id: string; label: string; icon: LucideIcon; coun
 
 export function FloatingNavigation({ items, activeId, onNavigate, disabled }: { items: NavigationItem[]; activeId: string; onNavigate: (id: string) => void; disabled: boolean }) {
   const [hidden, setHidden] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const bar = useRef<HTMLElement>(null);
-  const drag = useRef<{ x: number; y: number; originX: number; originY: number; moved: boolean } | null>(null);
+  const drag = useRef(false);
   const suppressClick = useRef(false);
 
   useEffect(() => {
@@ -23,34 +23,33 @@ export function FloatingNavigation({ items, activeId, onNavigate, disabled }: { 
       else if (distance > 18 && !drag.current) setHidden(true);
       previous = current;
     };
-    const resize = () => setPosition({ x: 0, y: 0 });
     window.addEventListener("scroll", scroll, { passive: true });
-    window.addEventListener("resize", resize);
-    return () => { window.removeEventListener("scroll", scroll); window.removeEventListener("resize", resize); };
+    return () => { window.removeEventListener("scroll", scroll); };
   }, []);
 
-  return <nav ref={bar} className={`floating-navigation ${hidden || disabled ? "floating-navigation-hidden" : ""}`} aria-label="Quick navigation" inert={hidden || disabled} style={{ left: `calc(50% + ${position.x}px)`, bottom: `calc(max(12px, env(safe-area-inset-bottom)) + ${position.y}px)` }}
+  const itemAt = (x: number, y: number) => {
+    const rect = bar.current?.getBoundingClientRect();
+    if (!rect || x < rect.left || x > rect.right || y < rect.top - 20 || y > rect.bottom + 20) return null;
+    const index = Math.max(0, Math.min(items.length - 1, Math.floor((x - rect.left - 6) / ((rect.width - 12) / items.length))));
+    return items[index]?.id ?? null;
+  };
+  const highlightIndex = items.findIndex((item) => item.id === (previewId ?? activeId));
+  return <nav ref={bar} className={`floating-navigation ${drag.current ? "floating-navigation-held" : ""} ${hidden || disabled ? "floating-navigation-hidden" : ""}`} aria-label="Quick navigation" inert={hidden || disabled} style={{ left: "50%", bottom: "max(12px, env(safe-area-inset-bottom))" }}
     onPointerDown={(event) => {
       if (event.button !== 0) return;
       suppressClick.current = false;
-      drag.current = { x: event.clientX, y: event.clientY, originX: position.x, originY: position.y, moved: false };
+      drag.current = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setPreviewId(itemAt(event.clientX, event.clientY));
     }}
     onPointerMove={(event) => {
-      const start = drag.current;
-      if (!start || !bar.current) return;
-      const dx = event.clientX - start.x;
-      const dy = event.clientY - start.y;
-      if (!start.moved && Math.hypot(dx, dy) < 10) return;
-      start.moved = true;
-      bar.current.setPointerCapture(event.pointerId);
-      const width = bar.current.offsetWidth;
-      const limit = Math.max(0, (window.innerWidth - width) / 2 - 8);
-      setPosition({ x: Math.max(-limit, Math.min(limit, start.originX + dx)), y: Math.max(0, Math.min(window.innerHeight - 150, start.originY - dy)) });
+      if (drag.current) setPreviewId(itemAt(event.clientX, event.clientY));
     }}
-    onPointerUp={() => { suppressClick.current = Boolean(drag.current?.moved); drag.current = null; }}
-    onPointerCancel={() => { suppressClick.current = true; drag.current = null; }}
+    onPointerUp={(event) => { if (!drag.current) return; const id = itemAt(event.clientX, event.clientY); suppressClick.current = true; drag.current = false; setPreviewId(null); if (id) onNavigate(id); }}
+    onPointerCancel={() => { suppressClick.current = true; drag.current = false; setPreviewId(null); }}
     onClickCapture={(event) => { if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); suppressClick.current = false; } }}>
-    {items.map(({ id, label, icon: Icon, count }) => <button key={id} type="button" aria-label={`${label}, ${count}`} aria-current={activeId === id ? "page" : undefined} onClick={() => onNavigate(id)}>
+    {highlightIndex >= 0 ? <span aria-hidden="true" className="floating-navigation-glass" style={{ width: `calc((100% - 12px) / ${items.length})`, transform: `translateX(${highlightIndex * 100}%)` }} /> : null}
+    {items.map(({ id, label, icon: Icon, count }) => <button key={id} type="button" aria-label={`${label}, ${count}`} aria-current={activeId === id ? "page" : undefined} data-preview={previewId === id} onClick={() => onNavigate(id)}>
       <span className="floating-navigation-icon"><Icon size={21} strokeWidth={activeId === id ? 2.5 : 1.8} /><span className="navigation-badge">{count > 99 ? "99+" : count}</span></span>
       <span className="floating-navigation-label">{label}</span>
     </button>)}
