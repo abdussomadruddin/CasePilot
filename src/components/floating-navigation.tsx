@@ -50,7 +50,7 @@ export function FloatingNavigation({ items, activeId, onNavigate, disabled }: { 
     onClickCapture={(event) => { if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); suppressClick.current = false; } }}>
     {highlightIndex >= 0 ? <span aria-hidden="true" className="floating-navigation-glass" style={{ width: `calc((100% - 12px) / ${items.length})`, transform: `translateX(${highlightIndex * 100}%)` }} /> : null}
     {items.map(({ id, label, icon: Icon, count }) => <button key={id} type="button" aria-label={`${label}, ${count}`} aria-current={activeId === id ? "page" : undefined} data-preview={previewId === id} onClick={() => onNavigate(id)}>
-      <span className="floating-navigation-icon"><Icon size={21} strokeWidth={activeId === id ? 2.5 : 1.8} /><span className="navigation-badge">{count > 99 ? "99+" : count}</span></span>
+      <span className="floating-navigation-icon"><Icon size={21} strokeWidth={activeId === id ? 2.5 : 1.8} />{id !== "dashboard" && count > 0 ? <span className="navigation-badge">{count > 99 ? "99+" : count}</span> : null}</span>
       <span className="floating-navigation-label">{label}</span>
     </button>)}
   </nav>;

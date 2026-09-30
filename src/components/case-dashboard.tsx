@@ -1028,15 +1028,18 @@ export function CaseDashboard() {
   const navigationAppointments = appointments.filter((item) => (role === "admin" || item.ownerId === profile?.id) && item.status === "scheduled" && +new Date(item.startsAt) >= leadNowMs);
   const navigationCounts: Record<string, number> = {
     dashboard: visibleCases.filter((record) => isFollowUpDue(record)).length + navigationLeads.filter((lead) => lead.status === "new" || isLeadFollowUpDue(lead, leadNowMs)).length + navigationAppointments.length,
-    cases: visibleCases.length,
-    leads: navigationLeads.length,
-    lead_followup: navigationLeads.filter((lead) => isLeadFollowUpDue(lead, leadNowMs)).length,
+    cases: visibleCases.filter((record) => isMyTask(record, role, profile?.id)).length,
+    leads: navigationLeads.filter((lead) => ["new", "contacted", "all_offer_presented", "need_follow_up", "potential"].includes(lead.status)).length,
+    lead_followup: navigationLeads.filter((lead) => lead.status === "new" || lead.status === "contacted").length,
     appointments: navigationAppointments.length,
     team: teamMembers.length,
     integration: new Set(navigationLeads.map((lead) => lead.source).filter((source) => source === "meta_ads" || source === "tiktok_ads")).size,
   };
   const navigateSection = (id: string) => {
     setFunnelSelection(null);
+    if (id === "cases") {
+      setActiveTab("tasks"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter("");
+    }
     if (id === "lead_followup" || id === "leads") {
       setLeadStatusJump("all");
       setLeadViewJump(id === "lead_followup" ? "followup" : "all");
@@ -2115,19 +2118,9 @@ export function CaseDashboard() {
               type="button"
               className={`drawer-item flex items-center gap-3 rounded-md px-4 py-3 text-left ${active ? "drawer-item-active text-white" : "text-zinc-300 hover:bg-white/5"}`}
               aria-current={active ? "page" : undefined}
-              onClick={() => {
-                setFunnelSelection(null);
-                if (id === "lead_followup" || id === "leads") {
-                  setLeadStatusJump("all");
-                  setLeadViewJump(id === "lead_followup" ? "followup" : "all");
-                  setAppSection("leads");
-                } else setAppSection(id as typeof appSection);
-                setDrawerOpen(false);
-                setProfileMenuOpen(false);
-                window.scrollTo({ top: 0 });
-              }}
+              onClick={() => navigateSection(id)}
             >
-              <Icon className="h-5 w-5 shrink-0" /><span className="flex-1">{label}</span><span className="drawer-count">{navigationCounts[id] > 99 ? "99+" : navigationCounts[id]}</span>
+              <Icon className="h-5 w-5 shrink-0" /><span className="flex-1">{label}</span>{id !== "dashboard" && navigationCounts[id] > 0 ? <span className="drawer-count">{navigationCounts[id] > 99 ? "99+" : navigationCounts[id]}</span> : null}
             </button>
           );
           })}

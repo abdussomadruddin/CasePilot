@@ -234,7 +234,8 @@ export function LeadPanel({
   }, []);
   useEffect(() => setView(initialView), [initialView]);
   const scopedLeads = cohortLeadIds ? leads.filter((lead) => cohortLeadIds.includes(lead.id)) : leads;
-  const ownerLeads = scopedLeads.filter((lead) => matchesOwnerFilter(lead, ownerFilter, teamMembers));
+  const ownerLeads = scopedLeads.filter((lead) => matchesOwnerFilter(lead, ownerFilter, teamMembers))
+    .sort((left, right) => Number(["number_invalid", "rejected"].includes(left.status)) - Number(["number_invalid", "rejected"].includes(right.status)));
   const dueLeads = ownerLeads.filter((lead) => isLeadFollowUpDue(lead, nowMs));
   const statusLeads = ownerLeads.filter((lead) => filter === "all" || lead.status === filter);
   const followUpStages = availableLeadFollowUpStages(statusLeads.map((lead) => ({
