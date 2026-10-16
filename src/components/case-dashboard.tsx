@@ -2,7 +2,8 @@
 
 import { vehicleCatalog } from "../../supabase/functions/_shared/vehicle-catalog";
 import { emptyInvoice } from "@/lib/invoice";
-import type { InvoiceSeed } from "@/components/client-document-workspace";
+import { emptyEhakmilik } from "@/lib/ehakmilik";
+import type { EhakmilikSeed, InvoiceSeed } from "@/components/client-document-workspace";
 
 import {
   AlertTriangle,
@@ -720,7 +721,8 @@ function previousCaseMonth(value: string) {
 }
 
 export function CaseDashboard() {
-  const [appSection, setAppSection] = useState<"dashboard" | "cases" | "leads" | "appointments" | "team" | "integration" | "honda_vso" | "invoice" | "receipt" | "clients">("dashboard");
+  const [appSection, setAppSection] = useState<"dashboard" | "cases" | "leads" | "appointments" | "team" | "integration" | "honda_vso" | "invoice" | "receipt" | "ehakmilik" | "clients">("dashboard");
+  const [ehakmilikSeed, setEhakmilikSeed] = useState<EhakmilikSeed | null>(null);
   const [invoiceSeed, setInvoiceSeed] = useState<InvoiceSeed | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [leads, setLeads] = useState<LeadRecord[]>([]);
@@ -768,13 +770,13 @@ export function CaseDashboard() {
   useEffect(() => setOwnerFilter("all"), [profile?.id]);
   const [contextReady, setContextReady] = useState(false);
   const uiProfileId = profile?.id;
-  useEffect(() => { setInvoiceSeed(null); }, [uiProfileId]);
+  useEffect(() => { setInvoiceSeed(null); setEhakmilikSeed(null); }, [uiProfileId]);
   const [hasVisitedCases, setHasVisitedCases] = useState(false);
   useEffect(() => {
     if (!uiProfileId) { setContextReady(false); return; }
     const saved = readUiContext<{ section: typeof appSection; view: typeof leadViewJump; tab: DashboardTab; status: StatusFilter; dealer: DealerFilter; month: string; visitedCases: boolean; owner: OwnerFilter }>(`cp:ui:${uiProfileId}`);
     const explicit = new URLSearchParams(window.location.search).has("section");
-    if (!explicit && ["dashboard", "cases", "leads", "appointments", "team", "integration", "honda_vso", "invoice", "receipt", "clients"].includes(saved.section || "")) {
+    if (!explicit && ["dashboard", "cases", "leads", "appointments", "team", "integration", "honda_vso", "invoice", "receipt", "ehakmilik", "clients"].includes(saved.section || "")) {
       setAppSection(saved.section!);
       if (["all", "new", "contacted", "followup"].includes(saved.view || "")) setLeadViewJump(saved.view!);
     }
@@ -915,7 +917,7 @@ export function CaseDashboard() {
 
   useEffect(() => {
     const section = new URLSearchParams(window.location.search).get("section");
-    if (section === "appointments" || section === "leads" || section === "cases" || section === "integration" || section === "honda_vso" || section === "invoice" || section === "receipt" || section === "clients") setAppSection(section);
+    if (section === "appointments" || section === "leads" || section === "cases" || section === "integration" || section === "honda_vso" || section === "invoice" || section === "receipt" || section === "ehakmilik" || section === "clients") setAppSection(section);
     const leadView = new URLSearchParams(window.location.search).get("view");
     if (section === "leads" && (leadView === "new" || leadView === "contacted" || leadView === "followup")) setLeadViewJump(leadView);
   }, []);
@@ -961,7 +963,7 @@ export function CaseDashboard() {
 
   useEffect(() => {
     if (role !== "admin" && (appSection === "team" || appSection === "integration")) setAppSection("dashboard");
-    if (role === "sales_manager" && ["honda_vso", "invoice", "receipt", "clients"].includes(appSection)) setAppSection("dashboard");
+    if (role === "sales_manager" && ["honda_vso", "invoice", "receipt", "ehakmilik", "clients"].includes(appSection)) setAppSection("dashboard");
   }, [appSection, role]);
 
   useEffect(() => {
@@ -1850,7 +1852,7 @@ export function CaseDashboard() {
               </div>
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-extrabold tracking-normal text-white sm:text-2xl">
-                  {appSection === "dashboard" ? "Dashboard" : appSection === "cases" ? "Case" : appSection === "leads" ? "Lead" : appSection === "appointments" ? "Appointment" : appSection === "integration" ? "Integration" : appSection === "honda_vso" ? "Honda VSO" : appSection === "invoice" ? "Invoice" : appSection === "receipt" ? "Receipt" : appSection === "clients" ? "Client" : "Team"}
+                  {appSection === "dashboard" ? "Dashboard" : appSection === "cases" ? "Case" : appSection === "leads" ? "Lead" : appSection === "appointments" ? "Appointment" : appSection === "integration" ? "Integration" : appSection === "honda_vso" ? "Honda VSO" : appSection === "invoice" ? "Invoice" : appSection === "receipt" ? "Receipt" : appSection === "ehakmilik" ? "e-hakmilik" : appSection === "clients" ? "Client" : "Team"}
                 </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
                   <span className="rounded-full border border-red-500/30 bg-red-950/50 px-2.5 py-1 text-red-100">
@@ -2132,6 +2134,12 @@ export function CaseDashboard() {
                     saving={saving}
                     teamMembers={teamMembers}
                     onEdit={openEditForm}
+                    onCreateEhakmilik={(record) => {
+                      if (role === "sales_manager") return;
+                      const bank = record.banks.length === 1 ? record.banks[0] : undefined;
+                      setEhakmilikSeed({ id: crypto.randomUUID(), phone: record.customerPhone || "", data: { ...emptyEhakmilik(), customerName: record.customerName, model: record.carModel, variant: record.carVariant || "", colour: record.carColor || "", bankName: bank?.bankName || "", bankerName: bank?.bankerName || "", salesAdvisorName: profile?.fullName || "" } });
+                      setAppSection("ehakmilik");
+                    }}
                     onCreateInvoice={(record) => {
                       if (role === "sales_manager") return;
                       setInvoiceSeed({ id: crypto.randomUUID(), phone: record.customerPhone || "", data: { ...emptyInvoice(), customerName: record.customerName, model: record.carModel, variant: record.carVariant || "", colour: record.carColor || "", preparedName: profile?.fullName || "", preparedPhone: profile?.phone || "" } });
@@ -2169,7 +2177,7 @@ export function CaseDashboard() {
         {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={`${leadStatusJump}:${funnelSelection?.section === "leads" ? funnelSelection.label : ""}`} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} initialView={leadViewJump} onViewChange={setLeadViewJump} cohortLeadIds={funnelSelection?.section === "leads" ? funnelSelection.ids : undefined} cohortLabel={funnelSelection?.section === "leads" ? funnelSelection.label : undefined} onClearCohort={() => setFunnelSelection(null)} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
         {appSection === "appointments" && profile && ["admin", "customer_service", "broker"].includes(role) ? <AppointmentPanel key={appointmentSubject} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} appointments={appointments} initialSubject={appointmentSubject} onRefresh={refreshCases} /> : null}
         </div></MotionSurface>
-        {profile && role !== "sales_manager" ? <ClientDocumentWorkspace key={profile.id} section={appSection} profile={profile} invoiceSeed={invoiceSeed} onNavigate={setAppSection} /> : null}
+        {profile && role !== "sales_manager" ? <ClientDocumentWorkspace key={profile.id} section={appSection} profile={profile} invoiceSeed={invoiceSeed} ehakmilikSeed={ehakmilikSeed} onNavigate={setAppSection} /> : null}
       </div>
       <div
         className={`casepilot-drawer fixed inset-0 z-50 ${drawerOpen ? "casepilot-drawer-open" : ""}`}
@@ -2198,7 +2206,7 @@ export function CaseDashboard() {
             { id: "cases", label: "Case", icon: FolderKanban },
             ...(role !== "sales_manager" ? [{ id: "honda_vso", label: "Honda VSO", icon: FileText }] : []),
             ...(role !== "sales_manager" ? [{ id: "invoice", label: "Invoice", icon: FileText }] : []),
-            ...(role !== "sales_manager" ? [{ id: "receipt", label: "Receipt", icon: FileText }, { id: "clients", label: "Client", icon: Users }] : []),
+            ...(role !== "sales_manager" ? [{ id: "receipt", label: "Receipt", icon: FileText }, { id: "ehakmilik", label: "e-hakmilik", icon: FileText }, { id: "clients", label: "Client", icon: Users }] : []),
             ...(["admin", "customer_service", "broker"].includes(role)
               ? [{ id: "leads", label: "Lead", icon: Users }, { id: "lead_followup", label: "Lead Follow Up", icon: Clock3 }, { id: "appointments", label: "Appointment", icon: CalendarDays }]
               : []),
@@ -2225,7 +2233,7 @@ export function CaseDashboard() {
         </nav>
       </div>
 
-      {!["honda_vso", "invoice", "receipt"].includes(appSection) ? <FloatingNavigation items={[
+      {!["honda_vso", "invoice", "receipt", "ehakmilik"].includes(appSection) ? <FloatingNavigation items={[
         { id: "dashboard", label: "Home", icon: LayoutDashboard, count: navigationCounts.dashboard },
         ...(["admin", "customer_service", "broker"].includes(role) ? [
           { id: "leads", label: "Lead", icon: Users, count: navigationCounts.leads },
@@ -2978,6 +2986,7 @@ function CaseCard({
   onSaveRemark,
   onSaveStatus,
   onCreateInvoice,
+  onCreateEhakmilik,
 }: {
   record: CaseRecord;
   role: Role;
@@ -2989,6 +2998,7 @@ function CaseCard({
   onSaveRemark: (record: CaseRecord, remark: string) => Promise<void>;
   onSaveStatus: (record: CaseRecord, status: CaseStatus) => Promise<void>;
   onCreateInvoice: (record: CaseRecord) => void;
+  onCreateEhakmilik: (record: CaseRecord) => void;
 }) {
   const assignedRoles = getAssignedRoles(record.status);
   const latestRemark = getLatestRemark(record);
@@ -3148,7 +3158,7 @@ function CaseCard({
         </div>
       </div>
 
-      {role !== "sales_manager" ? <div className="border-t border-zinc-800 px-3 py-2 sm:px-4"><button type="button" className="secondary-button" onClick={() => onCreateInvoice(record)}><FileText className="h-4 w-4" />Create Invoice</button></div> : null}
+      {role !== "sales_manager" ? <div className="flex flex-wrap gap-2 border-t border-zinc-800 px-3 py-2 sm:px-4"><button type="button" className="secondary-button" onClick={() => onCreateInvoice(record)}><FileText className="h-4 w-4" />Create Invoice</button><button type="button" className="secondary-button" onClick={() => onCreateEhakmilik(record)}><FileText className="h-4 w-4" />e-hakmilik</button></div> : null}
       {allowEdit ? (
         <div className="grid gap-2 border-t border-zinc-800 px-3 py-2 sm:px-4">
           <div className="flex items-center gap-2">

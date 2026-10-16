@@ -6,15 +6,18 @@ import { Check, CloudUpload, FilePlus2, LoaderCircle, Plus, RefreshCw, Search, U
 import { getSupabaseClient } from "@/lib/supabase";
 import { asInvoice, asReceipt, asVso, blankBundle, clientFields, documentWithShared, listClients, listPurchases, loadBundle, newDraft, normalizedClientPhone, purchaseFields, saveBundle, updateDocument, type ClientBundle, type ClientRow, type DocumentData, type DocumentKind, type PurchaseRow } from "@/lib/client-documents";
 import type { Profile } from "@/lib/types";
+import { emptyEhakmilik, type EhakmilikData } from "@/lib/ehakmilik";
 import type { InvoiceData } from "@/lib/invoice";
 
 const InvoicePanel = dynamic(() => import("@/components/invoice-panel").then(m => m.InvoicePanel));
 const HondaVsoPanel = dynamic(() => import("@/components/honda-vso-panel").then(m => m.HondaVsoPanel));
 const ReceiptPanel = dynamic(() => import("@/components/receipt-panel").then(m => m.ReceiptPanel));
+const EhakmilikPanel = dynamic(() => import("@/components/ehakmilik-panel").then(m => m.EhakmilikPanel));
+export type EhakmilikSeed = { id: string; phone: string; data: EhakmilikData };
 type SaveState = "draft" | "saving" | "saved" | "error" | "conflict" | "sample";
 export type InvoiceSeed = { id: string; data: InvoiceData; phone: string };
 
-export function ClientDocumentWorkspace({ section, profile, invoiceSeed, onNavigate }: { section: string; profile: Profile; invoiceSeed: InvoiceSeed | null; onNavigate: (section: "clients" | DocumentKind) => void }) {
+export function ClientDocumentWorkspace({ section, profile, invoiceSeed, ehakmilikSeed, onNavigate }: { section: string; profile: Profile; invoiceSeed: InvoiceSeed | null; ehakmilikSeed: EhakmilikSeed | null; onNavigate: (section: "clients" | DocumentKind) => void }) {
   const [bundle, setBundle] = useState<ClientBundle>(() => blankBundle(profile.id));
   const current = useRef(bundle);
   const [clients, setClients] = useState<ClientRow[]>([]);
@@ -32,11 +35,12 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, onNavig
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const alive = useRef(true);
   const seenSeed = useRef("");
+  const caseEhakPending = useRef(false);
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   const flushRef = useRef<() => Promise<void>>(async () => {});
-  const kind: DocumentKind | null = section === "invoice" || section === "honda_vso" || section === "receipt" ? section : null;
+  const kind: DocumentKind | null = section === "invoice" || section === "honda_vso" || section === "receipt" || section === "ehakmilik" ? section : null;
   const phone = normalizedClientPhone(bundle.client.data.phone || "");
-  const matches = clients.filter(item => item.id !== bundle.client.id && item.owner_id === bundle.client.owner_id && phone && normalizedClientPhone(item.data.phone || "") === phone);
+  const matches = clients.filter(item => item.id !== bundle.client.id && phone && normalizedClientPhone(item.data.phone || "") === phone);
   const blockedByMatch = matches.length > 0 && ignoredMatch !== phone;
   const matchingRef = useRef(blockedByMatch);
   matchingRef.current = blockedByMatch;
@@ -144,6 +148,7 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, onNavig
     return revision.current === savedRevision.current || window.confirm("Masih ada perubahan belum disimpan. Ganti draft semasa?");
   }
   function selectBundle(value: ClientBundle) {
+    caseEhakPending.current = false;
     retry.current = null; revision.current = 0; savedRevision.current = 0; sample.current = false;
     replace(value); setActiveDraftId(""); setIgnoredMatch(""); setStatus(value.client.version ? "saved" : "draft"); setError("");
   }
@@ -157,6 +162,17 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, onNavig
       selectBundle(next); setPurchases(sets);
     } catch { setError("Client gagal dibuka. Draft semasa dikekalkan."); }
     finally { setLoading(false); }
+  }
+  async function selectMatchingClient(client: ClientRow) {
+    if (!caseEhakPending.current) { await selectClient(client); return; }
+    if (!mayReplace()) return;
+    // Keep case data in a new purchase; never replace an older purchase or document.
+    const source = current.current;
+    const next = { ...source, client, purchase: { ...source.purchase, client_id: client.id } };
+    caseEhakPending.current = false; retry.current = null;
+    revision.current += 1; sample.current = false;
+    replace(next); setIgnoredMatch(""); setStatus("draft"); setError("");
+    void listPurchases(client.id).then(setPurchases).catch(() => setError("Senarai pembelian gagal dimuatkan. Cuba refresh."));
   }
   async function selectPurchase(purchase: PurchaseRow) {
     if (!mayReplace()) return;
@@ -210,6 +226,21 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, onNavig
     replace(seeded); setActiveDraftId(draft.id); setPurchases([]); setIgnoredMatch(""); setStatus("draft"); setError("");
   }, [clients, invoiceSeed, profile.id, profile.fullName, profile.phone, replace]);
 
+  useEffect(() => {
+    if (!ehakmilikSeed || seenSeed.current === ehakmilikSeed.id) return;
+    seenSeed.current = ehakmilikSeed.id;
+    if (pending.current || (revision.current !== savedRevision.current && !window.confirm("Ganti draft belum disimpan dengan maklumat case?"))) return;
+    const next = blankBundle(profile.id);
+    next.client.data.phone = ehakmilikSeed.phone;
+    caseEhakPending.current = true;
+    const draft = newDraft("ehakmilik", next.purchase.id, profile.fullName, profile.phone || "");
+    next.documents = [draft];
+    retry.current = null;
+    revision.current += 1; sample.current = false;
+    replace(updateDocument(next, draft, { ...emptyEhakmilik(), ...ehakmilikSeed.data }));
+    setActiveDraftId(draft.id); setPurchases([]); setIgnoredMatch(""); setStatus("draft"); setError("");
+  }, [ehakmilikSeed, profile.id, profile.fullName, profile.phone, replace]);
+
   const draft = bundle.documents.find(d => d.kind === kind && d.id === activeDraftId) || bundle.documents.find(d => d.kind === kind);
   const draftData = draft?.data, draftKind = draft?.kind;
   const clientData = bundle.client.data, purchaseData = bundle.purchase.data;
@@ -217,6 +248,7 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, onNavig
   function editDocument(value: DocumentData) { if (draft) change(updateDocument(current.current, draft, value)); }
   function useSample(value: DocumentData) {
     if (!kind) return;
+    caseEhakPending.current = false;
     const next = blankBundle(profile.id);
     const sampleDraft = { ...newDraft(kind, next.purchase.id, profile.fullName, profile.phone || ""), data: value };
     next.documents = [sampleDraft];
@@ -238,12 +270,13 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, onNavig
       <div className="mt-2 flex items-center gap-2"><select aria-label="Pilih set pembelian" className="field min-w-0 flex-1" disabled={loading || status === "saving"} value={bundle.purchase.version ? bundle.purchase.id : ""} onChange={e => { const p = purchases.find(x => x.id === e.target.value); if (p) void selectPurchase(p); }}><option value="">Set pembelian baharu</option>{purchases.map(p => <option key={p.id} value={p.id}>{p.data.label || [p.data.model, p.data.variant, p.data.plate].filter(Boolean).join(" ") || "Set pembelian"}</option>)}</select><button className="icon-button" title="Set pembelian baharu" aria-label="Set pembelian baharu" disabled={status === "saving"} onClick={() => { if (!mayReplace()) return; const next = blankBundle(profile.id); next.client = bundle.client; next.purchase.client_id = bundle.client.id; selectBundle(next); }}><FilePlus2 className="h-4 w-4" /></button></div>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-400"><span role="status" className="flex items-center gap-1">{status === "saving" ? <LoaderCircle className="h-3 w-3 animate-spin" /> : status === "saved" ? <Check className="h-3 w-3 text-emerald-400" /> : <CloudUpload className="h-3 w-3" />}{status === "saving" ? "Saving..." : status === "saved" ? "Saved" : status === "sample" ? "Contoh belum disimpan" : status === "error" || status === "conflict" ? "Gagal disimpan" : "Draft"}</span>{status === "sample" ? <button className="text-emerald-300 underline" onClick={() => { sample.current = false; setStatus("draft"); }}>Simpan contoh sebagai client</button> : null}{status === "error" ? <button className="underline" onClick={() => void flush()}>Cuba semula</button> : null}{status === "conflict" ? <button className="underline" onClick={async () => { if (!window.confirm("Buang input belum disimpan dan muatkan versi server?")) return; try { const rows = await listClients(); const c = rows.find(x => x.id === bundle.client.id); if (!c) throw new Error(); const sets = await listPurchases(c.id); const p = sets.find(x => x.id === bundle.purchase.id); if (!p) throw new Error(); selectBundle(await loadBundle(c, p)); setClients(rows); setPurchases(sets); } catch { setError("Versi server gagal dimuatkan. Input dikekalkan."); } }}>Muatkan versi server</button> : null}</div>
       {error ? <p role="alert" className="mt-2 text-sm text-amber-300">{error}</p> : null}
-      {blockedByMatch ? <div className="mt-3 flex flex-wrap items-center gap-2 border-l-2 border-amber-400 pl-3 text-sm"><span>Telefon sepadan: {matches[0].data.customerName || matches[0].data.phone}</span><button className="secondary-button" onClick={() => void selectClient(matches[0])}>Guna client ini</button><button className="secondary-button" onClick={() => setIgnoredMatch(phone)}>Simpan berasingan</button></div> : null}
+      {blockedByMatch ? <div className="mt-3 flex flex-wrap items-center gap-2 border-l-2 border-amber-400 pl-3 text-sm"><span>Telefon sepadan: {matches[0].data.customerName || matches[0].data.phone}</span><button className="secondary-button" onClick={() => void selectMatchingClient(matches[0])}>Guna client ini</button><button className="secondary-button" onClick={() => setIgnoredMatch(phone)}>Simpan berasingan</button></div> : null}
     </div>
     {kind === "receipt" ? <div className="mb-4 flex gap-2"><select className="field min-w-0 flex-1" aria-label="Pilih receipt" value={draft?.id || ""} onChange={e => { const selected = allReceipts.find(d => d.id === e.target.value); if (selected && mayReplace()) { const purchase = purchases.find(p => p.id === selected.purchase_id); if (purchase) void selectPurchase(purchase); } }}>{allReceipts.filter(d => purchases.some(p => p.id === d.purchase_id)).map((d, i) => <option key={d.id} value={d.id}>{String(d.data.receiptNo || `Receipt ${i + 1}`)}{d.purchase_id !== bundle.purchase.id ? ` · ${purchases.find(p => p.id === d.purchase_id)?.data.label || "Pembelian lain"}` : ""}</option>)}{bundle.documents.filter(d => d.kind === "receipt" && !allReceipts.some(x => x.id === d.id)).map((d, i) => <option key={d.id} value={d.id}>{String(d.data.receiptNo || `Receipt ${i + 1}`)}</option>)}</select><button className="secondary-button" disabled={status === "saving"} onClick={() => { if (!mayReplace()) return; const d = newDraft("receipt", bundle.purchase.id, profile.fullName, profile.phone || ""); change({ ...bundle, documents: [...bundle.documents, d] }); setActiveDraftId(d.id); }}><Plus className="h-4 w-4" />Receipt</button></div> : null}
-    {section === "clients" ? <div className="pb-24"><h1 className="mb-4 text-xl font-bold">Client</h1><div className="grid gap-6 lg:grid-cols-2"><div><fieldset disabled={loading} className="grid min-w-0 gap-3 sm:grid-cols-2">{Object.entries(clientFields).map(([key, label]) => <label key={key} className="grid min-w-0 gap-1.5 text-xs text-zinc-400"><span>{label}</span>{key === "address" ? <textarea className="field w-full" maxLength={1000} value={bundle.client.data[key] || ""} onChange={e => change({ ...bundle, client: { ...bundle.client, data: { ...bundle.client.data, [key]: e.target.value } } })} /> : <input className="field min-w-0 w-full" type={key === "phone" ? "tel" : key === "email" ? "email" : "text"} maxLength={200} value={bundle.client.data[key] || ""} onChange={e => change({ ...bundle, client: { ...bundle.client, data: { ...bundle.client.data, [key]: e.target.value } } })} />}</label>)}</fieldset><h2 className="mb-3 mt-6 text-sm font-semibold">Pembelian / Kenderaan</h2><div className="grid min-w-0 gap-3 sm:grid-cols-2">{Object.entries(purchaseFields).map(([key, label]) => <label key={key} className="grid min-w-0 gap-1.5 text-xs text-zinc-400"><span>{label}</span><input className="field min-w-0 w-full" maxLength={200} value={bundle.purchase.data[key] || ""} onChange={e => change({ ...bundle, purchase: { ...bundle.purchase, data: { ...bundle.purchase.data, [key]: e.target.value } } })} /></label>)}</div><div className="mt-4 flex flex-wrap gap-2">{([ ["invoice", "Invoice"], ["honda_vso", "Honda VSO"], ["receipt", "Receipt"] ] as const).map(([id, label]) => <button className="secondary-button" key={id} onClick={() => onNavigate(id)}><FilePlus2 className="h-4 w-4" />{label}</button>)}</div></div><div><label className="mb-3 flex items-center gap-2"><Search className="h-4 w-4 text-zinc-400" /><input aria-label="Cari client" className="field min-w-0 w-full" placeholder="Cari client" value={search} onChange={e => setSearch(e.target.value)} /></label><div className="divide-y divide-zinc-800">{filteredClients.map(c => <button key={c.id} className="flex w-full flex-col gap-1 py-3 text-left" onClick={() => void selectClient(c)}><strong className="text-sm">{c.data.customerName || "Client"}</strong><span className="text-xs text-zinc-400">{[c.data.phone, c.data.email].filter(Boolean).join(" · ")}</span></button>)}{!filteredClients.length ? <p className="py-6 text-sm text-zinc-500">Tiada client.</p> : null}</div></div></div></div> : null}
+    {section === "clients" ? <div className="pb-24"><h1 className="mb-4 text-xl font-bold">Client</h1><div className="grid gap-6 lg:grid-cols-2"><div><fieldset disabled={loading} className="grid min-w-0 gap-3 sm:grid-cols-2">{Object.entries(clientFields).map(([key, label]) => <label key={key} className="grid min-w-0 gap-1.5 text-xs text-zinc-400"><span>{label}</span>{key === "address" ? <textarea className="field w-full" maxLength={1000} value={bundle.client.data[key] || ""} onChange={e => change({ ...bundle, client: { ...bundle.client, data: { ...bundle.client.data, [key]: e.target.value } } })} /> : <input className="field min-w-0 w-full" type={key === "phone" ? "tel" : key === "email" ? "email" : "text"} maxLength={200} value={bundle.client.data[key] || ""} onChange={e => change({ ...bundle, client: { ...bundle.client, data: { ...bundle.client.data, [key]: e.target.value } } })} />}</label>)}</fieldset><h2 className="mb-3 mt-6 text-sm font-semibold">Pembelian / Kenderaan</h2><div className="grid min-w-0 gap-3 sm:grid-cols-2">{Object.entries(purchaseFields).map(([key, label]) => <label key={key} className="grid min-w-0 gap-1.5 text-xs text-zinc-400"><span>{label}</span><input className="field min-w-0 w-full" maxLength={200} value={bundle.purchase.data[key] || ""} onChange={e => change({ ...bundle, purchase: { ...bundle.purchase, data: { ...bundle.purchase.data, [key]: e.target.value } } })} /></label>)}</div><div className="mt-4 flex flex-wrap gap-2">{([ ["invoice", "Invoice"], ["honda_vso", "Honda VSO"], ["receipt", "Receipt"], ["ehakmilik", "e-hakmilik"] ] as const).map(([id, label]) => <button className="secondary-button" key={id} onClick={() => onNavigate(id)}><FilePlus2 className="h-4 w-4" />{label}</button>)}</div></div><div><label className="mb-3 flex items-center gap-2"><Search className="h-4 w-4 text-zinc-400" /><input aria-label="Cari client" className="field min-w-0 w-full" placeholder="Cari client" value={search} onChange={e => setSearch(e.target.value)} /></label><div className="divide-y divide-zinc-800">{filteredClients.map(c => <button key={c.id} className="flex w-full flex-col gap-1 py-3 text-left" onClick={() => void selectClient(c)}><strong className="text-sm">{c.data.customerName || "Client"}</strong><span className="text-xs text-zinc-400">{[c.data.phone, c.data.email].filter(Boolean).join(" · ")}</span></button>)}{!filteredClients.length ? <p className="py-6 text-sm text-zinc-500">Tiada client.</p> : null}</div></div></div></div> : null}
     {kind === "invoice" && data && draft ? <InvoicePanel key={draft.id} data={asInvoice(data)} onChange={editDocument} onSample={useSample} /> : null}
     {kind === "honda_vso" && data && draft ? <HondaVsoPanel key={draft.id} data={asVso(data)} onChange={editDocument} onSample={useSample} /> : null}
+    {kind === "ehakmilik" && data && draft ? <EhakmilikPanel key={draft.id} data={data as EhakmilikData} onChange={editDocument} onSample={useSample} /> : null}
     {kind === "receipt" && data && draft ? <ReceiptPanel key={draft.id} data={asReceipt(data)} onChange={editDocument} onSample={useSample} /> : null}
     </fieldset>
   </section>;

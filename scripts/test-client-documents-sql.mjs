@@ -16,8 +16,10 @@ try {
     create publication supabase_realtime;
   `);
   await db.exec(await readFile(new URL("../supabase/migrations/20261016145622_client_document_workspace.sql", import.meta.url), "utf8"));
+  await db.exec(await readFile(new URL("../supabase/migrations/20261016161647_add_ehakmilik_document.sql", import.meta.url), "utf8"));
   await actor(1);
   const first = payload(10, 11, 12);
+  first.documents[0].kind = "ehakmilik";
   const created = await save(first);
   assert.equal(created.client.version, 1);
   assert.equal((await save(first)).client.version, 1, "Network retry is idempotent");

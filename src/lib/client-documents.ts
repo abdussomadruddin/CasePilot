@@ -3,7 +3,9 @@ import { emptyVsoData, type VsoData } from "@/lib/honda-vso.mjs";
 import { emptyReceipt, type ReceiptData } from "@/lib/receipt";
 import { getSupabaseClient } from "@/lib/supabase";
 
-export type DocumentKind = "invoice" | "honda_vso" | "receipt";
+import { emptyEhakmilik } from "@/lib/ehakmilik";
+
+export type DocumentKind = "invoice" | "honda_vso" | "receipt" | "ehakmilik";
 export type DocumentData = Record<string, string | boolean>;
 export type ClientRow = { id: string; owner_id: string; data: Record<string, string>; version: number; updated_at: string };
 export type PurchaseRow = { id: string; client_id: string; data: Record<string, string>; version: number; updated_at: string };
@@ -12,6 +14,7 @@ export type ClientBundle = { client: ClientRow; purchase: PurchaseRow; documents
 export const clientFields = { customerName: "Nama client", phone: "Telefon", email: "Email", nric: "NRIC / Passport", address: "Alamat" };
 export const purchaseFields = { label: "Nama set pembelian", make: "Brand", model: "Model", variant: "Variant", colour: "Warna", chassisNo: "Chassis no.", engineNo: "Engine no.", plate: "Plate no.", transmission: "Transmission" };
 const fieldMap: Record<DocumentKind, Record<string, string>> = {
+  ehakmilik: { customerName: "customerName", nric: "nric", model: "model", variant: "variant", colour: "colour", chassisNo: "chassisNo", engineNo: "engineNo" },
   invoice: { customerName: "customerName", model: "model", variant: "variant", colour: "colour", chassis: "chassisNo", plate: "plate" },
   honda_vso: { customerName: "customerName", mobilePhone: "phone", nric: "nric", address: "address", model: "model", variant: "variant", colour: "colour", chassisNo: "chassisNo", engineNo: "engineNo" },
   receipt: { customerName: "customerName", address: "address", make: "make", model: "model", variant: "variant", colour: "colour", chassisNo: "chassisNo", engineNo: "engineNo", transmission: "transmission" },
@@ -26,7 +29,7 @@ export function blankBundle(ownerId: string): ClientBundle {
   return { client: { id: cid, owner_id: ownerId, data: {}, version: 0, updated_at: "" }, purchase: { id: pid, client_id: cid, data: {}, version: 0, updated_at: "" }, documents: [] };
 }
 export function newDraft(kind: DocumentKind, purchaseId: string, preparedName: string, preparedPhone: string): DraftRow {
-  const data = kind === "invoice" ? { ...emptyInvoice(), preparedName, preparedPhone } : kind === "receipt" ? { ...emptyReceipt(), preparedName, preparedPhone } : { ...emptyVsoData(), salesAdvisorName: preparedName };
+  const data = kind === "ehakmilik" ? { ...emptyEhakmilik(), salesAdvisorName: preparedName } : kind === "invoice" ? { ...emptyInvoice(), preparedName, preparedPhone } : kind === "receipt" ? { ...emptyReceipt(), preparedName, preparedPhone } : { ...emptyVsoData(), salesAdvisorName: preparedName };
   return { id: crypto.randomUUID(), purchase_id: purchaseId, kind, data, version: 0, updated_at: "" };
 }
 export function documentWithShared(kind: DocumentKind, draft: DocumentData, clientData: Record<string, string>, purchaseData: Record<string, string>): DocumentData {

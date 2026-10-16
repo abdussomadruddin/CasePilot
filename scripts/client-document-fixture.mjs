@@ -15,6 +15,7 @@ await db.exec(`create role anon; create role authenticated; create schema auth;
   insert into profiles values('${id}','admin',true);
   create publication supabase_realtime;`);
 await db.exec(await readFile(new URL("../supabase/migrations/20261016145622_client_document_workspace.sql", import.meta.url), "utf8"));
+  await db.exec(await readFile(new URL("../supabase/migrations/20261016161647_add_ehakmilik_document.sql", import.meta.url), "utf8"));
 let calls = 0, fail = false, delay = 0, queue = Promise.resolve();
 const subscriptions = new Map();
 function broadcast(table, record) {
