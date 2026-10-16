@@ -27,17 +27,14 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, ehakmil
   const [status, setStatus] = useState<SaveState>("draft");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [available, setAvailable] = useState(false);
   const [search, setSearch] = useState("");
   const [ignoredMatch, setIgnoredMatch] = useState("");
   const revision = useRef(0), savedRevision = useRef(0), pending = useRef(false), sample = useRef(false);
   const retry = useRef<{ bundle: ClientBundle; token: string; revision: number } | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const alive = useRef(true);
   const seenSeed = useRef("");
   const caseEhakPending = useRef(false);
   const refreshRef = useRef<() => Promise<void>>(async () => {});
-  const flushRef = useRef<() => Promise<void>>(async () => {});
   const kind: DocumentKind | null = section === "invoice" || section === "honda_vso" || section === "receipt" || section === "ehakmilik" ? section : null;
   const phone = normalizedClientPhone(bundle.client.data.phone || "");
   const matches = clients.filter(item => item.id !== bundle.client.id && phone && normalizedClientPhone(item.data.phone || "") === phone);
@@ -52,12 +49,12 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, ehakmil
     replace(value);
     setStatus(isSample ? "sample" : "draft");
     setError("");
-    if (timer.current) clearTimeout(timer.current);
   }
-  const flush = useCallback(async () => {
-    if (pending.current || sample.current || matchingRef.current || revision.current === savedRevision.current) return;
+  const flush = useCallback(async (): Promise<boolean> => {
+    if (pending.current || sample.current || matchingRef.current) return false;
+    if (revision.current === savedRevision.current) return true;
     const value = current.current;
-    if (!(value.client.data.customerName || "").trim() && !(value.client.data.phone || "").trim()) return;
+    if (!(value.client.data.customerName || "").trim() && !(value.client.data.phone || "").trim()) { setError("Isi nama atau telefon Client sebelum menyimpan."); return false; }
     pending.current = true;
     const attempt = retry.current || { bundle: value, token: crypto.randomUUID(), revision: revision.current };
     retry.current = attempt;
@@ -65,7 +62,7 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, ehakmil
     setError("");
     try {
       const saved = await saveBundle(attempt.bundle, attempt.token);
-      if (!alive.current) return;
+      if (!alive.current) return false;
       const latest = current.current;
       if (latest.client.id === saved.client.id && latest.purchase.id === saved.purchase.id) {
         replace({ client: { ...latest.client, version: saved.client.version, updated_at: saved.client.updated_at }, purchase: { ...latest.purchase, version: saved.purchase.version, updated_at: saved.purchase.updated_at }, documents: latest.documents.map(item => {
@@ -77,19 +74,29 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, ehakmil
       }
       retry.current = null;
       void refreshRef.current();
+      return true;
     } catch (caught) {
-      if (!alive.current) return;
+      if (!alive.current) return false;
       const conflict = (caught as { code?: string }).code === "40001";
       setStatus(conflict ? "conflict" : "error");
       setError(conflict ? "Data dikemas kini di peranti lain. Input anda masih dikekalkan." : "Gagal disimpan. Input anda masih dikekalkan; cuba semula.");
+      return false;
     } finally { pending.current = false; }
   }, [replace]);
-  flushRef.current = flush;
+  async function saveExplicitly() {
+    if (matchingRef.current) { setError("Pilih guna Client sepadan atau simpan berasingan dahulu."); return false; }
+    if (pending.current || status === "conflict") return false;
+    sample.current = false;
+    if (!await flush()) return false;
+    // A retry may first acknowledge an older request; save the current input too.
+    if (revision.current !== savedRevision.current && !await flush()) return false;
+    return revision.current === savedRevision.current;
+  }
 
   const refresh = useCallback(async () => {
     const rows = await listClients();
     if (!alive.current) return;
-    setClients(rows); setAvailable(true);
+    setClients(rows);
     if (current.current.client.version) {
       const purchaseRows = await listPurchases(current.current.client.id);
       if (!alive.current || current.current.client.id !== rows.find(row => row.id === current.current.client.id)?.id) return;
@@ -105,7 +112,7 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, ehakmil
     const local = current.current;
     if (!local.client.version) return;
     const client = rows.find(row => row.id === local.client.id);
-    if (!client) { setError("Client ini tidak lagi boleh diakses."); setAvailable(false); return; }
+    if (!client) { setError("Client ini tidak lagi boleh diakses."); return; }
     const sets = await listPurchases(client.id);
     if (!alive.current || current.current.client.id !== client.id) return;
     setPurchases(sets);
@@ -119,7 +126,7 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, ehakmil
   refreshRef.current = refresh;
   useEffect(() => {
     alive.current = true;
-    const sync = () => { void refresh().catch(() => { if (alive.current) { setError("Senarai Client belum dapat dimuatkan. Cuba refresh."); setAvailable(false); } }); };
+    const sync = () => { void refresh().catch(() => { if (alive.current) { setError("Senarai Client belum dapat dimuatkan. Cuba refresh."); } }); };
     sync();
     let syncTimer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 200); };
@@ -129,13 +136,8 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, ehakmil
     channel.subscribe();
     window.addEventListener("online", sync);
     window.addEventListener("focus", sync);
-    return () => { alive.current = false; clearTimeout(syncTimer); if (timer.current) clearTimeout(timer.current); void db.removeChannel(channel); window.removeEventListener("online", sync); window.removeEventListener("focus", sync); };
+    return () => { alive.current = false; clearTimeout(syncTimer); void db.removeChannel(channel); window.removeEventListener("online", sync); window.removeEventListener("focus", sync); };
   }, [profile.id, refresh]);
-  useEffect(() => {
-    if (timer.current) clearTimeout(timer.current);
-    if (available && status === "draft" && !blockedByMatch) timer.current = setTimeout(() => void flushRef.current(), 800);
-    return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [bundle, available, blockedByMatch, status, flush]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (revision.current !== savedRevision.current && !sample.current) event.preventDefault(); };
     window.addEventListener("beforeunload", warn);
@@ -258,8 +260,8 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, ehakmil
   }
   const visible = section === "clients" || Boolean(kind);
   const filteredClients = clients.filter(c => `${c.data.customerName || ""} ${c.data.phone || ""} ${c.data.email || ""}`.toLowerCase().includes(search.toLowerCase()));
-  return <section hidden={!visible} className="min-w-0" onBlurCapture={event => { const next = event.relatedTarget as Node | null; if (next && event.currentTarget.contains(next)) return; if (available && status !== "error" && status !== "conflict") { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); } }}>
-    <fieldset disabled={loading} className="min-w-0">
+  return <section hidden={!visible} className="min-w-0">
+    <fieldset disabled={loading || status === "saving"} className="min-w-0">
     <div className="mb-4 border-b border-zinc-800 pb-4">
       <div className="flex flex-wrap items-center gap-2">
         <UserRound className="h-4 w-4 text-zinc-400" />
@@ -268,16 +270,16 @@ export function ClientDocumentWorkspace({ section, profile, invoiceSeed, ehakmil
         <button className="icon-button" title="Refresh Client" aria-label="Refresh Client" onClick={() => void refresh().catch(() => setError("Senarai Client gagal dimuatkan."))}><RefreshCw className="h-4 w-4" /></button>
       </div>
       <div className="mt-2 flex items-center gap-2"><select aria-label="Pilih set pembelian" className="field min-w-0 flex-1" disabled={loading || status === "saving"} value={bundle.purchase.version ? bundle.purchase.id : ""} onChange={e => { const p = purchases.find(x => x.id === e.target.value); if (p) void selectPurchase(p); }}><option value="">Set pembelian baharu</option>{purchases.map(p => <option key={p.id} value={p.id}>{p.data.label || [p.data.model, p.data.variant, p.data.plate].filter(Boolean).join(" ") || "Set pembelian"}</option>)}</select><button className="icon-button" title="Set pembelian baharu" aria-label="Set pembelian baharu" disabled={status === "saving"} onClick={() => { if (!mayReplace()) return; const next = blankBundle(profile.id); next.client = bundle.client; next.purchase.client_id = bundle.client.id; selectBundle(next); }}><FilePlus2 className="h-4 w-4" /></button></div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-400"><span role="status" className="flex items-center gap-1">{status === "saving" ? <LoaderCircle className="h-3 w-3 animate-spin" /> : status === "saved" ? <Check className="h-3 w-3 text-emerald-400" /> : <CloudUpload className="h-3 w-3" />}{status === "saving" ? "Saving..." : status === "saved" ? "Saved" : status === "sample" ? "Contoh belum disimpan" : status === "error" || status === "conflict" ? "Gagal disimpan" : "Draft"}</span>{status === "sample" ? <button className="text-emerald-300 underline" onClick={() => { sample.current = false; setStatus("draft"); }}>Simpan contoh sebagai client</button> : null}{status === "error" ? <button className="underline" onClick={() => void flush()}>Cuba semula</button> : null}{status === "conflict" ? <button className="underline" onClick={async () => { if (!window.confirm("Buang input belum disimpan dan muatkan versi server?")) return; try { const rows = await listClients(); const c = rows.find(x => x.id === bundle.client.id); if (!c) throw new Error(); const sets = await listPurchases(c.id); const p = sets.find(x => x.id === bundle.purchase.id); if (!p) throw new Error(); selectBundle(await loadBundle(c, p)); setClients(rows); setPurchases(sets); } catch { setError("Versi server gagal dimuatkan. Input dikekalkan."); } }}>Muatkan versi server</button> : null}</div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-400"><span role="status" className="flex items-center gap-1">{status === "saving" ? <LoaderCircle className="h-3 w-3 animate-spin" /> : status === "saved" ? <Check className="h-3 w-3 text-emerald-400" /> : <CloudUpload className="h-3 w-3" />}{status === "saving" ? "Saving..." : status === "saved" ? "Saved" : status === "sample" ? "Contoh belum disimpan" : status === "error" || status === "conflict" ? "Gagal disimpan" : "Draft"}</span>{status === "conflict" ? <button className="underline" onClick={async () => { if (!window.confirm("Buang input belum disimpan dan muatkan versi server?")) return; try { const rows = await listClients(); const c = rows.find(x => x.id === bundle.client.id); if (!c) throw new Error(); const sets = await listPurchases(c.id); const p = sets.find(x => x.id === bundle.purchase.id); if (!p) throw new Error(); selectBundle(await loadBundle(c, p)); setClients(rows); setPurchases(sets); } catch { setError("Versi server gagal dimuatkan. Input dikekalkan."); } }}>Muatkan versi server</button> : null}</div>
       {error ? <p role="alert" className="mt-2 text-sm text-amber-300">{error}</p> : null}
       {blockedByMatch ? <div className="mt-3 flex flex-wrap items-center gap-2 border-l-2 border-amber-400 pl-3 text-sm"><span>Telefon sepadan: {matches[0].data.customerName || matches[0].data.phone}</span><button className="secondary-button" onClick={() => void selectMatchingClient(matches[0])}>Guna client ini</button><button className="secondary-button" onClick={() => setIgnoredMatch(phone)}>Simpan berasingan</button></div> : null}
     </div>
     {kind === "receipt" ? <div className="mb-4 flex gap-2"><select className="field min-w-0 flex-1" aria-label="Pilih receipt" value={draft?.id || ""} onChange={e => { const selected = allReceipts.find(d => d.id === e.target.value); if (selected && mayReplace()) { const purchase = purchases.find(p => p.id === selected.purchase_id); if (purchase) void selectPurchase(purchase); } }}>{allReceipts.filter(d => purchases.some(p => p.id === d.purchase_id)).map((d, i) => <option key={d.id} value={d.id}>{String(d.data.receiptNo || `Receipt ${i + 1}`)}{d.purchase_id !== bundle.purchase.id ? ` · ${purchases.find(p => p.id === d.purchase_id)?.data.label || "Pembelian lain"}` : ""}</option>)}{bundle.documents.filter(d => d.kind === "receipt" && !allReceipts.some(x => x.id === d.id)).map((d, i) => <option key={d.id} value={d.id}>{String(d.data.receiptNo || `Receipt ${i + 1}`)}</option>)}</select><button className="secondary-button" disabled={status === "saving"} onClick={() => { if (!mayReplace()) return; const d = newDraft("receipt", bundle.purchase.id, profile.fullName, profile.phone || ""); change({ ...bundle, documents: [...bundle.documents, d] }); setActiveDraftId(d.id); }}><Plus className="h-4 w-4" />Receipt</button></div> : null}
-    {section === "clients" ? <div className="pb-24"><h1 className="mb-4 text-xl font-bold">Client</h1><div className="grid gap-6 lg:grid-cols-2"><div><fieldset disabled={loading} className="grid min-w-0 gap-3 sm:grid-cols-2">{Object.entries(clientFields).map(([key, label]) => <label key={key} className="grid min-w-0 gap-1.5 text-xs text-zinc-400"><span>{label}</span>{key === "address" ? <textarea className="field w-full" maxLength={1000} value={bundle.client.data[key] || ""} onChange={e => change({ ...bundle, client: { ...bundle.client, data: { ...bundle.client.data, [key]: e.target.value } } })} /> : <input className="field min-w-0 w-full" type={key === "phone" ? "tel" : key === "email" ? "email" : "text"} maxLength={200} value={bundle.client.data[key] || ""} onChange={e => change({ ...bundle, client: { ...bundle.client, data: { ...bundle.client.data, [key]: e.target.value } } })} />}</label>)}</fieldset><h2 className="mb-3 mt-6 text-sm font-semibold">Pembelian / Kenderaan</h2><div className="grid min-w-0 gap-3 sm:grid-cols-2">{Object.entries(purchaseFields).map(([key, label]) => <label key={key} className="grid min-w-0 gap-1.5 text-xs text-zinc-400"><span>{label}</span><input className="field min-w-0 w-full" maxLength={200} value={bundle.purchase.data[key] || ""} onChange={e => change({ ...bundle, purchase: { ...bundle.purchase, data: { ...bundle.purchase.data, [key]: e.target.value } } })} /></label>)}</div><div className="mt-4 flex flex-wrap gap-2">{([ ["invoice", "Invoice"], ["honda_vso", "Honda VSO"], ["receipt", "Receipt"], ["ehakmilik", "e-hakmilik"] ] as const).map(([id, label]) => <button className="secondary-button" key={id} onClick={() => onNavigate(id)}><FilePlus2 className="h-4 w-4" />{label}</button>)}</div></div><div><label className="mb-3 flex items-center gap-2"><Search className="h-4 w-4 text-zinc-400" /><input aria-label="Cari client" className="field min-w-0 w-full" placeholder="Cari client" value={search} onChange={e => setSearch(e.target.value)} /></label><div className="divide-y divide-zinc-800">{filteredClients.map(c => <button key={c.id} className="flex w-full flex-col gap-1 py-3 text-left" onClick={() => void selectClient(c)}><strong className="text-sm">{c.data.customerName || "Client"}</strong><span className="text-xs text-zinc-400">{[c.data.phone, c.data.email].filter(Boolean).join(" · ")}</span></button>)}{!filteredClients.length ? <p className="py-6 text-sm text-zinc-500">Tiada client.</p> : null}</div></div></div></div> : null}
-    {kind === "invoice" && data && draft ? <InvoicePanel key={draft.id} data={asInvoice(data)} onChange={editDocument} onSample={useSample} /> : null}
-    {kind === "honda_vso" && data && draft ? <HondaVsoPanel key={draft.id} data={asVso(data)} onChange={editDocument} onSample={useSample} /> : null}
-    {kind === "ehakmilik" && data && draft ? <EhakmilikPanel key={draft.id} data={data as EhakmilikData} onChange={editDocument} onSample={useSample} /> : null}
-    {kind === "receipt" && data && draft ? <ReceiptPanel key={draft.id} data={asReceipt(data)} onChange={editDocument} onSample={useSample} /> : null}
+    {section === "clients" ? <div className="pb-24"><div className="mb-4 flex items-center justify-between gap-3"><h1 className="text-xl font-bold">Client</h1><button className="primary-button" disabled={loading || status === "saving" || status === "conflict"} onClick={() => void saveExplicitly()}><CloudUpload className="h-4 w-4" />Simpan</button></div><div className="grid gap-6 lg:grid-cols-2"><div><fieldset disabled={loading} className="grid min-w-0 gap-3 sm:grid-cols-2">{Object.entries(clientFields).map(([key, label]) => <label key={key} className="grid min-w-0 gap-1.5 text-xs text-zinc-400"><span>{label}</span>{key === "address" ? <textarea className="field w-full" maxLength={1000} value={bundle.client.data[key] || ""} onChange={e => change({ ...bundle, client: { ...bundle.client, data: { ...bundle.client.data, [key]: e.target.value } } })} /> : <input className="field min-w-0 w-full" type={key === "phone" ? "tel" : key === "email" ? "email" : "text"} maxLength={200} value={bundle.client.data[key] || ""} onChange={e => change({ ...bundle, client: { ...bundle.client, data: { ...bundle.client.data, [key]: e.target.value } } })} />}</label>)}</fieldset><h2 className="mb-3 mt-6 text-sm font-semibold">Pembelian / Kenderaan</h2><div className="grid min-w-0 gap-3 sm:grid-cols-2">{Object.entries(purchaseFields).map(([key, label]) => <label key={key} className="grid min-w-0 gap-1.5 text-xs text-zinc-400"><span>{label}</span><input className="field min-w-0 w-full" maxLength={200} value={bundle.purchase.data[key] || ""} onChange={e => change({ ...bundle, purchase: { ...bundle.purchase, data: { ...bundle.purchase.data, [key]: e.target.value } } })} /></label>)}</div><div className="mt-4 flex flex-wrap gap-2">{([ ["honda_vso", "Honda VSO"], ["invoice", "Invoice"], ["receipt", "Receipt"], ["ehakmilik", "e-hakmilik"] ] as const).map(([id, label]) => <button className="secondary-button" key={id} onClick={() => onNavigate(id)}><FilePlus2 className="h-4 w-4" />{label}</button>)}</div></div><div><label className="mb-3 flex items-center gap-2"><Search className="h-4 w-4 text-zinc-400" /><input aria-label="Cari client" className="field min-w-0 w-full" placeholder="Cari client" value={search} onChange={e => setSearch(e.target.value)} /></label><div className="divide-y divide-zinc-800">{filteredClients.map(c => <button key={c.id} className="flex w-full flex-col gap-1 py-3 text-left" onClick={() => void selectClient(c)}><strong className="text-sm">{c.data.customerName || "Client"}</strong><span className="text-xs text-zinc-400">{[c.data.phone, c.data.email].filter(Boolean).join(" · ")}</span></button>)}{!filteredClients.length ? <p className="py-6 text-sm text-zinc-500">Tiada client.</p> : null}</div></div></div></div> : null}
+    {kind === "invoice" && data && draft ? <InvoicePanel key={draft.id} data={asInvoice(data)} onChange={editDocument} onSample={useSample} onSave={saveExplicitly} /> : null}
+    {kind === "honda_vso" && data && draft ? <HondaVsoPanel key={draft.id} data={asVso(data)} onChange={editDocument} onSample={useSample} onSave={saveExplicitly} /> : null}
+    {kind === "ehakmilik" && data && draft ? <EhakmilikPanel key={draft.id} data={data as EhakmilikData} onChange={editDocument} onSample={useSample} onSave={saveExplicitly} /> : null}
+    {kind === "receipt" && data && draft ? <ReceiptPanel key={draft.id} data={asReceipt(data)} onChange={editDocument} onSample={useSample} onSave={saveExplicitly} /> : null}
     </fieldset>
   </section>;
 }

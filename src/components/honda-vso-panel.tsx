@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
-import { CarFront, Download, FileCheck2, FileText, LoaderCircle, RotateCcw, Store, UserRound, Wallet, ClipboardList } from "lucide-react";
+import { CarFront, FileCheck2, FileText, LoaderCircle, RotateCcw, Store, UserRound, Wallet, ClipboardList } from "lucide-react";
 import { exampleVsoData } from "@/lib/honda-vso-example";
+import { SavedPdfDownload } from "@/components/saved-pdf-download";
 import { getValidAccessToken } from "@/lib/auth";
 import { buildFileName, emptyVsoData, resolvePricing, type VsoData, type VsoField } from "@/lib/honda-vso.mjs";
 import { vehicleCatalog } from "../../supabase/functions/_shared/vehicle-catalog";
@@ -46,7 +47,7 @@ export function PdfPreview({ url }: { url: string }) {
   return error ? <p role="alert" className="p-4 text-sm text-amber-300">{error}</p> : <canvas ref={canvasRef} aria-label="Preview PDF VSO halaman pertama" className="block h-auto w-full bg-white" />;
 }
 
-export function HondaVsoPanel({ data, onChange, onSample }: { data: VsoData; onChange: (value: VsoData) => void; onSample: (value: VsoData) => void }) {
+export function HondaVsoPanel({ data, onChange, onSample, onSave }: { data: VsoData; onSave: () => Promise<boolean>; onChange: (value: VsoData) => void; onSample: (value: VsoData) => void }) {
   const setData = (value: SetStateAction<VsoData>) => onChange(typeof value === "function" ? value(data) : value);
   const [totalOverride, setTotalOverride] = useState(Boolean(data.totalAmount));
   const [balanceOverride, setBalanceOverride] = useState(Boolean(data.totalOutstanding));
@@ -108,7 +109,7 @@ export function HondaVsoPanel({ data, onChange, onSample }: { data: VsoData; onC
       <div ref={previewRef} className="min-w-0 scroll-mt-28 self-start lg:sticky lg:top-24"><h2 className="mb-3 text-sm font-semibold">Preview PDF</h2><div className="overflow-hidden rounded-md border border-zinc-700">{result ? <PdfPreview key={result.url} url={result.url} /> : <div className="grid min-h-60 place-items-center bg-zinc-900 text-zinc-500"><FileText className="h-10 w-10" aria-hidden="true" /></div>}</div></div>
     </div>
     {mounted ? createPortal(<div className="vso-action-dock fixed inset-x-0 bottom-0 z-40 border-t border-zinc-700 bg-zinc-950/95 px-3 pt-3 backdrop-blur-sm">
-      <div className="mx-auto max-w-3xl">{error ? <p role="alert" className="mb-2 text-sm text-red-300">{error}</p> : result ? <p role="status" className="mb-2 text-xs text-emerald-300">PDF siap</p> : null}<div className="flex gap-2"><button type="button" className="primary-button min-w-0 flex-1" disabled={busy} onClick={() => void generate()}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />} {busy ? "Menjana..." : "Jana PDF"}</button><button type="button" className="icon-button shrink-0" aria-label="Lihat preview PDF" title="Preview" disabled={!result || busy} onClick={() => previewRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}><FileText className="h-4 w-4" /></button><a className={`secondary-button min-w-0 flex-1 ${!result || busy ? "pointer-events-none opacity-40" : ""}`} href={result?.url} download={result?.filename} aria-disabled={!result || busy} tabIndex={result && !busy ? 0 : -1}><Download className="h-4 w-4" /> Download</a></div></div>
+      <div className="mx-auto max-w-3xl">{error ? <p role="alert" className="mb-2 text-sm text-red-300">{error}</p> : result ? <p role="status" className="mb-2 text-xs text-emerald-300">PDF siap</p> : null}<div className="flex gap-2"><button type="button" className="primary-button min-w-0 flex-1" disabled={busy} onClick={() => void generate()}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />} {busy ? "Menjana..." : "Jana PDF"}</button><button type="button" className="icon-button shrink-0" aria-label="Lihat preview PDF" title="Preview" disabled={!result || busy} onClick={() => previewRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}><FileText className="h-4 w-4" /></button><SavedPdfDownload result={result} disabled={busy} onSave={onSave} onError={setError} /></div></div>
     </div>, document.body) : null}
   </section>;
 }
