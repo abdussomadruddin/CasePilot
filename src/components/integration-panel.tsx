@@ -11,6 +11,7 @@ import {
 } from "@/lib/integration-store";
 import { getSupabaseClient, getSupabaseUrl } from "@/lib/supabase";
 import type { LeadRecord, Profile } from "@/lib/types";
+import { createRealtimeRefresh } from "@/lib/realtime-refresh";
 
 const sourceLabels = { meta_ads: "Meta Ads", tiktok_ads: "TikTok Ads" } as const;
 const endpoint = `${getSupabaseUrl()}/functions/v1/ingest-lead`;
@@ -43,12 +44,32 @@ export function IntegrationPanel({ teamMembers, leads }: { teamMembers: Profile[
   }
 
   useEffect(() => {
+    let disposed = false;
+    let connected = false;
+    const sync = createRealtimeRefresh(loadLeadConnectors, (value) => {
+      setConnectors(value);
+      setError("");
+    }, () => disposed, (caught) => setError(caught instanceof Error ? caught.message : "Unable to sync connectors."));
+    const recover = () => {
+      if (document.visibilityState === "visible") void sync();
+    };
     const supabase = getSupabaseClient();
     const channel = supabase.channel("casepilot-lead-integrations")
-      .on("postgres_changes", { event: "*", schema: "public", table: "lead_connectors" }, () => { void refresh(); })
-      .subscribe((status) => { if (status === "SUBSCRIBED") void refresh(); });
-    void refresh();
-    return () => { void supabase.removeChannel(channel); };
+      .on("postgres_changes", { event: "*", schema: "public", table: "lead_connectors" }, () => { void sync(); })
+      .subscribe((status) => { connected = status === "SUBSCRIBED"; if (connected) void sync(); });
+    const timer = window.setInterval(() => { if (!connected && navigator.onLine) recover(); }, 10_000);
+    window.addEventListener("online", recover);
+    window.addEventListener("focus", recover);
+    document.addEventListener("visibilitychange", recover);
+    void sync();
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      window.removeEventListener("online", recover);
+      window.removeEventListener("focus", recover);
+      document.removeEventListener("visibilitychange", recover);
+      void supabase.removeChannel(channel);
+    };
   }, []);
 
   async function copy(value: string, name: string) {

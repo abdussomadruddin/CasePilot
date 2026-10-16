@@ -1,5 +1,9 @@
 "use client";
 
+import { vehicleCatalog } from "../../supabase/functions/_shared/vehicle-catalog";
+import { emptyInvoice } from "@/lib/invoice";
+import type { InvoiceSeed } from "@/components/client-document-workspace";
+
 import {
   AlertTriangle,
   Banknote,
@@ -29,6 +33,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  LoaderCircle,
   Share2,
   Shield,
   Smartphone,
@@ -42,8 +47,12 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { createRealtimeRefresh } from "@/lib/realtime-refresh";
+import { MotionSurface, useTabScroll } from "@/components/motion-surface";
+import { readUiContext, writeUiContext } from "@/lib/ui-context";
+import { PriorContactBadge } from "@/components/prior-contact-badge";
 import { hideLeadPhoneInNote } from "../../supabase/functions/_shared/lead-contact";
 
 import {
@@ -59,6 +68,7 @@ import { createEmptyCase } from "@/lib/case-factory";
 import { AppointmentPanel, LeadPanel } from "@/components/operations-panels";
 import { FunnelChart } from "@/components/funnel-chart";
 import { FloatingNavigation } from "@/components/floating-navigation";
+import dynamic from "next/dynamic";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { OwnerFilterSelect } from "@/components/owner-filter-select";
 import { matchesOwnerFilter, type OwnerFilter } from "@/lib/owner-filter";
@@ -68,6 +78,8 @@ import {
   loadTeamMembers,
   removeCase,
   saveCase,
+  saveCaseRemark,
+  saveCaseStatus,
   uploadDocuments,
 } from "@/lib/case-store";
 import {
@@ -138,6 +150,7 @@ type TabDefinition = {
 };
 
 const uploadTimeoutMs = 5 * 60 * 1000;
+const ClientDocumentWorkspace = dynamic(() => import("@/components/client-document-workspace").then(module => module.ClientDocumentWorkspace));
 
 type PushStatus = "unsupported" | "default" | "denied" | "enabled" | "loading" | "error";
 
@@ -176,9 +189,9 @@ type CarCatalogItem = {
   colors: string[];
 };
 
-type CarBrand = "Honda" | "Proton" | "JAECOO" | "JETOUR" | "Chery";
+type CarBrand = string;
 
-const carBrands: CarBrand[] = ["Honda", "Proton", "JAECOO", "JETOUR", "Chery"];
+const carBrands: CarBrand[] = [...new Set(vehicleCatalog.map((item) => item.brand))];
 
 const metricTabs: TabDefinition[] = [
   { id: "all", label: "All Cases", icon: FolderKanban, toneClass: "bg-honda text-white" },
@@ -196,7 +209,7 @@ const potentialCaseStatuses: CaseStatus[] = [
   "registered", "grant_roadtax_collected", "prepare_delivery",
 ];
 
-const carCatalog: CarCatalogItem[] = [
+const legacyCarCatalog: CarCatalogItem[] = [
   {
     brand: "Proton",
     model: "Proton S70",
@@ -545,6 +558,11 @@ const carCatalog: CarCatalogItem[] = [
   },
 ];
 
+const carCatalog: CarCatalogItem[] = vehicleCatalog.map((item) => ({
+  ...item,
+  colors: legacyCarCatalog.find((existing) => existing.model === item.model)?.colors || [],
+}));
+
 const statusTone: Record<CaseStatus, string> = {
   documents_collected: "border-blue-500/50 bg-blue-500/15 text-blue-100",
   more_documents_needed: "border-amber-400/50 bg-amber-400/15 text-amber-100",
@@ -583,7 +601,8 @@ const initialLogin = {
 };
 
 function getCarCatalogItem(model: string) {
-  return carCatalog.find((item) => item.model === model);
+  return carCatalog.find((item) => item.model === model)
+    || legacyCarCatalog.find((item) => item.model === model);
 }
 
 function optionsWithCurrent(options: readonly string[], current: string) {
@@ -701,7 +720,8 @@ function previousCaseMonth(value: string) {
 }
 
 export function CaseDashboard() {
-  const [appSection, setAppSection] = useState<"dashboard" | "cases" | "leads" | "appointments" | "team" | "integration">("dashboard");
+  const [appSection, setAppSection] = useState<"dashboard" | "cases" | "leads" | "appointments" | "team" | "integration" | "honda_vso" | "invoice" | "receipt" | "clients">("dashboard");
+  const [invoiceSeed, setInvoiceSeed] = useState<InvoiceSeed | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [leads, setLeads] = useState<LeadRecord[]>([]);
   const [callingLeadId, setCallingLeadId] = useState("");
@@ -709,7 +729,7 @@ export function CaseDashboard() {
   const [prefillCase, setPrefillCase] = useState<CaseRecord | null>(null);
   const [appointmentSubject, setAppointmentSubject] = useState("");
   const [leadStatusJump, setLeadStatusJump] = useState<LeadStatus | "all">("all");
-  const [leadViewJump, setLeadViewJump] = useState<"all" | "followup">("all");
+  const [leadViewJump, setLeadViewJump] = useState<"all" | "new" | "contacted" | "followup">("all");
   const [funnelSelection, setFunnelSelection] = useState<{ section: "leads" | "cases"; ids: string[]; label: string } | null>(null);
   const [leadNowMs, setLeadNowMs] = useState(() => Date.now());
   const currentMonth = caseMonthKey(new Date().toISOString());
@@ -728,6 +748,7 @@ export function CaseDashboard() {
   const [deleteError, setDeleteError] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [dataReady, setDataReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingMessage, setUploadingMessage] = useState("");
   const [teamSaving, setTeamSaving] = useState(false);
@@ -745,6 +766,44 @@ export function CaseDashboard() {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => setOwnerFilter("all"), [profile?.id]);
+  const [contextReady, setContextReady] = useState(false);
+  const uiProfileId = profile?.id;
+  useEffect(() => { setInvoiceSeed(null); }, [uiProfileId]);
+  const [hasVisitedCases, setHasVisitedCases] = useState(false);
+  useEffect(() => {
+    if (!uiProfileId) { setContextReady(false); return; }
+    const saved = readUiContext<{ section: typeof appSection; view: typeof leadViewJump; tab: DashboardTab; status: StatusFilter; dealer: DealerFilter; month: string; visitedCases: boolean; owner: OwnerFilter }>(`cp:ui:${uiProfileId}`);
+    const explicit = new URLSearchParams(window.location.search).has("section");
+    if (!explicit && ["dashboard", "cases", "leads", "appointments", "team", "integration", "honda_vso", "invoice", "receipt", "clients"].includes(saved.section || "")) {
+      setAppSection(saved.section!);
+      if (["all", "new", "contacted", "followup"].includes(saved.view || "")) setLeadViewJump(saved.view!);
+    }
+    if (saved.tab && ["all", "this_month", "last_month", "tasks", "followup", "potential", "delivered", "cancelled_rejected"].includes(saved.tab)) setActiveTab(saved.tab);
+    if (saved.status) setStatusFilter(saved.status);
+    if (saved.dealer) setDealerFilter(saved.dealer);
+    if (typeof saved.month === "string") setMonthFilter(saved.month);
+    if (saved.owner) setOwnerFilter(saved.owner);
+    setHasVisitedCases(Boolean(saved.visitedCases));
+    setContextReady(true);
+  }, [uiProfileId]);
+  useEffect(() => { if (appSection === "cases") setHasVisitedCases(true); }, [appSection]);
+  useEffect(() => {
+    if (profile && contextReady) writeUiContext(`cp:ui:${profile.id}`, { section: appSection, view: leadViewJump, tab: activeTab, status: statusFilter, dealer: dealerFilter, month: monthFilter, owner: ownerFilter, visitedCases: hasVisitedCases });
+  }, [profile, contextReady, appSection, leadViewJump, activeTab, statusFilter, dealerFilter, monthFilter, ownerFilter, hasVisitedCases]);
+  useTabScroll(`cp:scroll:${profile?.id}:${appSection}:${appSection === "leads" ? leadViewJump : appSection === "cases" ? activeTab : ""}`, Boolean(profile && contextReady && !loading));
+
+  useEffect(() => {
+    const feedback = (event: MouseEvent) => {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const button = event.target instanceof Element ? event.target.closest("button") : null;
+      if (!button || button.disabled || typeof button.animate !== "function") return;
+      button.animate([{ opacity: .75 }, { opacity: 1 }], {
+        duration: 150, easing: "ease-out",
+      });
+    };
+    document.addEventListener("click", feedback, true);
+    return () => document.removeEventListener("click", feedback, true);
+  }, []);
 
   useEffect(() => {
     if (!filtersOpen) return;
@@ -831,7 +890,7 @@ export function CaseDashboard() {
         if (!mounted) return;
         setError(caught instanceof Error ? caught.message : "Unable to load cases.");
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) { setLoading(false); setDataReady(true); }
       }
     }
 
@@ -856,8 +915,9 @@ export function CaseDashboard() {
 
   useEffect(() => {
     const section = new URLSearchParams(window.location.search).get("section");
-    if (section === "appointments" || section === "leads" || section === "cases" || section === "integration") setAppSection(section);
-    if (section === "leads" && new URLSearchParams(window.location.search).get("view") === "followup") setLeadViewJump("followup");
+    if (section === "appointments" || section === "leads" || section === "cases" || section === "integration" || section === "honda_vso" || section === "invoice" || section === "receipt" || section === "clients") setAppSection(section);
+    const leadView = new URLSearchParams(window.location.search).get("view");
+    if (section === "leads" && (leadView === "new" || leadView === "contacted" || leadView === "followup")) setLeadViewJump(leadView);
   }, []);
 
   useEffect(() => {
@@ -901,6 +961,7 @@ export function CaseDashboard() {
 
   useEffect(() => {
     if (role !== "admin" && (appSection === "team" || appSection === "integration")) setAppSection("dashboard");
+    if (role === "sales_manager" && ["honda_vso", "invoice", "receipt", "clients"].includes(appSection)) setAppSection("dashboard");
   }, [appSection, role]);
 
   useEffect(() => {
@@ -931,26 +992,12 @@ export function CaseDashboard() {
     const currentProfile = profile;
     const supabase = getSupabaseClient();
     let disposed = false;
+    let connected = false;
     const canUseOperations = ["admin", "customer_service", "broker"].includes(currentProfile.role);
 
     function makeRefresh<T>(load: () => Promise<T>, apply: (value: T) => void) {
-      let refreshing = false;
-      let pending = false;
-      return async () => {
-        pending = true;
-        if (refreshing || disposed) return;
-        refreshing = true;
-        while (pending && !disposed) {
-          pending = false;
-          try {
-            const value = await load();
-            if (!disposed) apply(value);
-          } catch (caught) {
-            if (!disposed) console.warn("Unable to refresh dashboard", caught);
-          }
-        }
-        refreshing = false;
-      };
+      return createRealtimeRefresh(load, apply, () => disposed,
+        (caught) => console.warn("Unable to refresh dashboard", caught));
     }
 
     const refreshCasesNow = makeRefresh(async () => (await loadCases()).cases, setCases);
@@ -959,6 +1006,7 @@ export function CaseDashboard() {
     const refreshAppointmentsNow = makeRefresh(loadAppointments, setAppointments);
 
     function refreshAll() {
+      setLeadNowMs(Date.now());
       void refreshCasesNow();
       void refreshTeamNow();
       if (canUseOperations) {
@@ -1001,14 +1049,24 @@ export function CaseDashboard() {
     }
     channel = channel.on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, refreshProfile);
     channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") refreshAll();
+      connected = status === "SUBSCRIBED";
+      if (connected) {
+        refreshProfile();
+        refreshAll();
+      }
     });
+    const recoveryTimer = window.setInterval(() => {
+      if (!connected && navigator.onLine && document.visibilityState === "visible") refreshWhenVisible();
+    }, 10_000);
+    window.addEventListener("online", refreshWhenVisible);
     window.addEventListener("focus", refreshWhenVisible);
     window.addEventListener("pageshow", refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       disposed = true;
+      window.clearInterval(recoveryTimer);
+      window.removeEventListener("online", refreshWhenVisible);
       window.removeEventListener("focus", refreshWhenVisible);
       window.removeEventListener("pageshow", refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
@@ -1030,14 +1088,24 @@ export function CaseDashboard() {
     dashboard: visibleCases.filter((record) => isFollowUpDue(record)).length + navigationLeads.filter((lead) => lead.status === "new" || isLeadFollowUpDue(lead, leadNowMs)).length + navigationAppointments.length,
     cases: visibleCases.filter((record) => isMyTask(record, role, profile?.id)).length,
     leads: navigationLeads.filter((lead) => ["new", "contacted", "all_offer_presented", "need_follow_up", "potential"].includes(lead.status)).length,
-    lead_followup: navigationLeads.filter((lead) => lead.status === "new" || lead.status === "contacted").length,
+    lead_followup: navigationLeads.filter((lead) => lead.status === "new" || (lead.status === "contacted" && lead.followUpCount < 4)).length,
     appointments: navigationAppointments.length,
     team: teamMembers.length,
     integration: new Set(navigationLeads.map((lead) => lead.source).filter((source) => source === "meta_ads" || source === "tiktok_ads")).size,
   };
   const navigateSection = (id: string) => {
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("section");
+    cleanUrl.searchParams.delete("view");
+    window.history.replaceState(null, "", cleanUrl);
+    const target = id === "lead_followup" ? "leads" : id;
+    if (target === appSection && (target !== "leads" || (id === "lead_followup") === (leadViewJump === "followup"))) {
+      window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+      setDrawerOpen(false);
+      return;
+    }
     setFunnelSelection(null);
-    if (id === "cases") {
+    if (id === "cases" && !hasVisitedCases) {
       setActiveTab(role === "sales_manager" ? "this_month" : "tasks"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(role === "sales_manager" ? currentMonth : "");
     }
     if (id === "lead_followup" || id === "leads") {
@@ -1047,7 +1115,6 @@ export function CaseDashboard() {
     } else setAppSection(id as typeof appSection);
     setDrawerOpen(false);
     setProfileMenuOpen(false);
-    window.scrollTo({ top: 0 });
   };
 
   const tabCases = useMemo(() => {
@@ -1267,10 +1334,10 @@ export function CaseDashboard() {
     setError("");
     try {
       await revealLeadPhone(lead.id, profile.id);
-      await refreshCases();
       window.location.href = channel === "call"
         ? `tel:${lead.customerPhone.replace(/[^\d+]/g, "")}`
         : buildWhatsAppUrl(lead.customerPhone);
+      void refreshCases().catch(() => setError("Contact saved. Unable to refresh; retry refresh."));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to contact lead.");
     } finally {
@@ -1283,6 +1350,7 @@ export function CaseDashboard() {
 
     try {
       setAuthLoading(true);
+      setDataReady(false);
       setError("");
       const currentProfile = await signInWithPassword(login.email, login.password);
       setLogin((current) => ({ ...current, password: "" }));
@@ -1308,6 +1376,7 @@ export function CaseDashboard() {
       setError(caught instanceof Error ? caught.message : "Unable to sign in.");
     } finally {
       setAuthLoading(false);
+      setDataReady(true);
     }
   }
 
@@ -1669,11 +1738,11 @@ export function CaseDashboard() {
   if (!appEnvironment.checked || (!profile && loading)) {
     return (
       <main className="grid min-h-[100dvh] place-items-center px-4 py-6" role="status" aria-live="polite">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="grid h-16 w-16 place-items-center rounded-lg bg-honda text-white shadow-lg shadow-red-950/40">
+        <div className="launch-brand flex flex-col items-center gap-4 text-center">
+          <div className="launch-mark grid h-16 w-16 place-items-center rounded-lg bg-honda text-white shadow-lg shadow-red-950/40">
             <FolderKanban className="h-8 w-8" aria-hidden="true" />
           </div>
-          <div><h1 className="text-xl font-semibold text-white">CasePilot</h1><p className="mt-1 text-sm text-zinc-400">Loading your workspace...</p></div>
+          <div><h1 className="launch-wordmark text-xl font-semibold text-white" aria-label="CasePilot">{"CasePilot".split("").map((letter, index) => <span key={index} aria-hidden="true" style={{ animationDelay: `${index * 28}ms` }}>{letter}</span>)}</h1><p className="mt-1 text-sm text-zinc-400">Loading your workspace...</p></div>
           <RefreshCw className="h-4 w-4 animate-spin text-zinc-500" aria-hidden="true" />
         </div>
       </main>
@@ -1781,7 +1850,7 @@ export function CaseDashboard() {
               </div>
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-extrabold tracking-normal text-white sm:text-2xl">
-                  {appSection === "dashboard" ? "Dashboard" : appSection === "cases" ? "Case" : appSection === "leads" ? "Lead" : appSection === "appointments" ? "Appointment" : appSection === "integration" ? "Integration" : "Team"}
+                  {appSection === "dashboard" ? "Dashboard" : appSection === "cases" ? "Case" : appSection === "leads" ? "Lead" : appSection === "appointments" ? "Appointment" : appSection === "integration" ? "Integration" : appSection === "honda_vso" ? "Honda VSO" : appSection === "invoice" ? "Invoice" : appSection === "receipt" ? "Receipt" : appSection === "clients" ? "Client" : "Team"}
                 </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
                   <span className="rounded-full border border-red-500/30 bg-red-950/50 px-2.5 py-1 text-red-100">
@@ -1873,6 +1942,9 @@ export function CaseDashboard() {
           </div>
         ) : null}
 
+        <MotionSurface screenKey={appSection}>
+        {!dataReady ? <div className="grid gap-3" role="status" aria-label="Loading workspace">{[0,1,2].map((item) => <div key={item} className="h-28 rounded-md bg-zinc-900 animate-pulse motion-reduce:animate-none" />)}</div> : null}
+        <div className={dataReady ? "grid gap-5" : "hidden"}>
         {appSection === "dashboard" ? (
           <section className="screen-enter grid gap-4">
             <div className="dashboard-stats grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -1896,11 +1968,12 @@ export function CaseDashboard() {
                   <article key={lead.id} className="surface-card flex min-w-0 flex-col items-start justify-between gap-3 p-4 sm:flex-row">
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold text-white">{lead.customerName || "Unnamed lead"}</p>
+                      <PriorContactBadge lead={lead} />
                       {lead.carBrand || lead.carModel ? <p className="truncate text-sm text-zinc-400">{[lead.carBrand, lead.carModel].filter(Boolean).join(" · ")}</p> : null}
                       <p className="truncate text-xs text-zinc-400">{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</p>
                       {latestLeadNote(lead) ? <p className="mt-2 break-words whitespace-pre-wrap text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{hideLeadPhoneInNote(latestLeadNote(lead), Boolean(lead.phoneRevealedAt))}</p> : null}
                     </div>
-                    {lead.customerPhone ? <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0"><button type="button" className="lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void contactNewLead(lead, "call")}><PhoneCall className="h-4 w-4" />Call</button><button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void contactNewLead(lead, "whatsapp")}><MessageCircle className="h-4 w-4" />WhatsApp</button></div> : <button type="button" className="secondary-button shrink-0" onClick={() => { setLeadStatusJump("new"); setLeadViewJump("all"); setAppSection("leads"); }}>Add phone</button>}
+                    {lead.customerPhone ? <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0"><button type="button" className="lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" aria-busy={callingLeadId === lead.id} disabled={Boolean(callingLeadId)} onClick={() => void contactNewLead(lead, "call")}><PhoneCall className="h-4 w-4" />Call</button><button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void contactNewLead(lead, "whatsapp")}><MessageCircle className="h-4 w-4" />WhatsApp</button></div> : <button type="button" className="secondary-button shrink-0" onClick={() => { setLeadStatusJump("new"); setLeadViewJump("all"); setAppSection("leads"); }}>Add phone</button>}
                   </article>
                 )) : <p className="text-sm text-zinc-500">No new leads to contact.</p>}
               </section>
@@ -1932,7 +2005,7 @@ export function CaseDashboard() {
           ))}
         </section>
 
-        <section className="grid gap-3">
+        <section key={activeTab} className="screen-enter grid gap-3">
           <>
               <div className="flex min-w-0 flex-col gap-3 py-2 lg:flex-row lg:items-center lg:justify-between">
                 <button type="button" className="secondary-button sm:hidden" onClick={() => setFiltersOpen(true)} aria-expanded={filtersOpen}>
@@ -2045,9 +2118,9 @@ export function CaseDashboard() {
                 </div>
               </div>
 
-              {loading ? (
-                <div className="surface-card p-8 text-center text-sm text-muted">
-                  Loading cases
+              {loading && !cases.length ? (
+                <div className="grid gap-3" role="status" aria-label="Loading cases">
+                  {[0, 1, 2].map((item) => <div key={item} className="h-28 rounded-md bg-zinc-900 animate-pulse motion-reduce:animate-none" />)}
                 </div>
               ) : filteredCases.length ? (
                 filteredCases.map((record) => (
@@ -2059,7 +2132,26 @@ export function CaseDashboard() {
                     saving={saving}
                     teamMembers={teamMembers}
                     onEdit={openEditForm}
+                    onCreateInvoice={(record) => {
+                      if (role === "sales_manager") return;
+                      setInvoiceSeed({ id: crypto.randomUUID(), phone: record.customerPhone || "", data: { ...emptyInvoice(), customerName: record.customerName, model: record.carModel, variant: record.carVariant || "", colour: record.carColor || "", preparedName: profile?.fullName || "", preparedPhone: profile?.phone || "" } });
+                      setAppSection("invoice");
+                    }}
                     onDelete={handleDelete}
+                    onSaveRemark={async (record, remark) => {
+                      if (!profile || !canEditCase(role, record, profile.id)) throw new Error("Not permitted");
+                      const { activity, ...patch } = await saveCaseRemark(record, remark, role);
+                      setCases((current) => current.map((item) => item.id === record.id
+                        ? { ...item, ...patch, activities: [...item.activities.filter((event) => event.id !== activity.id), activity] }
+                        : item));
+                    }}
+                    onSaveStatus={async (record, status) => {
+                      if (!profile || !canEditCase(role, record, profile.id) || !canUpdateToStatus(role, status)) throw new Error("Not permitted");
+                      const { activity, ...patch } = await saveCaseStatus(record, status, role);
+                      setCases((current) => current.map((item) => item.id === record.id
+                        ? { ...item, ...patch, activities: [...item.activities.filter((event) => event.id !== activity.id), activity] }
+                        : item));
+                    }}
                   />
                 ))
               ) : (
@@ -2076,6 +2168,8 @@ export function CaseDashboard() {
         {appSection === "integration" && role === "admin" ? <IntegrationPanel teamMembers={teamMembers} leads={leads} /> : null}
         {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={`${leadStatusJump}:${funnelSelection?.section === "leads" ? funnelSelection.label : ""}`} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} initialView={leadViewJump} onViewChange={setLeadViewJump} cohortLeadIds={funnelSelection?.section === "leads" ? funnelSelection.ids : undefined} cohortLabel={funnelSelection?.section === "leads" ? funnelSelection.label : undefined} onClearCohort={() => setFunnelSelection(null)} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
         {appSection === "appointments" && profile && ["admin", "customer_service", "broker"].includes(role) ? <AppointmentPanel key={appointmentSubject} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} appointments={appointments} initialSubject={appointmentSubject} onRefresh={refreshCases} /> : null}
+        </div></MotionSurface>
+        {profile && role !== "sales_manager" ? <ClientDocumentWorkspace key={profile.id} section={appSection} profile={profile} invoiceSeed={invoiceSeed} onNavigate={setAppSection} /> : null}
       </div>
       <div
         className={`casepilot-drawer fixed inset-0 z-50 ${drawerOpen ? "casepilot-drawer-open" : ""}`}
@@ -2102,6 +2196,9 @@ export function CaseDashboard() {
           {([
             { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
             { id: "cases", label: "Case", icon: FolderKanban },
+            ...(role !== "sales_manager" ? [{ id: "honda_vso", label: "Honda VSO", icon: FileText }] : []),
+            ...(role !== "sales_manager" ? [{ id: "invoice", label: "Invoice", icon: FileText }] : []),
+            ...(role !== "sales_manager" ? [{ id: "receipt", label: "Receipt", icon: FileText }, { id: "clients", label: "Client", icon: Users }] : []),
             ...(["admin", "customer_service", "broker"].includes(role)
               ? [{ id: "leads", label: "Lead", icon: Users }, { id: "lead_followup", label: "Lead Follow Up", icon: Clock3 }, { id: "appointments", label: "Appointment", icon: CalendarDays }]
               : []),
@@ -2110,7 +2207,7 @@ export function CaseDashboard() {
             const active = id === "lead_followup"
               ? appSection === "leads" && leadViewJump === "followup"
               : id === "leads"
-                ? appSection === "leads" && leadViewJump === "all"
+                ? appSection === "leads" && leadViewJump !== "followup"
                 : appSection === id;
             return (
             <button
@@ -2128,7 +2225,7 @@ export function CaseDashboard() {
         </nav>
       </div>
 
-      <FloatingNavigation items={[
+      {!["honda_vso", "invoice", "receipt"].includes(appSection) ? <FloatingNavigation items={[
         { id: "dashboard", label: "Home", icon: LayoutDashboard, count: navigationCounts.dashboard },
         ...(["admin", "customer_service", "broker"].includes(role) ? [
           { id: "leads", label: "Lead", icon: Users, count: navigationCounts.leads },
@@ -2136,7 +2233,7 @@ export function CaseDashboard() {
         ] : []),
         { id: "cases", label: "Case", icon: FolderKanban, count: navigationCounts.cases },
         ...(["admin", "customer_service", "broker"].includes(role) ? [{ id: "appointments", label: "Appointment", icon: CalendarDays, count: navigationCounts.appointments }] : []),
-      ]} activeId={appSection === "leads" && leadViewJump === "followup" ? "lead_followup" : appSection} onNavigate={navigateSection} disabled={drawerOpen || isFormOpen || Boolean(accountMode)} />
+      ]} activeId={appSection === "leads" && leadViewJump === "followup" ? "lead_followup" : appSection} onNavigate={navigateSection} disabled={drawerOpen || isFormOpen || Boolean(accountMode)} /> : null}
 
       {isFormOpen ? (
         <CaseForm
@@ -2878,6 +2975,9 @@ function CaseCard({
   teamMembers,
   onEdit,
   onDelete,
+  onSaveRemark,
+  onSaveStatus,
+  onCreateInvoice,
 }: {
   record: CaseRecord;
   role: Role;
@@ -2886,6 +2986,9 @@ function CaseCard({
   teamMembers: Profile[];
   onEdit: (record: CaseRecord) => void;
   onDelete: (record: CaseRecord) => void;
+  onSaveRemark: (record: CaseRecord, remark: string) => Promise<void>;
+  onSaveStatus: (record: CaseRecord, status: CaseStatus) => Promise<void>;
+  onCreateInvoice: (record: CaseRecord) => void;
 }) {
   const assignedRoles = getAssignedRoles(record.status);
   const latestRemark = getLatestRemark(record);
@@ -2896,6 +2999,48 @@ function CaseCard({
   const allowDelete = canDeleteCase(role);
   const showContactLists = role !== "sales_manager";
   const [isExpanded, setIsExpanded] = useState(false);
+  const [remarkDraft, setRemarkDraft] = useState("");
+  const [remarkSaving, setRemarkSaving] = useState(false);
+  const [remarkFeedback, setRemarkFeedback] = useState("");
+  const [remarkFailed, setRemarkFailed] = useState(false);
+  const remarkPending = useRef(false);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusFeedback, setStatusFeedback] = useState("");
+  const [statusFailed, setStatusFailed] = useState(false);
+  const statusPending = useRef(false);
+  const inlineStatuses = caseStatuses.filter((status) => canUpdateToStatus(role, status));
+  async function changeStatus(status: CaseStatus) {
+    if (statusPending.current || status === record.status) return;
+    statusPending.current = true;
+    setStatusSaving(true);
+    setStatusFeedback("");
+    setStatusFailed(false);
+    try {
+      await onSaveStatus(record, status);
+      setStatusFeedback("Status saved");
+    } catch (caught) {
+      setStatusFailed(true);
+      setStatusFeedback(caught instanceof Error ? caught.message : "Unable to save status. Try again.");
+    } finally { statusPending.current = false; setStatusSaving(false); }
+  }
+  async function saveRemark() {
+    if (remarkPending.current || !remarkDraft.trim()) return;
+    remarkPending.current = true;
+    setRemarkSaving(true);
+    setRemarkFeedback("");
+    setRemarkFailed(false);
+    try {
+      await onSaveRemark(record, remarkDraft);
+      setRemarkDraft("");
+      setRemarkFeedback("Remark saved");
+    } catch (caught) {
+      setRemarkFailed(true);
+      setRemarkFeedback(caught instanceof Error ? caught.message : "Unable to save remark. Try again.");
+    } finally {
+      remarkPending.current = false;
+      setRemarkSaving(false);
+    }
+  }
   const hasCustomerPhone = Boolean(record.customerPhone.trim());
   const activeTeamMembers = showContactLists
     ? teamMembers.filter((member) => member.active !== false && member.phone?.trim())
@@ -3002,6 +3147,39 @@ function CaseCard({
           </p>
         </div>
       </div>
+
+      {role !== "sales_manager" ? <div className="border-t border-zinc-800 px-3 py-2 sm:px-4"><button type="button" className="secondary-button" onClick={() => onCreateInvoice(record)}><FileText className="h-4 w-4" />Create Invoice</button></div> : null}
+      {allowEdit ? (
+        <div className="grid gap-2 border-t border-zinc-800 px-3 py-2 sm:px-4">
+          <div className="flex items-center gap-2">
+            <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-zinc-400">
+              Status
+              <select className="field min-w-0 flex-1 text-sm" aria-label={`Status for ${record.customerName || "customer"}`} value={record.status} disabled={saving || statusSaving} onChange={(event) => void changeStatus(event.target.value as CaseStatus)}>
+                {!inlineStatuses.includes(record.status) ? <option value={record.status}>{statusLabels[record.status]}</option> : null}
+                {inlineStatuses.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}
+              </select>
+            </label>
+            {statusSaving ? <LoaderCircle className="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none" aria-label="Saving status" /> : null}
+          </div>
+          {statusFeedback ? <p role={statusFailed ? "alert" : "status"} className={`text-xs ${statusFailed ? "text-red-300" : "text-emerald-300"}`}>{statusFeedback}</p> : null}
+          <div className="flex items-end gap-2">
+            <textarea
+              aria-label={`Remark for ${record.customerName || "customer"}`}
+              className="field min-w-0 flex-1 resize-y text-sm"
+              rows={2}
+              placeholder="Add remark"
+              value={remarkDraft}
+              disabled={remarkSaving}
+              onChange={(event) => { setRemarkDraft(event.target.value); setRemarkFeedback(""); }}
+            />
+            <button type="button" className="primary-button shrink-0" onClick={() => void saveRemark()} disabled={saving || remarkSaving || !remarkDraft.trim()} aria-label={`Save remark for ${record.customerName || "customer"}`}>
+              {remarkSaving ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
+              {remarkSaving ? "Saving" : "Save"}
+            </button>
+          </div>
+          {remarkFeedback ? <p role={remarkFailed ? "alert" : "status"} className={`text-xs ${remarkFailed ? "text-red-300" : "text-emerald-300"}`}>{remarkFeedback}</p> : null}
+        </div>
+      ) : null}
 
       {isExpanded ? (
         <>
@@ -3531,7 +3709,7 @@ function CaseForm({
                 required
               >
                 <option value="">Select brand</option>
-                {carBrands.map((brand) => (
+                {optionsWithCurrent(carBrands, selectedBrand).map((brand) => (
                   <option key={brand} value={brand}>
                     {brand}
                   </option>

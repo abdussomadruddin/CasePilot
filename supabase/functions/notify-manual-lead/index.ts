@@ -1,5 +1,4 @@
 import { createClient } from "npm:@supabase/supabase-js@2.50.0";
-import { sendPushesForUsers } from "../_shared/web-push.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -74,20 +73,5 @@ Deno.serve(async (request) => {
   if (claimError?.code === "23505") return reply({ ok: true, duplicate: true });
   if (claimError) return reply({ ok: false, error: "Unable to record notification." }, 503);
 
-  try {
-    const result = await sendPushesForUsers(service, [owner.id], {
-      title: "CasePilot · New lead",
-      body: `${lead.customer_name || "New lead"} is ready to contact.`,
-      url: "/?section=leads",
-    });
-    if (result.error || result.skipped || result.failed) {
-      await service.from("manual_lead_push_deliveries").delete().eq("lead_id", lead.id);
-      return reply({ ok: false, error: "Push could not be delivered." }, 503);
-    }
-    return reply({ ok: true, sent: result.sent });
-  } catch (error) {
-    await service.from("manual_lead_push_deliveries").delete().eq("lead_id", lead.id);
-    console.error("Manual lead push failed", error);
-    return reply({ ok: false, error: "Push could not be delivered." }, 503);
-  }
+  return reply({ ok: true, queued: true });
 });

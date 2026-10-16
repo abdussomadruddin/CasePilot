@@ -1,18 +1,23 @@
+import { leadVehicleModels } from "./lead-vehicle.ts";
+
 export type LeadContact = { name: string; phone: string; email: string };
 
 const missing = new Set(["", "null", "undefined", "no data", "n/a", "-"]);
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 const phonePattern = /(?:\+?60[ \t().-]*|0)1[0-9 \t().-]{7,18}\d/g;
-const negativeAnswerPattern = /^(?:tak(?:\s+ada|de|da)?|tidak|tiada|belum\s+ada|no(?:ne)?)(?:\b|$)/u;
+const negativeAnswerPattern = /^(?:tak(?:\s+ada|de|da)?|tkde|tkda|tidak|tiada|belum\s+ada|no(?:ne)?)(?:\b|$)/u;
 const formAnswers = new Set([
   "city sedan", "city hatchback", "city hacthback", "civic", "hr-v", "cr-v", "wr-v",
+  "new city sedan", "new city hatchback", "new city hacthback", "new civic",
+  "new wr-v", "new hr-v", "new cr-v",
   "secepat yang boleh (asap)", "1-3 bulan", "3-6 bulan", "survey sahaja",
-  "kerja kerajaan", "kerja swasta", "berniaga/freelance",
+  "kerja kerajaan", "kerja swasta", "kerajaan", "swasta", "berniaga/freelance",
   "rm2500 - rm3500", "rm3500 - rm5000", "rm5000 keatas",
   "nak trade-in", "no", "tiada", "tiada (nak full loan)",
   "10% deposit", "custom deposit", "nak beli cash tunai",
 ].map(normalizedAnswer));
 const vehicleAnswers = new Set([
+  ...leadVehicleModels.flatMap(({ brand, model }) => [brand, model, model.slice(brand.length).trim(), `New ${model.slice(brand.length).trim()}`]),
   "honda", "proton", "jaecoo", "jetour", "chery",
   "jaecoo j5", "jaecoo j5 ev", "jaecoo j7", "jaecoo j7 phev", "jaecoo j8",
   "proton s70", "proton new s70", "proton saga", "proton persona", "proton iriz",

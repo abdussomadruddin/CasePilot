@@ -1,14 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { availableLeadFollowUpStages, canRecordLeadFollowUp, isLeadFollowUpDue, maxLeadFollowUps } from "../src/lib/types.ts";
+import { availableLeadFollowUpStages, canRecordLeadFollowUp, leadFollowUpAction, isLeadFollowUpDue, maxLeadFollowUps } from "../src/lib/types.ts";
 
-test("follow-up action stops at six", () => {
+test("follow-up recording stops at six", () => {
   assert.equal(maxLeadFollowUps, 6);
   assert.equal(canRecordLeadFollowUp(5, "contacted"), true);
   assert.equal(canRecordLeadFollowUp(6, "contacted"), false);
   assert.equal(canRecordLeadFollowUp(7, "contacted"), false);
   assert.equal(canRecordLeadFollowUp(2, "rejected"), false);
   assert.equal(canRecordLeadFollowUp(2, "potential"), true);
+});
+
+test("follow-up opens WhatsApp without recording after six", () => {
+  assert.equal(leadFollowUpAction(5, "contacted"), "record");
+  assert.equal(leadFollowUpAction(6, "contacted"), "whatsapp");
+  assert.equal(leadFollowUpAction(7, "potential"), "whatsapp");
+  assert.equal(leadFollowUpAction(6, "rejected"), "blocked");
 });
 
 test("follow-up filter shows only stages containing callable leads", () => {
@@ -33,12 +40,19 @@ import { groupLeadReminders, reminderMessage, reminderTypeAt } from "../supabase
 const now = Date.parse("2026-09-24T01:00:00.000Z");
 const contacted = {
   status: "contacted",
+  followUpCount: 0,
   followUpActivityAt: new Date(now - 86_400_000).toISOString(),
 };
 
 test("contacted lead becomes due after 24 hours", () => {
   assert.equal(isLeadFollowUpDue(contacted, now - 1), false);
   assert.equal(isLeadFollowUpDue(contacted, now), true);
+});
+
+test("four or more follow-ups cannot become due even when Contacted", () => {
+  for (const followUpCount of [0, 1, 2, 3]) assert.equal(isLeadFollowUpDue({ ...contacted, followUpCount }, now), true);
+  for (const followUpCount of [4, 5, 6, 7]) assert.equal(isLeadFollowUpDue({ ...contacted, followUpCount }, now), false);
+  assert.equal(isLeadFollowUpDue({ ...contacted, status: "all_offer_presented", followUpCount: 3 }, now), false);
 });
 
 test("a new remark resets the due time", () => {
@@ -74,18 +88,20 @@ test("Admin receives no reminder when only new leads exist", () => {
   assert.deepEqual([...groups.keys()], ["broker"]);
 });
 
-test("New slots are 10, 11, 12, 14 and 16 Kuala Lumpur time only", () => {
-  for (const hour of [10, 11, 12, 14, 16]) {
+test("New slots include every hour from 10 to 18 Kuala Lumpur time", () => {
+  for (const hour of [10, 11, 12, 13, 14, 15, 16, 17, 18]) {
     assert.equal(reminderTypeAt(new Date(Date.UTC(2026, 8, 25, hour - 8))), "new");
   }
-  for (const hour of [9, 13, 15, 17, 21]) {
+  for (const hour of [9, 19, 21]) {
     assert.notEqual(reminderTypeAt(new Date(Date.UTC(2026, 8, 25, hour - 8))), "new");
   }
 });
 
-test("Contacted slots stay at 9, 15 and 21 Kuala Lumpur time", () => {
-  for (const hour of [9, 15, 21]) {
-    assert.equal(reminderTypeAt(new Date(Date.UTC(2026, 8, 25, hour - 8))), "contacted");
+test("Contacted slots use half hours from 9:30 to 17:30 Kuala Lumpur time", () => {
+  for (const hour of [9, 10, 11, 12, 13, 14, 15, 16, 17]) {
+    assert.equal(reminderTypeAt(new Date(Date.UTC(2026, 8, 25, hour - 8, 30))), "contacted");
   }
+  assert.equal(reminderTypeAt(new Date("2026-09-25T07:00:00Z")), "new");
+  assert.equal(reminderTypeAt(new Date("2026-09-25T01:00:00Z")), null);
   assert.equal(reminderTypeAt(new Date("2026-09-25T02:11:00Z")), null);
 });

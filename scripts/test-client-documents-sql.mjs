@@ -1,0 +1,53 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+const { PGlite } = await import(process.env.PGLITE_MODULE || "/tmp/casepilot-sql-tests/node_modules/@electric-sql/pglite/dist/index.js");
+const db = new PGlite();
+const uuid = n => `11111111-1111-4111-8111-${String(n).padStart(12, "0")}`;
+const actor = async n => { await db.exec(`reset role; set request.jwt.claim.sub = '${uuid(n)}'; set role authenticated;`); };
+const save = async p => (await db.query("select public.save_client_document_bundle($1::jsonb) as bundle", [JSON.stringify(p)])).rows[0].bundle;
+const payload = (c, p, d) => ({ client: { id: uuid(c), version: 0, data: { customerName: "Test Client", phone: "0173559147" } }, purchase: { id: uuid(p), version: 0, data: { model: "City" } }, documents: [{ id: uuid(d), kind: "receipt", version: 0, data: { receiptNo: "R1", transfer: "2500" } }], saveToken: uuid(d + 100) });
+try {
+  await db.exec(`create role anon; create role authenticated; create schema auth;
+    create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+    grant usage on schema auth to authenticated;
+    create table public.profiles(id uuid primary key,role text,active boolean);
+    grant select on public.profiles to authenticated;
+    insert into profiles values('${uuid(1)}','broker',true),('${uuid(2)}','customer_service',true),('${uuid(3)}','admin',true),('${uuid(4)}','sales_manager',true),('${uuid(5)}','broker',false);
+    create publication supabase_realtime;
+  `);
+  await db.exec(await readFile(new URL("../supabase/migrations/20261016145622_client_document_workspace.sql", import.meta.url), "utf8"));
+  await actor(1);
+  const first = payload(10, 11, 12);
+  const created = await save(first);
+  assert.equal(created.client.version, 1);
+  assert.equal((await save(first)).client.version, 1, "Network retry is idempotent");
+  await assert.rejects(db.exec("update document_clients set data='{}'"), /permission denied/);
+  await assert.rejects(db.exec("delete from document_clients"), /permission denied/);
+  const stale = { ...first, saveToken: uuid(999) };
+  await assert.rejects(save(stale), /CLIENT_VERSION_CONFLICT/);
+  await assert.rejects(save({ ...stale, client: { ...stale.client, version: null } }), /CLIENT_VERSION_CONFLICT/);
+  const updated = await save({ ...created, saveToken: uuid(998), client: { ...created.client, data: { ...created.client.data, customerName: "Updated Client" } } });
+  assert.equal(updated.client.version, 2);
+  await actor(2);
+  assert.equal((await db.query("select * from document_clients")).rows.length, 0);
+  assert.equal((await db.query("select * from client_document_drafts")).rows.length, 0);
+  await assert.rejects(save({ ...updated, saveToken: uuid(997) }), /Access denied/);
+  const other = await save(payload(20, 21, 22));
+  await actor(1);
+  await assert.rejects(save({ ...updated, purchase: other.purchase, saveToken: uuid(996) }), /Access denied/);
+  await assert.rejects(save({ ...updated, documents: other.documents, saveToken: uuid(995) }), /Access denied/);
+  await assert.rejects(save({ ...updated, purchase: other.purchase, saveToken: uuid(998) }), /Access denied/, "Idempotency must not bypass parent access");
+  await actor(3);
+  assert.equal((await db.query("select * from document_clients")).rows.length, 2);
+  assert.equal((await db.query("select * from client_document_drafts")).rows.length, 2);
+  await save({ ...updated, saveToken: uuid(994) });
+  for (const role of [4, 5]) {
+    await actor(role);
+    assert.equal((await db.query("select * from document_clients")).rows.length, 0);
+    await assert.rejects(save(payload(30, 31, 32)), /Access denied/);
+  }
+  await db.exec("reset role; set role anon");
+  await assert.rejects(db.query("select * from document_clients"), /permission denied/);
+  await assert.rejects(save(payload(30, 31, 32)), /permission denied/);
+  console.log("PASS: atomic save, CAS, idempotency, owner/admin RLS, cross-client injection, Sales Manager/inactive/anon denial");
+} finally { await db.close(); }

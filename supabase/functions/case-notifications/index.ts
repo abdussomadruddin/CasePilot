@@ -147,7 +147,7 @@ function getKualaLumpurReminderSlot(now: Date) {
   const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
   const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
 
-  if (![8, 16].includes(hour) || minute >= 15) return null;
+  if (![8, 20].includes(hour) || minute >= 15) return null;
 
   return new Date(Date.UTC(year, month - 1, day, hour - 8));
 }
@@ -185,7 +185,7 @@ Deno.serve(async () => {
   if (!reminderSlot) {
     return Response.json({
       ok: true,
-      skipped: "scheduled_for_8am_or_4pm_kuala_lumpur",
+      skipped: "scheduled_for_8am_or_8pm_kuala_lumpur",
       notifications: 0,
       activities: 0,
       push: { sent: 0, failed: 0 },

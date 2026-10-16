@@ -1,12 +1,18 @@
+import { vehicleCatalog } from "./vehicle-catalog.ts";
+
 export type LeadVehicle = { brand: string; model: string };
 
-export const leadVehicleModels: LeadVehicle[] = Object.entries({
+const legacyVehicleModels: LeadVehicle[] = Object.entries({
   Proton: ["Proton S70", "Proton NEW S70 1.5 i-GT", "Proton Saga", "Proton Persona", "Proton Iriz", "Proton X50", "Proton X70", "Proton X90", "Proton e.MAS 5", "Proton e.MAS 7"],
   JAECOO: ["JAECOO J5", "JAECOO J5 EV", "JAECOO J7", "JAECOO J7 PHEV", "JAECOO J8"],
   JETOUR: ["JETOUR Dashing", "JETOUR VT9", "JETOUR T1", "JETOUR T2", "JETOUR T2 i-DM"],
   Chery: ["Chery TIGGO Cross", "Chery O5", "Chery OMODA E5", "Chery TIGGO 7 Pro", "Chery TIGGO 7 PHEV", "Chery TIGGO 8", "Chery TIGGO 8 PHEV", "Chery TIGGO 9"],
   Honda: ["Honda City", "Honda City Hatchback", "Honda WR-V", "Honda HR-V", "Honda Civic", "Honda CR-V", "Honda e:N1", "Honda Civic Type R", "Honda Prelude"],
 }).flatMap(([brand, models]) => models.map((model) => ({ brand, model })));
+
+export const leadVehicleModels: LeadVehicle[] = [...new Map(
+  [...legacyVehicleModels, ...vehicleCatalog].map(({ brand, model }) => [model, { brand, model }]),
+).values()];
 
 function contains(haystack: string, needle: string) {
   const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -21,7 +27,7 @@ export function extractLeadVehicle(note: string, supplied: Partial<LeadVehicle> 
     const aliases = [item.model, item.model.slice(item.brand.length).trim()];
     if (item.model === "Proton NEW S70 1.5 i-GT") aliases.push("Proton NEW S70", "NEW S70");
     if (item.model === "Honda City Hatchback") aliases.push("City Hacthback", "Honda City Hacthback");
-    return aliases.filter((alias) => contains(text, alias)).map((alias) => ({ ...item, length: alias.length }));
+    return aliases.filter((alias) => alias.length >= 3 && contains(text, alias)).map((alias) => ({ ...item, length: alias.length }));
   }).sort((a, b) => b.length - a.length)[0];
   const match = (directModel && findModel(directModel)) || findModel(note);
   if (match) return { brand: match.brand, model: match.model };

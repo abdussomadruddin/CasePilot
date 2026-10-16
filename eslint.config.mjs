@@ -16,6 +16,7 @@ const eslintConfig = [
       "node_modules/**",
       "supabase/functions/**",
       "next-env.d.ts",
+      "public/pdf.worker.min.mjs",
     ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),

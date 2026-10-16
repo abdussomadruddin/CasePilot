@@ -21,6 +21,10 @@ type LeadRow = {
   phone_revealed_at: string | null;
   follow_up_activity_at: string | null;
   follow_up_count: number;
+  has_ever_contacted?: boolean;
+  return_count?: number;
+  received_at?: string | null;
+  receipt_id?: string;
   email: string | null;
   car_brand: string | null;
   car_model: string | null;
@@ -34,6 +38,8 @@ type LeadRow = {
     created_at: string;
   }>;
   lead_events?: Array<{
+    event_kind?: string;
+    previous_owner_id?: string;
     id: string;
     actor_id: string;
     status: LeadStatus;
@@ -77,6 +83,9 @@ function mapLead(row: LeadRow): LeadRecord {
     phoneRevealedAt: row.phone_revealed_at || "",
     followUpActivityAt: row.follow_up_activity_at || "",
     followUpCount: row.follow_up_count || 0,
+    hasBeenContacted: Boolean(row.has_ever_contacted && row.return_count),
+    receivedAt: row.received_at || row.created_at,
+    receiptId: row.receipt_id,
     email: row.email || "",
     carBrand: row.car_brand || "",
     carModel: row.car_model || "",
@@ -93,6 +102,8 @@ function mapLead(row: LeadRow): LeadRecord {
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)),
     events: (row.lead_events || [])
       .map((event) => ({
+        kind: event.event_kind,
+        previousOwnerId: event.previous_owner_id,
         id: event.id,
         actorId: event.actor_id,
         status: event.status,

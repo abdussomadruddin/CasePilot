@@ -2,14 +2,19 @@ export type ReminderLead = { id: string; owner_id: string };
 export type ReminderProfile = { id: string; role: string };
 export type ReminderCounts = { newCount: number; contactedCount: number };
 
-const newLeadHoursUtc = new Set([2, 3, 4, 6, 8]);
-const contactedHoursUtc = new Set([1, 7, 13]);
+const newLeadHoursUtc = new Set([2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
-export function reminderTypeAt(now: Date): "new" | "contacted" | null {
+export function reminderTypeAt(now: Date): "new" | "contacted" | "both" | null {
+  if (now.getUTCMinutes() >= 30 && now.getUTCMinutes() <= 40 && now.getUTCHours() >= 1 && now.getUTCHours() <= 9) return "contacted";
   if (now.getUTCMinutes() > 10) return null;
   if (newLeadHoursUtc.has(now.getUTCHours())) return "new";
-  if (contactedHoursUtc.has(now.getUTCHours())) return "contacted";
   return null;
+}
+
+export function reminderSlotAt(now: Date): Date {
+  const slot = new Date(now);
+  slot.setUTCMinutes(now.getUTCMinutes() >= 30 ? 30 : 0, 0, 0);
+  return slot;
 }
 
 export function groupLeadReminders(

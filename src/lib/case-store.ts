@@ -10,6 +10,7 @@ import {
   type CaseDealer,
   type CaseDocument,
   type CaseRecord,
+  type CaseStatus,
   type DatabaseCaseStatus,
   type DocumentType,
   type Profile,
@@ -300,6 +301,59 @@ export async function loadCases(): Promise<StoreResult> {
   return {
     source: "supabase",
     cases: ((data || []) as CaseRow[]).map(mapCase),
+  };
+}
+
+export async function saveCaseStatus(record: CaseRecord, status: CaseStatus, actorRole: Role) {
+  const { data, error } = await getSupabaseClient().rpc("save_case_status", {
+    p_case_id: record.id, p_status: status, p_expected_status: record.status,
+  });
+  if (error) throw new Error(error.message);
+  const activity = data.activity;
+  const reason = `Case status changed to ${statusLabels[status]}.`;
+  const roles = getNotificationRoles(status, record.dealer);
+  try {
+    const sent = await notifyCaseStatusChange({
+      caseId: record.id, status, roles,
+      userIds: record.ownerRole === "broker" && record.ownerId ? [record.ownerId] : [], reason,
+    });
+    if (!sent && roles.length) {
+      const { error: notificationError } = await getSupabaseClient().from("case_notifications").insert(
+        roles.map((role) => ({ case_id: record.id, role, reason, status, due_at: data.updated_at })),
+      );
+      if (notificationError) console.warn("Unable to create notification rows", notificationError.message);
+    }
+  } catch (caught) { console.warn("Unable to notify case status change", caught); }
+  return {
+    status, updatedAt: data.updated_at as string, updatedBy: actorRole,
+    nextFollowUpAt: (data.next_follow_up_at || "") as string,
+    activity: { id: activity.id, type: "status", actorRole: activity.actor_role,
+      actorName: activity.actor_name || roleLabels[actorRole], message: `Status changed to ${statusLabels[status]}.`,
+      status, createdAt: activity.created_at } as ActivityEvent,
+  };
+}
+
+export async function saveCaseRemark(record: CaseRecord, remark: string, actorRole: Role) {
+  const { data, error } = await getSupabaseClient().rpc("save_case_remark", {
+    p_case_id: record.id,
+    p_remark: remark.trim(),
+    p_expected_remark: record.remark,
+  });
+  if (error) throw new Error(error.message);
+  const activity = data.activity;
+  return {
+    remark: data.remark as string,
+    updatedAt: data.updated_at as string,
+    updatedBy: actorRole,
+    nextFollowUpAt: (data.next_follow_up_at || "") as string,
+    activity: {
+      id: activity.id,
+      type: "remark",
+      actorRole: activity.actor_role,
+      actorName: activity.actor_name || roleLabels[actorRole],
+      message: activity.message,
+      createdAt: activity.created_at,
+    } as ActivityEvent,
   };
 }
 

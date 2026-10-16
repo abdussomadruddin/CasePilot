@@ -203,6 +203,9 @@ export const leadStatusLabels: Record<LeadStatus, string> = {
 };
 
 export type LeadRecord = {
+  hasBeenContacted?: boolean;
+  receivedAt?: string;
+  receiptId?: string;
   id: string;
   ownerId: string;
   source: "manual_upload" | "meta_ads" | "tiktok_ads";
@@ -233,7 +236,8 @@ export const leadSourceLabels: Record<LeadRecord["source"], string> = {
 };
 
 export function latestLeadNote(lead: LeadRecord) {
-  return lead.notes[0]?.body || lead.sourceNote;
+  const received = Date.parse(lead.receivedAt || lead.createdAt);
+  return lead.notes.find((note) => Date.parse(note.createdAt) >= received)?.body || lead.sourceNote;
 }
 
 export const maxLeadFollowUps = 6;
@@ -242,8 +246,13 @@ export function canRecordLeadFollowUp(count: number, status: LeadStatus) {
   return status !== "rejected" && count < maxLeadFollowUps;
 }
 
+export function leadFollowUpAction(count: number, status: LeadStatus) {
+  if (status === "rejected") return "blocked";
+  return canRecordLeadFollowUp(count, status) ? "record" : "whatsapp";
+}
+
 export function isLeadFollowUpDue(lead: LeadRecord, nowMs: number): boolean {
-  return lead.status === "contacted" && Boolean(lead.followUpActivityAt)
+  return lead.status === "contacted" && lead.followUpCount < 4 && Boolean(lead.followUpActivityAt)
     && nowMs - new Date(lead.followUpActivityAt).getTime() >= 86_400_000;
 }
 
@@ -264,6 +273,8 @@ export type LeadNote = {
 };
 
 export type LeadEvent = {
+  kind?: string;
+  previousOwnerId?: string;
   id: string;
   actorId: string;
   status: LeadStatus;

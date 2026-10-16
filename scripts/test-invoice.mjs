@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import ts from "typescript";
+import { PDFDocument } from "pdf-lib";
+
+const source = await readFile("src/lib/invoice.ts", "utf8");
+const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace('import("pdf-lib")', `import("${pathToFileURL(resolve("node_modules/pdf-lib/cjs/index.js"))}")`);
+const { exampleInvoice, buildInvoice, invoiceFilename } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+const data = exampleInvoice();
+assert.equal(data.bookingFee, "");
+assert.equal(data.payable, "4852.10");
+assert.equal(invoiceFilename(data), "INVOICE_Mr_Irfan_Faris_13-10-2026.pdf");
+const result = await buildInvoice(await readFile("assets/invoice-template.pdf"), data);
+assert.equal((await PDFDocument.load(result)).getPageCount(), 1);
+await writeFile("/tmp/casepilot-invoice-test.pdf", result);
+const edited = await buildInvoice(await readFile("assets/invoice-template.pdf"), { ...data, customerName: "Test Customer", otr: "12", payable: "99" });
+await writeFile("/tmp/casepilot-invoice-edited.pdf", edited);
+console.log("Invoice sample, manual totals, filename and single-page generation passed.");

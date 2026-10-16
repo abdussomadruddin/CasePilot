@@ -2,6 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+.vso-panel input[type="date"] {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.vso-panel input[type="date"]::-webkit-date-and-time-value { text-align: left; min-width: 0; }
+.vso-action-dock { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+
+button:not(:disabled):active {
+  transform: scale(.97);
+  transition-duration: 0ms;
+}
+button[aria-busy="true"] {
+  position: relative;
+}
+button[aria-busy="true"] > svg:first-child {
+  visibility: hidden;
+}
+button[aria-busy="true"]::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 12px;
+  top: calc(50% - 8px);
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: action-spin .7s linear infinite;
+}
+@keyframes action-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active { transform: none; }
+  button[aria-busy="true"]::before { animation: none; }
+}
+
 :root {
   color-scheme: dark;
   --cp-surface: #15171c;
@@ -97,11 +139,34 @@ body {
   box-shadow: inset 0 1px rgba(255, 255, 255, .08);
 }
 
-.screen-enter { animation: screen-enter 260ms cubic-bezier(.2, .8, .2, 1); }
+.screen-enter { animation: none; }
 @keyframes screen-enter {
   from { opacity: .55; transform: translate3d(0, 8px, 0); }
   to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
+
+.launch-mark { animation: launch-mark 520ms cubic-bezier(.22, 1, .36, 1) both; }
+.launch-wordmark span { display: inline-block; animation: brand-letter 360ms cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes launch-mark {
+  from { opacity: 0; transform: scale(.72) rotate(-8deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+@keyframes brand-letter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mobile-dashboard :where(button, a, input, textarea, select) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+    transition-duration: 160ms;
+    transition-timing-function: cubic-bezier(.22, 1, .36, 1);
+  }
+  .mobile-dashboard button:not(:disabled):active { transition-duration: 0ms; }
+  .mobile-dashboard :where([role="dialog"], [role="menu"]) {
+    animation: screen-enter 240ms cubic-bezier(.22, 1, .36, 1);
+  }
+}
+@keyframes app-reveal { from { opacity: .4; } to { opacity: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
   .casepilot-drawer,
@@ -195,6 +260,8 @@ body {
   .mobile-lead-card { box-shadow: inset 0 1px var(--cp-highlight), 0 6px 18px rgba(0, 0, 0, .12); }
   .mobile-lead-card > div:first-child > button:first-child { min-height: 48px; }
   .lead-view-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 4px;
     gap: 4px;
     border: 1px solid var(--cp-hairline);

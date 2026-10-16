@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Copy,
   FilePlus2,
+  LoaderCircle,
   MessageCircle,
   PhoneCall,
   Pencil,
@@ -14,7 +15,11 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { motion, useAnimationControls, useReducedMotion } from "motion/react";
+import { readUiContext, writeUiContext } from "@/lib/ui-context";
+import { PriorContactBadge } from "@/components/prior-contact-badge";
+import { compareLeadActivity } from "@/lib/lead-order";
 import { createPortal } from "react-dom";
 import { OwnerFilterSelect } from "@/components/owner-filter-select";
 import { formatLeadCopy } from "@/lib/lead-copy";
@@ -39,6 +44,7 @@ import {
   isLeadFollowUpDue,
   availableLeadFollowUpStages,
   canRecordLeadFollowUp,
+  leadFollowUpAction,
   maxLeadFollowUps,
   roleLabels,
   type AppointmentKind,
@@ -203,8 +209,8 @@ export function LeadPanel({
   onCreateCase: (lead: LeadRecord) => void;
   onAppointment: (lead: LeadRecord) => void;
   initialFilter?: LeadStatus | "all";
-  initialView?: "all" | "followup";
-  onViewChange?: (view: "all" | "followup") => void;
+  initialView?: "all" | "new" | "contacted" | "followup";
+  onViewChange?: (view: "all" | "new" | "contacted" | "followup") => void;
   cohortLeadIds?: string[];
   cohortLabel?: string;
   onClearCohort?: () => void;
@@ -220,15 +226,38 @@ export function LeadPanel({
   const [filter, setFilter] = useState<LeadStatus | "all">(initialFilter);
   const [followUpFilter, setFollowUpFilter] = useState<number | "all">("all");
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("all");
-  const [view, setView] = useState<"all" | "followup">(initialView);
+  const [view, setView] = useState<"all" | "new" | "contacted" | "followup">(initialView);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [saving, setSaving] = useState(false);
   const [copiedId, setCopiedId] = useState("");
   const [followingUpId, setFollowingUpId] = useState("");
   const [contactingLeadId, setContactingLeadId] = useState("");
+  const contactInFlight = useRef(false);
+  const followUpInFlight = useRef(false);
   const [followUpCounts, setFollowUpCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState("");
   const selected = leads.find((lead) => lead.id === selectedId);
+  const reduce = useReducedMotion();
+  const listRef = useRef<HTMLDivElement>(null);
+  const anchor = useRef<{ id: string; top: number; scroll: number } | null>(null);
+  const [notice, setNotice] = useState("");
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    const saved = readUiContext<{ filter: LeadStatus | "all"; followUp: number | "all"; owner: OwnerFilter; selected: string }>(`cp:leads:${profile.id}:${dashboardFollowUp ? "dashboard" : "tab"}`);
+    if (saved.filter && (saved.filter === "all" || leadStatuses.includes(saved.filter))) setFilter(saved.filter);
+    if (saved.followUp === "all" || (typeof saved.followUp === "number" && saved.followUp >= 0 && saved.followUp <= 6)) setFollowUpFilter(saved.followUp);
+    if (saved.owner) setOwnerFilter(saved.owner);
+    if (typeof saved.selected === "string") setSelectedId(saved.selected);
+    setRestored(true);
+  }, [profile.id, dashboardFollowUp]);
+  useEffect(() => {
+    if (restored) writeUiContext(`cp:leads:${profile.id}:${dashboardFollowUp ? "dashboard" : "tab"}`, { filter, followUp: followUpFilter, owner: ownerFilter, selected: selectedId });
+  }, [restored, profile.id, dashboardFollowUp, filter, followUpFilter, ownerFilter, selectedId]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 2500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(timer);
@@ -236,16 +265,54 @@ export function LeadPanel({
   useEffect(() => setView(initialView), [initialView]);
   const scopedLeads = cohortLeadIds ? leads.filter((lead) => cohortLeadIds.includes(lead.id)) : leads;
   const ownerLeads = scopedLeads.filter((lead) => matchesOwnerFilter(lead, ownerFilter, teamMembers))
-    .sort((left, right) => Number(["number_invalid", "rejected"].includes(left.status)) - Number(["number_invalid", "rejected"].includes(right.status)));
-  const dueLeads = ownerLeads.filter((lead) => isLeadFollowUpDue(lead, nowMs));
+    .sort((left, right) => view === "all" ? compareLeadActivity(left, right)
+      : Number(["number_invalid", "rejected"].includes(left.status)) - Number(["number_invalid", "rejected"].includes(right.status)));
+  const dueLeads = ownerLeads.filter((lead) => isLeadFollowUpDue({
+    ...lead, followUpCount: Math.max(lead.followUpCount, followUpCounts[lead.receiptId || lead.id] ?? 0),
+  }, nowMs));
+  const newLeads = ownerLeads.filter((lead) => lead.status === "new");
+  const contactedLeads = ownerLeads.filter((lead) => lead.status === "contacted");
   const statusLeads = ownerLeads.filter((lead) => filter === "all" || lead.status === filter);
   const followUpStages = availableLeadFollowUpStages(statusLeads.map((lead) => ({
     phoneRevealedAt: lead.phoneRevealedAt,
-    followUpCount: Math.max(lead.followUpCount, followUpCounts[lead.id] ?? 0),
+    followUpCount: Math.max(lead.followUpCount, followUpCounts[lead.receiptId || lead.id] ?? 0),
     status: lead.status,
   })));
   const activeFollowUpFilter = followUpFilter === "all" || followUpStages.some((stage) => stage.count === followUpFilter) ? followUpFilter : "all";
-  const shown = view === "followup" ? dueLeads : statusLeads.filter((lead) => activeFollowUpFilter === "all" || (lead.status !== "rejected" && lead.phoneRevealedAt && Math.max(lead.followUpCount, followUpCounts[lead.id] ?? 0) === activeFollowUpFilter));
+  const shown = view === "followup" ? dueLeads : view === "new" ? newLeads : view === "contacted" ? contactedLeads : statusLeads.filter((lead) => activeFollowUpFilter === "all" || (lead.status !== "rejected" && lead.phoneRevealedAt && Math.max(lead.followUpCount, followUpCounts[lead.receiptId || lead.id] ?? 0) === activeFollowUpFilter));
+  const order = shown.map((lead) => lead.id).join(":");
+  const listContext = `${view}:${filter}:${activeFollowUpFilter}:${ownerFilter}`;
+  const listMotion = useAnimationControls();
+  useEffect(() => {
+    listMotion.set({ opacity: reduce ? 1 : .65, y: reduce ? 0 : 12 });
+    void listMotion.start({ opacity: 1, y: 0, transition: reduce ? { duration: 0 } : { type: "spring", visualDuration: .26, bounce: 0 } });
+  }, [listContext, listMotion, reduce]);
+  const previousContext = useRef(listContext);
+  useLayoutEffect(() => {
+    const cards = () => Array.from(listRef.current?.querySelectorAll<HTMLElement>("[data-lead-id]") || []);
+    const layoutTop = (card: HTMLElement) => {
+      let top = 0;
+      let element: HTMLElement | null = card;
+      while (element) { top += element.offsetTop; element = element.offsetParent as HTMLElement | null; }
+      return top - window.scrollY;
+    };
+    const old = anchor.current;
+    if (old && previousContext.current === listContext && window.scrollY > 160) {
+      const card = cards().find((item) => item.dataset.leadId === old.id);
+      if (card) {
+        const delta = layoutTop(card) - (old.top - (window.scrollY - old.scroll));
+        if (Math.abs(delta) > 1) window.scrollBy({ top: delta, behavior: "instant" });
+      }
+    }
+    previousContext.current = listContext;
+    const capture = () => {
+      const card = cards().find((item) => item.getBoundingClientRect().bottom > 100);
+      anchor.current = card ? { id: card.dataset.leadId!, top: layoutTop(card), scroll: window.scrollY } : null;
+    };
+    capture();
+    window.addEventListener("scroll", capture, { passive: true });
+    return () => window.removeEventListener("scroll", capture);
+  }, [order, listContext]);
   useEffect(() => {
     if (followUpFilter !== activeFollowUpFilter) setFollowUpFilter(activeFollowUpFilter);
   }, [followUpFilter, activeFollowUpFilter]);
@@ -260,6 +327,7 @@ export function LeadPanel({
     try {
       const previous = leads.find((lead) => lead.id === draft.id);
       await saveLead(draft, profile.id, initialNote, previous?.status, profile.role !== "admin");
+      setNotice("Lead saved");
       if (!previous && draft.status === "new") {
         const { error: notificationError } = await getSupabaseClient().functions.invoke("notify-manual-lead", {
           body: { leadId: draft.id },
@@ -288,6 +356,7 @@ export function LeadPanel({
     setError("");
     try {
       await saveLead({ ...lead, status }, profile.id, status === "rejected" ? statusNote : "", lead.status, profile.role !== "admin");
+      setNotice("Status updated");
       if (status === "rejected") {
         setNote("");
         setInlineNote("");
@@ -309,6 +378,7 @@ export function LeadPanel({
     setError("");
     try {
       await addLeadNote(selected.id, profile.id, note);
+      setNotice("Note saved");
       setNote("");
       await onRefresh();
     } catch (caught) {
@@ -330,6 +400,7 @@ export function LeadPanel({
     setError("");
     try {
       await addLeadNote(leadId, profile.id, inlineNote);
+      setNotice("Note saved");
       setInlineNote("");
       setInlineNoteId("");
       await onRefresh();
@@ -360,37 +431,44 @@ export function LeadPanel({
       setError("This lead has no phone number yet. Add one before contacting.");
       return;
     }
-    if (contactingLeadId) return;
+    if (contactInFlight.current) return;
+    contactInFlight.current = true;
     setContactingLeadId(lead.id);
     setError("");
     try {
       if (!lead.phoneRevealedAt || lead.status === "new") {
         await revealLeadPhone(lead.id, profile.id);
-        await onRefresh();
       }
       const digits = lead.customerPhone.replace(/\D/g, "");
       window.location.href = channel === "call"
         ? `tel:${lead.customerPhone.replace(/[^\d+]/g, "")}`
         : `https://wa.me/${digits.startsWith("0") ? `60${digits.slice(1)}` : digits}`;
+      void onRefresh().catch(() => setError("Contact saved. Unable to refresh; retry refresh."));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to contact lead.");
     } finally {
+      contactInFlight.current = false;
       setContactingLeadId("");
     }
   }
 
   async function followUpLead(lead: LeadRecord) {
-    if (!lead.phoneRevealedAt || !lead.customerPhone || followingUpId || !canRecordLeadFollowUp(Math.max(lead.followUpCount, followUpCounts[lead.id] ?? 0), lead.status)) return;
+    const action = leadFollowUpAction(Math.max(lead.followUpCount, followUpCounts[lead.receiptId || lead.id] ?? 0), lead.status);
+    if (!lead.phoneRevealedAt || !lead.customerPhone || followUpInFlight.current || action === "blocked") return;
+    followUpInFlight.current = true;
     setFollowingUpId(lead.id);
     setError("");
     try {
       followUpWhatsAppUrls(lead.customerPhone);
-      const count = await recordLeadFollowUp(lead.id);
-      setFollowUpCounts((current) => ({ ...current, [lead.id]: count }));
+      if (action === "record") {
+        const count = await recordLeadFollowUp(lead.id);
+        setFollowUpCounts((current) => ({ ...current, [lead.receiptId || lead.id]: count }));
+      }
       await openFollowUpWhatsApp(lead.customerPhone);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to record follow-up.");
     } finally {
+      followUpInFlight.current = false;
       setFollowingUpId("");
     }
   }
@@ -435,9 +513,13 @@ export function LeadPanel({
         <button type="button" className="primary-button" onClick={() => { const lead = newLead(profile); if (profile.role === "admin") lead.ownerId = teamMembers.find((member) => member.active && ["customer_service", "broker"].includes(member.role))?.id || ""; setDraft(lead); setInitialNote(""); }}><Plus className="h-4 w-4" /> New Lead</button>
       </div>}
       {error ? <p className="rounded-md border border-red-800 bg-red-950/50 p-3 text-sm text-red-100" role="alert">{error}</p> : null}
+      {notice ? <p className="text-sm text-emerald-300" role="status">{notice}</p> : null}
+      {saving ? <p className="flex items-center gap-2 text-sm text-zinc-400" role="status"><LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" />Saving...</p> : null}
       {cohortLeadIds ? <div className="flex items-center justify-between gap-3 border-b border-cyan-800 py-2 text-sm"><span className="text-cyan-200">{cohortLabel}</span><button type="button" className="secondary-button" onClick={onClearCohort}>All leads</button></div> : null}
       {!dashboardFollowUp ? <div className="lead-view-tabs flex gap-2 border-b border-zinc-800 pb-2" role="tablist" aria-label="Lead views">
         <button type="button" role="tab" aria-selected={view === "all"} className={view === "all" ? "primary-button" : "secondary-button"} onClick={() => { setView("all"); onViewChange?.("all"); }}>All Leads <span>{ownerLeads.length}</span></button>
+        <button type="button" role="tab" aria-selected={view === "new"} className={view === "new" ? "primary-button" : "secondary-button"} onClick={() => { setView("new"); onViewChange?.("new"); }}>New Leads <span>{newLeads.length}</span></button>
+        <button type="button" role="tab" aria-selected={view === "contacted"} className={view === "contacted" ? "primary-button" : "secondary-button"} onClick={() => { setView("contacted"); onViewChange?.("contacted"); }}>Contacted <span>{contactedLeads.length}</span></button>
         <button type="button" role="tab" aria-selected={view === "followup"} className={view === "followup" ? "primary-button" : "secondary-button"} onClick={() => { setView("followup"); onViewChange?.("followup"); }}>Follow Up Due <span>{dueLeads.length}</span></button>
       </div> : null}
       <div className="grid gap-2 sm:flex sm:flex-wrap">
@@ -451,12 +533,13 @@ export function LeadPanel({
           {followUpStages.map(({ count, total }) => <option key={count} value={count}>{count ? `Follow Up ${count}` : "Follow Up"} ({total})</option>)}
         </select> : null}
       </div>
-      <div className="grid gap-2">
+      <motion.div ref={listRef} className="grid gap-2" animate={listMotion}>
         {shown.map((lead) => (
-          <article key={lead.id} className="mobile-lead-card surface-card min-w-0 p-4">
+          <motion.article key={lead.id} layout={reduce ? false : "position"} data-lead-id={lead.id} transition={{ type: "spring", visualDuration: .26, bounce: 0 }} className="mobile-lead-card surface-card min-w-0 p-4">
             <div className="flex items-start justify-between gap-3">
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }} aria-label={`Open ${lead.customerName} details`}>
                 <span className="block truncate font-semibold text-white">{leadName(lead)}</span>
+                <PriorContactBadge lead={lead} />
                 {lead.phoneRevealedAt || lead.carModel ? <span className="block truncate text-sm text-zinc-400">{[lead.phoneRevealedAt ? lead.customerPhone : "", lead.carModel].filter(Boolean).join(" · ")}</span> : null}
                 <span className="block truncate text-xs text-zinc-500">{ownerLabel(lead.ownerId, teamMembers)}</span>
                 <span className="block truncate text-xs text-zinc-400">{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</span>
@@ -464,37 +547,38 @@ export function LeadPanel({
               <div className="flex shrink-0 items-center gap-2">
                 {!lead.phoneRevealedAt ? <span className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100">{leadStatusLabels[lead.status]}</span> : null}
                 <button className="icon-button" type="button" aria-label={`Copy ${leadName(lead)} details`} title={copiedId === lead.id ? "Copied" : lead.phoneRevealedAt ? "Copy lead details" : "Copy details without phone until Call"} onClick={() => void copyLead(lead)}>{copiedId === lead.id ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}</button>
-                {view === "followup" && lead.status !== "rejected" && lead.phoneRevealedAt && lead.customerPhone ? <button className={followUpButtonClass(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount))} type="button" disabled={Boolean(followingUpId) || !canRecordLeadFollowUp(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount), lead.status)} title={canRecordLeadFollowUp(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount), lead.status) ? "Record follow-up and open WhatsApp" : "Maximum 6 follow-ups reached"} onClick={() => void followUpLead(lead)}><MessageCircle className="h-4 w-4" />{followUpLabel(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount))}</button> : view === "all" ? <button className="icon-button" type="button" aria-label={`Open ${leadName(lead)} details`} title="Open lead details" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }}><ChevronDown className="h-4 w-4" /></button> : null}
+                {view === "followup" && lead.status !== "rejected" && lead.phoneRevealedAt && lead.customerPhone ? <button className={followUpButtonClass(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount))} type="button" aria-busy={followingUpId === lead.id} disabled={Boolean(followingUpId)} title={canRecordLeadFollowUp(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount), lead.status) ? "Record follow-up and open WhatsApp" : "Open WhatsApp"} onClick={() => void followUpLead(lead)}><MessageCircle className="h-4 w-4" />{followUpLabel(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount))}</button> : view !== "followup" ? <button className="icon-button" type="button" aria-label={`Open ${leadName(lead)} details`} title="Open lead details" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }}><ChevronDown className="h-4 w-4" /></button> : null}
               </div>
             </div>
             {latestLeadNote(lead) ? <p className="mt-3 break-words whitespace-pre-wrap border-t border-zinc-800 pt-3 text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{hideLeadPhoneInNote(latestLeadNote(lead), Boolean(lead.phoneRevealedAt))}</p> : null}
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
-              {lead.customerPhone ? <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(lead, "call")}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(lead); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
-              {lead.status === "new" && lead.customerPhone ? <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:opacity-60" type="button" disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(lead, "whatsapp")}><MessageCircle className="h-4 w-4" /> WhatsApp</button> : null}
-              {view === "all" && lead.status !== "rejected" && lead.phoneRevealedAt && lead.customerPhone ? <button className={followUpButtonClass(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount))} type="button" disabled={Boolean(followingUpId) || !canRecordLeadFollowUp(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount), lead.status)} title={canRecordLeadFollowUp(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount), lead.status) ? "Record follow-up and open WhatsApp" : "Maximum 6 follow-ups reached"} onClick={() => void followUpLead(lead)}><MessageCircle className="h-4 w-4" /> {followUpLabel(Math.max(followUpCounts[lead.id] ?? 0, lead.followUpCount))}</button> : null}
+              {lead.customerPhone ? <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" aria-busy={contactingLeadId === lead.id} disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(lead, "call")}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(lead); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
+              {lead.status === "new" && lead.customerPhone ? <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:opacity-60" type="button" aria-busy={contactingLeadId === lead.id} disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(lead, "whatsapp")}><MessageCircle className="h-4 w-4" /> WhatsApp</button> : null}
+              {view !== "followup" && lead.status !== "rejected" && lead.phoneRevealedAt && lead.customerPhone ? <button className={followUpButtonClass(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount))} type="button" aria-busy={followingUpId === lead.id} disabled={Boolean(followingUpId)} title={canRecordLeadFollowUp(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount), lead.status) ? "Record follow-up and open WhatsApp" : "Open WhatsApp"} onClick={() => void followUpLead(lead)}><MessageCircle className="h-4 w-4" /> {followUpLabel(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount))}</button> : null}
               {lead.phoneRevealedAt ? <select className="field min-w-0 flex-1 basis-36" aria-label={`Status for ${lead.customerName}`} value={lead.status} disabled={saving} onChange={(event) => void updateStatus(lead, event.target.value as LeadStatus, inlineNoteId === lead.id ? inlineNote : "")}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || lead.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select> : null}
               {lead.phoneRevealedAt ? <button className="icon-button" type="button" aria-label={`Add note for ${lead.customerName}`} title="Add note" onClick={() => { setError(""); setInlineNoteId(inlineNoteId === lead.id ? "" : lead.id); setInlineNote(""); setPendingRejectId(""); }}><Pencil className="h-4 w-4" /></button> : null}
             </div>
             {inlineNoteId === lead.id ? <form className="mt-3 grid gap-2" onSubmit={(event) => void submitInlineNote(event, lead.id)}><label className="sr-only" htmlFor={`lead-note-${lead.id}`}>Note for {lead.customerName}</label><textarea id={`lead-note-${lead.id}`} className="field min-h-20" value={inlineNote} onChange={(event) => setInlineNote(event.target.value)} placeholder={pendingRejectId === lead.id ? "Reason for rejection" : "Add follow-up note"} /><div className="flex gap-2"><button className="secondary-button" disabled={saving || !inlineNote.trim()}><Save className="h-4 w-4" /> {pendingRejectId === lead.id ? "Reject lead" : "Save note"}</button><button className="icon-button" type="button" aria-label="Close note" onClick={() => { setInlineNoteId(""); setInlineNote(""); setPendingRejectId(""); }}><X className="h-4 w-4" /></button></div></form> : null}
-          </article>
+          </motion.article>
         ))}
-        {!shown.length ? <p className="surface-card p-6 text-sm text-zinc-400">{view === "followup" ? "No contacted leads are due for follow-up." : "No leads in this status."}</p> : null}
-      </div>
+        {!shown.length ? <p className="surface-card p-6 text-sm text-zinc-400">{view === "followup" ? "No contacted leads are due for follow-up." : view === "new" ? "No new leads." : view === "contacted" ? "No contacted leads." : "No leads in this status."}</p> : null}
+      </motion.div>
 
       {selected ? (
         <Modal title={leadName(selected)} onClose={() => { setNote(""); setSelectedId(""); }}>
+          <div className="px-4 pt-3"><PriorContactBadge lead={selected} /></div>
           <div className="grid gap-4 p-4">
             <div className="grid gap-1 text-sm"><p className="text-zinc-400">{selected.customerPhone ? selected.phoneRevealedAt ? selected.customerPhone : "Phone hidden" : "No phone number"}{selected.email ? ` · ${selected.email}` : ""}</p>{selected.carBrand || selected.carModel ? <p>{[selected.carBrand, selected.carModel].filter(Boolean).join(" · ")}</p> : null}<p className="text-zinc-400">{ownerLabel(selected.ownerId, teamMembers)}</p><p className="text-zinc-300">Source: {leadSourceLabels[selected.source]}{selected.sourceDetail ? ` · ${selected.sourceDetail}` : ""}</p>{selected.sourceNote ? <p className="whitespace-pre-wrap text-zinc-300">Inquiry: {hideLeadPhoneInNote(selected.sourceNote, Boolean(selected.phoneRevealedAt))}</p> : null}<p className="text-xs text-zinc-500">Created {displayTime(selected.createdAt)}</p></div>
             <div className="grid gap-2 sm:grid-cols-2">
-              {selected.customerPhone ? <button className={selected.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white"} type="button" disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(selected, "call")}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
-              {selected.status === "new" && selected.customerPhone ? <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:opacity-60" type="button" disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(selected, "whatsapp")}><MessageCircle className="h-4 w-4" /> WhatsApp</button> : null}
-              {selected.status !== "rejected" && selected.phoneRevealedAt && selected.customerPhone ? <button className={followUpButtonClass(Math.max(followUpCounts[selected.id] ?? 0, selected.followUpCount))} type="button" disabled={Boolean(followingUpId) || !canRecordLeadFollowUp(Math.max(followUpCounts[selected.id] ?? 0, selected.followUpCount), selected.status)} title={canRecordLeadFollowUp(Math.max(followUpCounts[selected.id] ?? 0, selected.followUpCount), selected.status) ? "Record follow-up and open WhatsApp" : "Maximum 6 follow-ups reached"} onClick={() => void followUpLead(selected)}><MessageCircle className="h-4 w-4" /> {followUpLabel(Math.max(followUpCounts[selected.id] ?? 0, selected.followUpCount))}</button> : null}
+              {selected.customerPhone ? <button className={selected.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white"} type="button" aria-busy={contactingLeadId === selected.id} disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(selected, "call")}><PhoneCall className="h-4 w-4" /> Call</button> : <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Add phone</button>}
+              {selected.status === "new" && selected.customerPhone ? <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:opacity-60" type="button" aria-busy={contactingLeadId === selected.id} disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(selected, "whatsapp")}><MessageCircle className="h-4 w-4" /> WhatsApp</button> : null}
+              {selected.status !== "rejected" && selected.phoneRevealedAt && selected.customerPhone ? <button className={followUpButtonClass(Math.max(followUpCounts[selected.receiptId || selected.id] ?? 0, selected.followUpCount))} type="button" aria-busy={followingUpId === selected.id} disabled={Boolean(followingUpId)} title={canRecordLeadFollowUp(Math.max(followUpCounts[selected.receiptId || selected.id] ?? 0, selected.followUpCount), selected.status) ? "Record follow-up and open WhatsApp" : "Open WhatsApp"} onClick={() => void followUpLead(selected)}><MessageCircle className="h-4 w-4" /> {followUpLabel(Math.max(followUpCounts[selected.receiptId || selected.id] ?? 0, selected.followUpCount))}</button> : null}
               {selected.phoneRevealedAt ? <select className="field" aria-label="Lead status" value={selected.status} disabled={saving} onChange={(event) => void updateStatus(selected, event.target.value as LeadStatus)}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || selected.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select> : null}
             </div>
             {selected.phoneRevealedAt ? <form className="grid gap-2" onSubmit={submitNote}><label className="text-sm font-medium">Note</label><textarea className="field min-h-20" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add follow-up note or rejection reason" /><button className="secondary-button w-fit" disabled={saving || !note.trim()}><Save className="h-4 w-4" /> Save note</button></form> : null}
             {selected.notes.length || selected.events.length || selected.followUps.length ? <div className="grid max-h-48 gap-2 overflow-y-auto border-t border-zinc-800 pt-3 text-sm"><p className="font-semibold">History</p>{[
               ...selected.notes.map((entry) => ({ id: entry.id, time: entry.createdAt, text: hideLeadPhoneInNote(entry.body, Boolean(selected.phoneRevealedAt)) })),
-              ...selected.events.map((entry) => ({ id: entry.id, time: entry.createdAt, text: `Status: ${leadStatusLabels[entry.status]}` })),
+              ...selected.events.map((entry) => ({ id: entry.id, time: entry.createdAt, text: entry.kind === "reentered" ? `Lead masuk semula · ${ownerLabel(entry.previousOwnerId || entry.actorId, teamMembers)} → ${ownerLabel(entry.actorId, teamMembers)} · New` : `Status: ${leadStatusLabels[entry.status]}` })),
               ...selected.followUps.map((entry) => ({ id: entry.id, time: entry.createdAt, text: `Follow Up ${entry.number}` })),
             ].sort((a, b) => +new Date(b.time) - +new Date(a.time)).map((entry) => <p key={entry.id} className="rounded-md bg-zinc-900 p-2"><span className="text-xs text-zinc-500">{displayTime(entry.time)}</span><br />{entry.text}</p>)}</div> : null}
             <div className="grid gap-2 border-t border-zinc-800 pt-3 sm:grid-cols-2">
@@ -563,6 +647,21 @@ export function AppointmentPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("all");
+  const [notice, setNotice] = useState("");
+  const [contextReady, setContextReady] = useState(false);
+  useEffect(() => {
+    const saved = readUiContext<{ owner: OwnerFilter }>(`cp:appointments:${profile.id}`);
+    if (saved.owner) setOwnerFilter(saved.owner);
+    setContextReady(true);
+  }, [profile.id]);
+  useEffect(() => {
+    if (contextReady) writeUiContext(`cp:appointments:${profile.id}`, { owner: ownerFilter });
+  }, [contextReady, profile.id, ownerFilter]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 2500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   const now = Date.now();
   const ownerAppointments = appointments.filter((appointment) => matchesOwnerFilter(appointment, ownerFilter, teamMembers));
   const upcoming = ownerAppointments.filter((appointment) => appointment.status === "scheduled" && +new Date(appointment.startsAt) >= now);
@@ -610,6 +709,7 @@ export function AppointmentPanel({
     setError("");
     try {
       await saveAppointment({ ...draft, ownerId: subject?.ownerId || profile.id, startsAt });
+      setNotice("Appointment saved");
       await onRefresh();
       setDraft(null);
     } catch (caught) {
@@ -624,6 +724,7 @@ export function AppointmentPanel({
     setError("");
     try {
       await saveAppointment({ ...appointment, status });
+      setNotice("Status updated");
       await onRefresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to update appointment.");
@@ -646,6 +747,8 @@ export function AppointmentPanel({
     {error ? <p className="rounded-md border border-red-800 bg-red-950/50 p-3 text-sm text-red-100" role="alert">{error}</p> : null}
     {profile.role === "admin" ? <OwnerFilterSelect value={ownerFilter} onChange={setOwnerFilter} members={teamMembers} records={appointments} className="sm:max-w-xs" /> : null}
     <h3 className="text-sm font-semibold text-zinc-300">Upcoming</h3>
+    {notice ? <p className="text-sm text-emerald-300" role="status">{notice}</p> : null}
+    {saving ? <p className="flex items-center gap-2 text-sm text-zinc-400" role="status"><LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" />Saving...</p> : null}
     <div className="grid gap-2">{upcoming.length ? upcoming.map(appointmentItem) : <p className="surface-card p-6 text-sm text-zinc-400">No upcoming appointments.</p>}</div>
     {previous.length ? <><h3 className="mt-4 text-sm font-semibold text-zinc-400">Past and cancelled</h3><div className="grid gap-2">{previous.map(appointmentItem)}</div></> : null}
     {draft ? <Modal title={appointments.some((item) => item.id === draft.id) ? "Edit Appointment" : "New Appointment"} onClose={() => setDraft(null)}>

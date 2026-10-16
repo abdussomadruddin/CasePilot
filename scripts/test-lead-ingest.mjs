@@ -3,7 +3,7 @@ import test from "node:test";
 import { parseIngestPayload } from "../supabase/functions/ingest-lead/payload.ts";
 import { extractLeadContact, hideLeadPhoneInNote } from "../supabase/functions/_shared/lead-contact.ts";
 import { extractLeadVehicle, leadVehicleModels } from "../supabase/functions/_shared/lead-vehicle.ts";
-import { readFileSync } from "node:fs";
+import { vehicleCatalog } from "../supabase/functions/_shared/vehicle-catalog.ts";
 
 test("Pabbly payload maps required and optional lead fields", () => {
   assert.deepEqual(parseIngestPayload({
@@ -154,7 +154,29 @@ test("direct vehicle fields take precedence over unrelated note mentions", () =>
 });
 
 test("lead model detector covers the CasePilot car catalog", () => {
-  const dashboard = readFileSync(new URL("../src/components/case-dashboard.tsx", import.meta.url), "utf8");
-  const catalogModels = [...dashboard.matchAll(/^    model: "([^"]+)"/gm)].map((match) => match[1]);
-  assert.deepEqual(leadVehicleModels.map((item) => item.model).sort(), catalogModels.sort());
+  const detectedModels = new Set(leadVehicleModels.map((item) => item.model));
+  for (const item of vehicleCatalog) assert.ok(detectedModels.has(item.model), item.model);
+});
+
+test("Swasta and Kerajaan are employment answers, not names", () => {
+  for (const answer of ["swasta", "Swasta", "KERAJAAN", "Kerajaan"]) {
+    assert.equal(extractLeadContact(`${answer}\nSarasvati\n+60173559147`).name, "Sarasvati");
+    assert.equal(extractLeadContact(`${answer}\n+60173559147`, { name: answer }).name, "");
+  }
+});
+
+test("new-car catalog has unique models and nonempty variants", () => {
+  assert.ok(vehicleCatalog.length > 100);
+  assert.equal(new Set(vehicleCatalog.map(item => item.model)).size, vehicleCatalog.length);
+  for (const item of vehicleCatalog) {
+    assert.ok(item.brand && item.variants.length && item.source.startsWith("https://"));
+    assert.equal(new Set(item.variants).size, item.variants.length);
+  }
+});
+
+test("expanded catalog models cannot become an unlabelled lead name", () => {
+  for (const model of ["Perodua Myvi", "Toyota Vios", "BYD Dolphin", "BMW 320i"]) {
+    const contact = extractLeadContact(`${model}\nAbdussomad Ruddin\n+60173559147`);
+    assert.equal(contact.name, "Abdussomad Ruddin", model);
+  }
 });

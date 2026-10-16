@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.50.0";
 import { sendPushesForUsers } from "../_shared/web-push.ts";
-import { groupLeadReminders, reminderMessage, reminderTypeAt, type ReminderLead, type ReminderProfile } from "./reminders.ts";
+import { groupLeadReminders, reminderMessage, reminderTypeAt, reminderSlotAt, type ReminderLead, type ReminderProfile } from "./reminders.ts";
 
 const oneDayMs = 24 * 60 * 60 * 1000;
 
@@ -17,22 +17,23 @@ Deno.serve(async () => {
     return Response.json({ ok: true, skipped: "outside_schedule" });
   }
 
-  const slotAt = new Date(now);
-  slotAt.setUTCMinutes(0, 0, 0);
+  const slotAt = reminderSlotAt(now);
   const supabase = createClient(supabaseUrl, serviceRoleKey);
   let dueLeads: ReminderLead[] = [];
   let newLeads: ReminderLead[] = [];
-  if (reminderType === "contacted") {
+  if (reminderType === "contacted" || reminderType === "both") {
     const { data, error } = await supabase
       .from("leads")
       .select("id,owner_id")
       .eq("status", "contacted")
+      .lt("follow_up_count", 4)
       .is("deleted_at", null)
       .not("follow_up_activity_at", "is", null)
       .lte("follow_up_activity_at", new Date(+now - oneDayMs).toISOString());
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
     dueLeads = (data || []) as ReminderLead[];
-  } else {
+  }
+  if (reminderType === "new" || reminderType === "both") {
     const { data, error } = await supabase
       .from("leads")
       .select("id,owner_id")
@@ -78,7 +79,7 @@ Deno.serve(async () => {
     const result = await sendPushesForUsers(supabase, [recipientId], {
       title: counts.newCount ? "CasePilot • Lead Reminder" : "CasePilot • Lead Follow Up",
       body: reminderMessage(counts),
-      url: counts.newCount ? "/?section=leads" : "/?section=leads&view=followup",
+      url: counts.newCount ? "/?section=leads&view=new" : "/?section=leads&view=followup",
     });
     const successful = result.sent > 0;
     const { error: updateError } = await supabase

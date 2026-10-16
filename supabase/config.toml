@@ -412,6 +412,9 @@ enabled = true
 [functions.lead-follow-up]
 verify_jwt = false
 
+[functions.new-lead-alerts]
+verify_jwt = false
+
 [functions.ingest-lead]
 verify_jwt = false
 # Directory under `supabase/` where declarative files are written.

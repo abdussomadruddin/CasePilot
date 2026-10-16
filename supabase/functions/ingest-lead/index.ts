@@ -1,5 +1,4 @@
 import { createClient } from "npm:@supabase/supabase-js@2.50.0";
-import { sendPushesForUsers } from "../_shared/web-push.ts";
 import { parseIngestPayload } from "./payload.ts";
 
 const jsonHeaders = { "content-type": "application/json" };
@@ -84,16 +83,6 @@ Deno.serve(async (request) => {
   const { error: usageError } = await supabase.from("lead_connectors")
     .update({ last_used_at: new Date().toISOString() }).eq("id", connector.id);
   if (usageError) console.warn("Unable to update connector usage", usageError.message);
-
-  try {
-    await sendPushesForUsers(supabase, [connector.owner_id], {
-      title: "CasePilot · New lead",
-      body: `${payload.name || "New lead"} is ready to contact.`,
-      url: "/?section=leads",
-    });
-  } catch (caught) {
-    console.warn("Unable to send new lead push", caught);
-  }
 
   return reply({ ok: true, duplicate: false, lead_id: lead.lead_id, owner_id: connector.owner_id, source: connector.source }, 201);
 });
