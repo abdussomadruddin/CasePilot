@@ -8,7 +8,7 @@ const source = await readFile("src/lib/ehakmilik.ts", "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace('import("pdf-lib")', `import("${pathToFileURL(resolve("node_modules/pdf-lib/cjs/index.js"))}")`);
 const { exampleEhakmilik, ehakmilikFilename, buildEhakmilik } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
 const data = { ...exampleEhakmilik(), date: "2026-10-17" };
-assert.equal(ehakmilikFilename(data), "e-hakmilik_PELANGGAN_CONTOH_2026-10-17.pdf");
+assert.equal(ehakmilikFilename(data), "e-hakmilik_IRFAN_FARIS_2026-10-17.pdf");
 const template = await readFile("assets/ehakmilik-template.pdf");
 const bytes = await buildEhakmilik(template, data);
 const pdf = await PDFDocument.load(bytes);

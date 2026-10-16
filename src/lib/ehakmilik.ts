@@ -4,7 +4,7 @@ export function emptyEhakmilik(): EhakmilikData {
   return { ...Object.fromEntries(Object.keys(ehakmilikFields).map(key => [key, ""])), date: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()) } as EhakmilikData;
 }
 export function exampleEhakmilik(): EhakmilikData {
-  return { ...emptyEhakmilik(), customerName: "PELANGGAN CONTOH", nric: "900101101234", model: "Honda City Hatchback", variant: "RS", colour: "Ignite Red Metallic", chassisNo: "PMHGN5880SD000001", engineNo: "L15ZE7000001", bankName: "Hong Leong Bank", bankerName: "BANKER CONTOH", salesAdvisorName: "PENASIHAT CONTOH" };
+  return { ...emptyEhakmilik(), date: "2026-10-12", customerName: "IRFAN FARIS", nric: "010812101659", model: "Honda City Hatchback", variant: "RS", colour: "Ignite Red Metallic", chassisNo: "PMHGN5880SD305909", engineNo: "L15ZE7005901", bankName: "Hong Leong Bank", bankerName: "HONG LEONG", salesAdvisorName: "MUIZ NAZMI" };
 }
 export function ehakmilikFilename(data: EhakmilikData) { return `e-hakmilik_${data.customerName.replace(/[^a-z0-9]+/gi, "_").slice(0, 80)}_${data.date}.pdf`; }
 export async function buildEhakmilik(template: Uint8Array, data: EhakmilikData) {
