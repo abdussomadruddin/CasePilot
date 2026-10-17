@@ -76,13 +76,21 @@ Deno.serve(async (request) => {
     return reply({ ok: false, error: "Unable to save lead." }, 500);
   }
 
+  // The accepted lead can belong to an earlier owner across connectors.
+  const { data: savedLead, error: savedLeadError } = await supabase.from("leads")
+    .select("owner_id").eq("id", lead.lead_id).single();
+  if (savedLeadError || !savedLead) {
+    console.error("Lead owner lookup failed", savedLeadError?.code);
+    return reply({ ok: false, error: "Unable to confirm lead owner." }, 503);
+  }
+
   if (lead.duplicate) {
-    return reply({ ok: true, duplicate: true, lead_id: lead.lead_id, owner_id: connector.owner_id, source: connector.source });
+    return reply({ ok: true, duplicate: true, lead_id: lead.lead_id, owner_id: savedLead.owner_id, source: connector.source });
   }
 
   const { error: usageError } = await supabase.from("lead_connectors")
     .update({ last_used_at: new Date().toISOString() }).eq("id", connector.id);
   if (usageError) console.warn("Unable to update connector usage", usageError.message);
 
-  return reply({ ok: true, duplicate: false, lead_id: lead.lead_id, owner_id: connector.owner_id, source: connector.source }, 201);
+  return reply({ ok: true, duplicate: false, lead_id: lead.lead_id, owner_id: savedLead.owner_id, source: connector.source }, 201);
 });
