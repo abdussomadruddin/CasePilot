@@ -42,3 +42,13 @@ test("copy before Call hides phone in contact and notes", () => {
   assert.equal(result.includes("+60 17-355 9147"), false);
   assert.match(result, /\[phone hidden until Call\]/);
 });
+
+
+test("New lead copies phone and email from original notes before Call", () => {
+  const note = "Aina\n+60 17-355 9147\naina@example.com\nInterested in City";
+  const result = formatLeadCopy({ status: "new", source: "tiktok_ads", sourceNote: note,
+    customerName: "Aina", customerPhone: "+60 17-355 9147", email: "aina@example.com",
+    carBrand: "Honda", carModel: "Honda City" }, false);
+  assert.equal(result, `*New Car Sales Inquiry From Tiktok*\n\n${note}`);
+  assert.equal(result.includes("hidden"), false);
+});
