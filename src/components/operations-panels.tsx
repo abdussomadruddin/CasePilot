@@ -580,7 +580,7 @@ export function LeadPanel({
               ...selected.followUps.map((entry) => ({ id: entry.id, time: entry.createdAt, text: `Follow Up ${entry.number}` })),
             ].sort((a, b) => +new Date(b.time) - +new Date(a.time)).map((entry) => <p key={entry.id} className="rounded-md bg-zinc-900 p-2"><span className="text-xs text-zinc-500">{displayTime(entry.time)}</span><br />{entry.text}</p>)}</div> : null}
             <div className="grid gap-2 border-t border-zinc-800 pt-3 sm:grid-cols-2">
-              <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Edit</button>
+              {selected.phoneRevealedAt || selected.status === "new" ? <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Edit</button> : null}
               <button className="secondary-button" type="button" onClick={() => { onAppointment(selected); setSelectedId(""); }}><CalendarClock className="h-4 w-4" /> Appointment</button>
               {cases.some((item) => item.leadId === selected.id) ? <span className="flex items-center gap-2 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4" /> Case created</span> : <button className="primary-button" type="button" onClick={() => { onCreateCase(selected); setSelectedId(""); }}><FilePlus2 className="h-4 w-4" /> Create Case</button>}
               {profile.role === "admin" ? <button className="secondary-button border-red-900 text-red-200" type="button" disabled={saving} onClick={() => void removeLead()}><Trash2 className="h-4 w-4" /> Delete</button> : null}
