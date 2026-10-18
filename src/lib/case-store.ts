@@ -279,10 +279,11 @@ export async function loadTeamMembers(includeInactive = false): Promise<Profile[
   return ((data || []) as ProfileRow[]).map(mapProfile);
 }
 
-export async function loadCases(): Promise<StoreResult> {
+export async function loadCases(ids?: string[]): Promise<StoreResult> {
   const supabase = getSupabaseClient();
 
-  const { data, error } = await supabase
+  if (ids && !ids.length) return { source: "supabase", cases: [] };
+  let query = supabase
     .from("cases")
     .select(
       `
@@ -296,6 +297,8 @@ export async function loadCases(): Promise<StoreResult> {
     .is("deleted_at", null)
     .order("updated_at", { ascending: false });
 
+  if (ids) query = query.in("id", ids);
+  const { data, error } = await query;
   if (error) throw error;
 
   return {

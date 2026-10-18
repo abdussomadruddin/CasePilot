@@ -124,12 +124,15 @@ function mapLead(row: LeadRow): LeadRecord {
   };
 }
 
-export async function loadLeads(): Promise<LeadRecord[]> {
-  const { data, error } = await getSupabaseClient()
+export async function loadLeads(ids?: string[]): Promise<LeadRecord[]> {
+  if (ids && !ids.length) return [];
+  let query = getSupabaseClient()
     .from("leads")
     .select("*,lead_notes(*),lead_events(*),lead_follow_up_actions(*)")
     .is("deleted_at", null)
     .order("updated_at", { ascending: false });
+  if (ids) query = query.in("id", ids);
+  const { data, error } = await query;
   if (error) throw error;
   return ((data || []) as LeadRow[]).map(mapLead);
 }
@@ -229,12 +232,15 @@ function mapAppointment(row: AppointmentRow): AppointmentRecord {
   };
 }
 
-export async function loadAppointments(): Promise<AppointmentRecord[]> {
-  const { data, error } = await getSupabaseClient()
+export async function loadAppointments(ids?: string[]): Promise<AppointmentRecord[]> {
+  if (ids && !ids.length) return [];
+  let query = getSupabaseClient()
     .from("appointments")
     .select("*")
     .is("deleted_at", null)
     .order("starts_at", { ascending: true });
+  if (ids) query = query.in("id", ids);
+  const { data, error } = await query;
   if (error) throw error;
   return ((data || []) as AppointmentRow[]).map(mapAppointment);
 }

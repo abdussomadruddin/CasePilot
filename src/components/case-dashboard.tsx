@@ -50,7 +50,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { createRealtimeRefresh } from "@/lib/realtime-refresh";
+import { createRealtimeRefresh, createScopedRealtimeRefresh, mergeRealtimeRows } from "@/lib/realtime-refresh";
 import { MotionSurface, useTabScroll } from "@/components/motion-surface";
 import { readUiContext, writeUiContext } from "@/lib/ui-context";
 import { PriorContactBadge } from "@/components/prior-contact-badge";
@@ -1003,10 +1003,20 @@ export function CaseDashboard() {
         (caught) => console.warn("Unable to refresh dashboard", caught));
     }
 
-    const refreshCasesNow = makeRefresh(async () => (await loadCases()).cases, setCases);
+    function makeScopedRefresh<T extends { id: string; updatedAt?: string }>(
+      load: (ids?: string[]) => Promise<T[]>,
+      setRows: (update: (rows: T[]) => T[]) => void,
+      compare: (a: T, b: T) => number = (a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""),
+    ) {
+      return createScopedRealtimeRefresh(load, (rows, ids) => {
+        setRows((current) => mergeRealtimeRows(current, rows, ids)
+          .sort(compare));
+      }, () => disposed, (caught) => console.warn("Unable to refresh dashboard", caught));
+    }
+    const refreshCasesNow = makeScopedRefresh(async (ids) => (await loadCases(ids)).cases, setCases);
     const refreshTeamNow = makeRefresh(() => loadTeamMembers(currentProfile.role === "admin"), setTeamMembers);
-    const refreshLeadsNow = makeRefresh(loadLeads, setLeads);
-    const refreshAppointmentsNow = makeRefresh(loadAppointments, setAppointments);
+    const refreshLeadsNow = makeScopedRefresh(loadLeads, setLeads);
+    const refreshAppointmentsNow = makeScopedRefresh(loadAppointments, setAppointments, (a, b) => a.startsAt.localeCompare(b.startsAt));
 
     function refreshAll() {
       setLeadNowMs(Date.now());
@@ -1018,21 +1028,22 @@ export function CaseDashboard() {
       }
     }
 
+    const refreshCurrentProfile = makeRefresh(getCurrentProfile, (current) => {
+      if (!current || current.id !== currentProfile.id) return;
+      if (current.role !== currentProfile.role || current.fullName !== currentProfile.fullName || current.active !== currentProfile.active) {
+        setProfile(current);
+        setRole(current.role);
+      }
+    });
     function refreshProfile() {
-      void getCurrentProfile().then((current) => {
-        if (disposed || !current || current.id !== currentProfile.id) return;
-        if (current.role !== currentProfile.role || current.fullName !== currentProfile.fullName || current.active !== currentProfile.active) {
-          setProfile(current);
-          setRole(current.role);
-        }
-      }).catch((caught) => console.warn("Unable to refresh profile", caught));
+      void refreshCurrentProfile();
       void refreshTeamNow();
-      void refreshCasesNow();
     }
 
     function refreshWhenVisible() {
       if (document.visibilityState === "visible") {
         refreshProfile();
+        void refreshCasesNow();
         if (canUseOperations) {
           void refreshLeadsNow();
           void refreshAppointmentsNow();
@@ -1042,15 +1053,26 @@ export function CaseDashboard() {
 
     let channel = supabase.channel("casepilot-dashboard-sync");
     for (const table of ["cases", "case_banks", "case_documents", "case_activities"]) {
-      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => { void refreshCasesNow(); });
+      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, (payload) => {
+        const row = payload.eventType === "DELETE" ? payload.old : payload.new;
+        const id = table === "cases" ? row.id : row.case_id;
+        void refreshCasesNow(typeof id === "string" ? id : undefined);
+      });
     }
     if (canUseOperations) {
       for (const table of ["leads", "lead_notes", "lead_events", "lead_follow_up_actions"]) {
-        channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => { void refreshLeadsNow(); });
+        channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, (payload) => {
+          const row = payload.eventType === "DELETE" ? payload.old : payload.new;
+          const id = table === "leads" ? row.id : row.lead_id;
+          void refreshLeadsNow(typeof id === "string" ? id : undefined);
+        });
       }
-      channel = channel.on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => { void refreshAppointmentsNow(); });
+      channel = channel.on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, (payload) => {
+        const row = payload.eventType === "DELETE" ? payload.old : payload.new;
+        void refreshAppointmentsNow(typeof row.id === "string" ? row.id : undefined);
+      });
     }
-    channel = channel.on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, refreshProfile);
+    channel = channel.on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { refreshProfile(); void refreshCasesNow(); });
     channel.subscribe((status) => {
       connected = status === "SUBSCRIBED";
       if (connected) {
@@ -1308,6 +1330,14 @@ export function CaseDashboard() {
     [currentMonth, lastMonth, metricCases, profile?.id, role, visibleCases],
   );
 
+  async function refreshLeadData() {
+    setLeads(await loadLeads());
+  }
+
+  async function refreshAppointmentData() {
+    setAppointments(await loadAppointments());
+  }
+
   async function refreshCases() {
     try {
       setIsHeaderMenuOpen(false);
@@ -1339,7 +1369,7 @@ export function CaseDashboard() {
       const destination = channel === "call" ? `tel:${lead.customerPhone.replace(/[^\d+]/g, "")}` : leadWhatsAppUrl(lead);
       await revealLeadPhone(lead.id, profile.id);
       window.location.href = destination;
-      void refreshCases().catch(() => setError("Contact saved. Unable to refresh; retry refresh."));
+      void refreshLeadData().catch(() => setError("Contact saved. Unable to refresh; retry refresh."));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to contact lead.");
     } finally {
@@ -1980,7 +2010,7 @@ export function CaseDashboard() {
                 )) : <p className="text-sm text-zinc-500">No new leads to contact.</p>}
               </section>
             ) : null}
-            {profile && (role === "customer_service" || role === "broker") ? <LeadPanel dashboardFollowUp initialView="followup" profile={profile} teamMembers={teamMembers} leads={leads.filter((lead) => lead.ownerId === profile.id)} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
+            {profile && (role === "customer_service" || role === "broker") ? <LeadPanel dashboardFollowUp initialView="followup" profile={profile} teamMembers={teamMembers} leads={leads.filter((lead) => lead.ownerId === profile.id)} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} onRefresh={refreshLeadData} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
             {role === "admin" || role === "sales_manager" ? <FunnelChart role={role} leads={role === "admin" ? leads : []} cases={visibleCases} nowMs={leadNowMs} onOpenStage={openFunnelStage} /> : null}
           </section>
         ) : null}
@@ -2174,8 +2204,8 @@ export function CaseDashboard() {
         </> : null}
         {appSection === "team" && role === "admin" ? <TeamManagementPanel members={teamMembers} saving={teamSaving} onCreate={handleCreateTeamMember} onUpdate={handleUpdateTeamMember} onDelete={handleDeleteTeamMember} /> : null}
         {appSection === "integration" && role === "admin" ? <IntegrationPanel teamMembers={teamMembers} leads={leads} /> : null}
-        {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={`${leadStatusJump}:${funnelSelection?.section === "leads" ? funnelSelection.label : ""}`} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} initialView={leadViewJump} onViewChange={setLeadViewJump} cohortLeadIds={funnelSelection?.section === "leads" ? funnelSelection.ids : undefined} cohortLabel={funnelSelection?.section === "leads" ? funnelSelection.label : undefined} onClearCohort={() => setFunnelSelection(null)} onRefresh={refreshCases} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
-        {appSection === "appointments" && profile && ["admin", "customer_service", "broker"].includes(role) ? <AppointmentPanel key={appointmentSubject} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} appointments={appointments} initialSubject={appointmentSubject} onRefresh={refreshCases} /> : null}
+        {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={`${leadStatusJump}:${funnelSelection?.section === "leads" ? funnelSelection.label : ""}`} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} initialView={leadViewJump} onViewChange={setLeadViewJump} cohortLeadIds={funnelSelection?.section === "leads" ? funnelSelection.ids : undefined} cohortLabel={funnelSelection?.section === "leads" ? funnelSelection.label : undefined} onClearCohort={() => setFunnelSelection(null)} onRefresh={refreshLeadData} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
+        {appSection === "appointments" && profile && ["admin", "customer_service", "broker"].includes(role) ? <AppointmentPanel key={appointmentSubject} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} appointments={appointments} initialSubject={appointmentSubject} onRefresh={refreshAppointmentData} /> : null}
         </div></MotionSurface>
         {profile && role !== "sales_manager" ? <ClientDocumentWorkspace key={profile.id} section={appSection} profile={profile} invoiceSeed={invoiceSeed} ehakmilikSeed={ehakmilikSeed} onNavigate={setAppSection} /> : null}
       </div>
