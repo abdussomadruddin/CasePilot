@@ -3470,7 +3470,7 @@ function CaseCard({
                   ))}
                 </ol>
               ) : (
-                <p className="text-sm text-muted">No activity yet</p>
+                timeline?.source === record && !timelineError ? <p className="text-sm text-muted">No activity yet</p> : null
               )}
             </Panel>
           </div>
