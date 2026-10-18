@@ -34,6 +34,7 @@ import {
   deleteAppointment,
   saveLead,
   revealLeadPhone,
+  loadLeads,
   recordLeadFollowUp,
 } from "@/lib/operations-store";
 import {
@@ -236,7 +237,21 @@ export function LeadPanel({
   const followUpInFlight = useRef(false);
   const [followUpCounts, setFollowUpCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState("");
-  const selected = leads.find((lead) => lead.id === selectedId);
+  const selectedSummary = leads.find((lead) => lead.id === selectedId);
+  const [historyDetail, setHistoryDetail] = useState<{ source: LeadRecord; record: LeadRecord } | null>(null);
+  const [historyError, setHistoryError] = useState("");
+  const [historyRetry, setHistoryRetry] = useState(0);
+  const selected = historyDetail && historyDetail.source === selectedSummary ? historyDetail.record : selectedSummary;
+  useEffect(() => {
+    if (!selectedSummary) return;
+    let cancelled = false;
+    setHistoryError("");
+    void loadLeads([selectedSummary.id], true).then((rows) => {
+      if (!cancelled && rows[0]) setHistoryDetail({ source: selectedSummary, record: rows[0] });
+      else if (!cancelled) setHistoryError("History unavailable. Refresh or try again.");
+    }).catch(() => { if (!cancelled) setHistoryError("Unable to load History. Try again."); });
+    return () => { cancelled = true; };
+  }, [selectedSummary, historyRetry]);
   const reduce = useReducedMotion();
   const listRef = useRef<HTMLDivElement>(null);
   const anchor = useRef<{ id: string; top: number; scroll: number } | null>(null);
@@ -574,6 +589,7 @@ export function LeadPanel({
               {selected.phoneRevealedAt ? <select className="field" aria-label="Lead status" value={selected.status} disabled={saving} onChange={(event) => void updateStatus(selected, event.target.value as LeadStatus)}>{leadStatuses.filter((status) => profile.role === "admin" || status !== "new" || selected.status === "new").map((status) => <option key={status} value={status}>{leadStatusLabels[status]}</option>)}</select> : null}
             </div>
             {selected.phoneRevealedAt ? <form className="grid gap-2" onSubmit={submitNote}><label className="text-sm font-medium">Note</label><textarea className="field min-h-20" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add follow-up note or rejection reason" /><button className="secondary-button w-fit" disabled={saving || !note.trim()}><Save className="h-4 w-4" /> Save note</button></form> : null}
+            {historyError ? <button type="button" className="secondary-button text-red-300" onClick={() => setHistoryRetry((n) => n + 1)}>{historyError}</button> : historyDetail?.source !== selectedSummary ? <p role="status" className="text-sm text-zinc-400">Loading History…</p> : null}
             {selected.notes.length || selected.events.length || selected.followUps.length ? <div className="grid max-h-48 gap-2 overflow-y-auto border-t border-zinc-800 pt-3 text-sm"><p className="font-semibold">History</p>{[
               ...selected.notes.map((entry) => ({ id: entry.id, time: entry.createdAt, text: hideLeadPhoneInNote(entry.body, selected.status === "new" || Boolean(selected.phoneRevealedAt)) })),
               ...selected.events.map((entry) => ({ id: entry.id, time: entry.createdAt, text: entry.kind === "reentered" ? `Lead masuk semula · ${entry.previousOwnerId && entry.previousOwnerId !== entry.actorId ? `${ownerLabel(entry.previousOwnerId, teamMembers)} → ` : ""}${ownerLabel(entry.actorId, teamMembers)} · New` : `Status: ${leadStatusLabels[entry.status]}` })),

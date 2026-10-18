@@ -49,7 +49,8 @@ Deno.serve(async () => {
     .from("profiles")
     .select("id,role")
     .eq("active", true)
-    .in("role", ["customer_service", "broker"]);
+    .in("role", ["customer_service", "broker"])
+    .in("id", [...new Set([...newLeads, ...dueLeads].map((lead) => lead.owner_id))]);
   if (profileError) return Response.json({ ok: false, error: profileError.message }, { status: 500 });
 
   const grouped = groupLeadReminders(

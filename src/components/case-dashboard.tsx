@@ -78,6 +78,8 @@ import { loadAppointments, loadLeads, revealLeadPhone } from "@/lib/operations-s
 import {
   loadCases,
   loadTeamMembers,
+  invalidateTeamCache,
+  loadCaseTimeline,
   removeCase,
   saveCase,
   saveCaseRemark,
@@ -1072,7 +1074,7 @@ export function CaseDashboard() {
         void refreshAppointmentsNow(typeof row.id === "string" ? row.id : undefined);
       });
     }
-    channel = channel.on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { refreshProfile(); void refreshCasesNow(); });
+    channel = channel.on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => { invalidateTeamCache(); refreshProfile(); void refreshCasesNow(); });
     channel.subscribe((status) => {
       connected = status === "SUBSCRIBED";
       if (connected) {
@@ -1339,6 +1341,7 @@ export function CaseDashboard() {
   }
 
   async function refreshCases() {
+    invalidateTeamCache();
     try {
       setIsHeaderMenuOpen(false);
       setLoading(true);
@@ -1640,6 +1643,7 @@ export function CaseDashboard() {
   }
 
   async function refreshTeamMembers() {
+    invalidateTeamCache();
     const members = await loadTeamMembers(role === "admin");
     setTeamMembers(members);
 
@@ -3085,7 +3089,19 @@ function CaseCard({
   const activeTeamMembers = showContactLists
     ? teamMembers.filter((member) => member.active !== false && member.phone?.trim())
     : [];
-  const visibleTimelineActivities = record.activities
+  const [timeline, setTimeline] = useState<{ source: CaseRecord; activities: ActivityEvent[] } | null>(null);
+  const [timelineError, setTimelineError] = useState("");
+  const [timelineRetry, setTimelineRetry] = useState(0);
+  useEffect(() => {
+    if (!isExpanded) return;
+    let cancelled = false;
+    setTimelineError("");
+    void loadCaseTimeline(record.id).then((activities) => {
+      if (!cancelled) setTimeline({ source: record, activities });
+    }).catch(() => { if (!cancelled) setTimelineError("Unable to load History. Try again."); });
+    return () => { cancelled = true; };
+  }, [isExpanded, record, timelineRetry]);
+  const visibleTimelineActivities = (timeline?.source === record ? timeline.activities : [])
     .filter(isVisibleTimelineActivity)
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   function toggleExpanded() {
@@ -3434,6 +3450,7 @@ function CaseCard({
             ) : null}
 
             <Panel title="Activity timeline" icon={Clock3}>
+              {timelineError ? <button type="button" className="secondary-button text-red-300" onClick={() => setTimelineRetry((n) => n + 1)}>{timelineError}</button> : timeline?.source !== record ? <p role="status" className="text-sm text-zinc-400">Loading History…</p> : null}
               {visibleTimelineActivities.length ? (
                 <ol className="relative grid max-h-80 gap-2 overflow-y-auto pr-1 before:absolute before:bottom-2 before:left-3 before:top-2 before:w-px before:bg-zinc-800">
                   {visibleTimelineActivities.map((activity) => (

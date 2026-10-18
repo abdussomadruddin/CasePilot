@@ -259,7 +259,24 @@ function mapProfile(row: ProfileRow): Profile {
   };
 }
 
+let teamCacheEpoch = 0;
+const teamCache = new Map<string, { epoch: number; until: number; value: Promise<Profile[]> }>();
+export function invalidateTeamCache() { teamCacheEpoch += 1; teamCache.clear(); }
+
 export async function loadTeamMembers(includeInactive = false): Promise<Profile[]> {
+  const { data: { session } } = await getSupabaseClient().auth.getSession();
+  const key = `${session?.access_token || "anonymous"}:${includeInactive}`;
+  const cached = teamCache.get(key);
+  if (cached && cached.epoch === teamCacheEpoch && cached.until > Date.now()) return cached.value;
+  // Clear the old session's entries; no team data is kept in browser storage.
+  for (const existing of teamCache.keys()) if (!existing.startsWith(`${session?.access_token || "anonymous"}:`)) teamCache.delete(existing);
+  const entry = { epoch: teamCacheEpoch, until: Date.now() + 30_000, value: fetchTeamMembers(includeInactive) };
+  teamCache.set(key, entry);
+  entry.value.catch(() => { if (teamCache.get(key) === entry) teamCache.delete(key); });
+  return entry.value;
+}
+
+async function fetchTeamMembers(includeInactive: boolean): Promise<Profile[]> {
   const supabase = getSupabaseClient();
 
   let query = supabase
@@ -279,7 +296,7 @@ export async function loadTeamMembers(includeInactive = false): Promise<Profile[
   return ((data || []) as ProfileRow[]).map(mapProfile);
 }
 
-export async function loadCases(ids?: string[]): Promise<StoreResult> {
+export async function loadCases(ids?: string[], fullHistory = false): Promise<StoreResult> {
   const supabase = getSupabaseClient();
 
   if (ids && !ids.length) return { source: "supabase", cases: [] };
@@ -287,10 +304,10 @@ export async function loadCases(ids?: string[]): Promise<StoreResult> {
     .from("cases")
     .select(
       `
-      *,
-      case_banks (*),
-      case_documents (*),
-      case_activities (*)
+      id,lead_id,dealer,customer_name,customer_phone,car_model,car_variant,car_color,status,remark,created_by_role,updated_by_role,created_at,updated_at,next_follow_up_at,owner_id,
+      case_banks (id,case_id,bank_name,banker_name,banker_phone),
+      case_documents (id,case_id,file_name,file_url,document_type,storage_path,uploaded_by_role,uploaded_at,expires_at,deleted_at,delete_reason),
+      ${fullHistory ? "case_activities" : "case_activities:case_activity_summaries"} (id,case_id,type,actor_role,actor_name,message,status,created_at)
       ,owner:profiles!cases_owner_id_fkey(id,full_name,role)
     `,
     )
@@ -299,12 +316,21 @@ export async function loadCases(ids?: string[]): Promise<StoreResult> {
 
   if (ids) query = query.in("id", ids);
   const { data, error } = await query;
+  if (error && !fullHistory && ["PGRST200", "PGRST205", "42P01"].includes(error.code)) return loadCases(ids, true);
   if (error) throw error;
 
   return {
     source: "supabase",
-    cases: ((data || []) as CaseRow[]).map(mapCase),
+    cases: ((data || []) as unknown as CaseRow[]).map(mapCase),
   };
+}
+
+export async function loadCaseTimeline(caseId: string): Promise<ActivityEvent[]> {
+  const { data, error } = await getSupabaseClient().from("case_activities")
+    .select("id,case_id,type,actor_role,actor_name,message,status,created_at")
+    .eq("case_id", caseId).order("created_at", { ascending: true });
+  if (error) throw error;
+  return ((data || []) as ActivityRow[]).map(mapActivity);
 }
 
 export async function saveCaseStatus(record: CaseRecord, status: CaseStatus, actorRole: Role) {

@@ -195,12 +195,17 @@ Deno.serve(async () => {
   const { data: cases, error } = await supabase
     .from("cases")
     .select("id,dealer,customer_name,car_model,car_variant,status,updated_at,next_follow_up_at,owner_id,owner:profiles!cases_owner_id_fkey(role)")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .not("status", "in", "(rejected,car_delivery,cancelled)")
+    .or(`next_follow_up_at.lte.${new Date(+now - oneDayMs).toISOString()},and(next_follow_up_at.is.null,updated_at.lte.${new Date(+now - twoDaysMs - oneDayMs).toISOString()})`);
 
   if (error) {
     return Response.json({ ok: false, error: error.message }, { status: 500 });
   }
 
+  if (!cases?.length) {
+    return Response.json({ ok: true, notifications: 0, activities: 0, push: { sent: 0, failed: 0 } });
+  }
   const slotEnd = new Date(+reminderSlot + 15 * 60 * 1000);
   const { data: existingNotifications, error: existingError } = await supabase
     .from("case_notifications")

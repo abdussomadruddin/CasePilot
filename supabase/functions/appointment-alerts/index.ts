@@ -35,15 +35,22 @@ Deno.serve(async () => {
     .select("id,owner_id,kind,starts_at,updated_at,customer_name,lead:leads(customer_name,car_model),case:cases(customer_name,car_model)")
     .eq("status", "scheduled")
     .is("deleted_at", null)
-    .gt("starts_at", new Date(+now - 480 * minuteMs).toISOString())
-    .lte("starts_at", new Date(+now + 4320 * minuteMs + 90_000).toISOString());
+    .or(offsets.map((offset) => {
+      const start = +now + offset * minuteMs;
+      return `and(starts_at.gte.${new Date(start - 90_000).toISOString()},starts_at.lte.${new Date(start).toISOString()})`;
+    }).join(","));
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
-  const { data: admins, error: adminError } = await supabase
+  if (!appointments?.length) return Response.json({ ok: true, sent: 0, failed: 0 });
+  const needsAdmin = appointments.some((appointment) => {
+    const dueAt = +new Date(appointment.starts_at) - 1440 * minuteMs;
+    return dueAt <= +now && dueAt >= +now - 90_000 && dueAt >= +new Date(appointment.updated_at);
+  });
+  const { data: admins, error: adminError } = needsAdmin ? await supabase
     .from("profiles")
     .select("id")
     .eq("role", "admin")
-    .eq("active", true);
+    .eq("active", true) : { data: [], error: null };
   if (adminError) return Response.json({ ok: false, error: adminError.message }, { status: 500 });
 
   let sent = 0;

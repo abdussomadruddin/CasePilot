@@ -124,17 +124,18 @@ function mapLead(row: LeadRow): LeadRecord {
   };
 }
 
-export async function loadLeads(ids?: string[]): Promise<LeadRecord[]> {
+export async function loadLeads(ids?: string[], fullHistory = false): Promise<LeadRecord[]> {
   if (ids && !ids.length) return [];
   let query = getSupabaseClient()
     .from("leads")
-    .select("*,lead_notes(*),lead_events(*),lead_follow_up_actions(*)")
+    .select(fullHistory ? "id,owner_id,source,source_lead_id,source_detail,source_note,connector_id,customer_name,customer_phone,whatsapp_username,phone_revealed_at,follow_up_activity_at,follow_up_count,has_ever_contacted,return_count,received_at,receipt_id,email,car_brand,car_model,status,created_at,updated_at,lead_notes(id,author_id,body,created_at),lead_events(id,actor_id,status,created_at,event_kind,previous_owner_id),lead_follow_up_actions(id,actor_id,follow_up_number,created_at)" : "id,owner_id,source,source_lead_id,source_detail,source_note,connector_id,customer_name,customer_phone,whatsapp_username,phone_revealed_at,follow_up_activity_at,follow_up_count,has_ever_contacted,return_count,received_at,receipt_id,email,car_brand,car_model,status,created_at,updated_at,lead_notes(id,author_id,body,created_at)")
     .is("deleted_at", null)
     .order("updated_at", { ascending: false });
   if (ids) query = query.in("id", ids);
+  if (!fullHistory) query = query.order("created_at", { referencedTable: "lead_notes", ascending: false }).limit(1, { referencedTable: "lead_notes" });
   const { data, error } = await query;
   if (error) throw error;
-  return ((data || []) as LeadRow[]).map(mapLead);
+  return ((data || []) as unknown as LeadRow[]).map(mapLead);
 }
 
 export async function saveLead(
@@ -236,7 +237,7 @@ export async function loadAppointments(ids?: string[]): Promise<AppointmentRecor
   if (ids && !ids.length) return [];
   let query = getSupabaseClient()
     .from("appointments")
-    .select("*")
+    .select("id,owner_id,lead_id,case_id,customer_name,customer_phone,kind,status,starts_at,location,notes,created_at,updated_at")
     .is("deleted_at", null)
     .order("starts_at", { ascending: true });
   if (ids) query = query.in("id", ids);

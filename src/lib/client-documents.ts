@@ -51,17 +51,17 @@ export function updateDocument(bundle: ClientBundle, draft: DraftRow, data: Docu
   return { client, purchase, documents: bundle.documents.map(item => item.id === draft.id ? { ...item, data } : item) };
 }
 export async function listClients(): Promise<ClientRow[]> {
-  const { data, error } = await getSupabaseClient().from("document_clients").select("*").order("updated_at", { ascending: false });
+  const { data, error } = await getSupabaseClient().from("document_clients").select("id,owner_id,data,version,updated_at").order("updated_at", { ascending: false });
   if (error) throw error;
   return data || [];
 }
 export async function listPurchases(clientId: string): Promise<PurchaseRow[]> {
-  const { data, error } = await getSupabaseClient().from("client_purchases").select("*").eq("client_id", clientId).order("created_at", { ascending: false });
+  const { data, error } = await getSupabaseClient().from("client_purchases").select("id,client_id,data,version,updated_at").eq("client_id", clientId).order("created_at", { ascending: false });
   if (error) throw error;
   return data || [];
 }
 export async function loadBundle(client: ClientRow, purchase: PurchaseRow): Promise<ClientBundle> {
-  const { data, error } = await getSupabaseClient().from("client_document_drafts").select("*").eq("purchase_id", purchase.id).order("created_at");
+  const { data, error } = await getSupabaseClient().from("client_document_drafts").select("id,purchase_id,kind,data,version,updated_at").eq("purchase_id", purchase.id).order("created_at");
   if (error) throw error;
   return { client, purchase, documents: data || [] };
 }
