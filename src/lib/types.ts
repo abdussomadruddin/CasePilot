@@ -215,6 +215,7 @@ export type LeadRecord = {
   connectorId: string;
   customerName: string;
   customerPhone: string;
+  whatsappUsername?: string;
   phoneRevealedAt: string;
   followUpActivityAt: string;
   followUpCount: number;

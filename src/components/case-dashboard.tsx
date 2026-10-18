@@ -73,6 +73,7 @@ import dynamic from "next/dynamic";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { OwnerFilterSelect } from "@/components/owner-filter-select";
 import { matchesOwnerFilter, type OwnerFilter } from "@/lib/owner-filter";
+import { hasLeadWhatsApp, leadWhatsAppUrl } from "@/lib/whatsapp-contact";
 import { loadAppointments, loadLeads, revealLeadPhone } from "@/lib/operations-store";
 import {
   loadCases,
@@ -1331,14 +1332,13 @@ export function CaseDashboard() {
   }
 
   async function contactNewLead(lead: LeadRecord, channel: "call" | "whatsapp") {
-    if (!profile || !lead.customerPhone || lead.ownerId !== profile.id || lead.status !== "new" || lead.phoneRevealedAt || callingLeadId) return;
+    if (!profile || (channel === "call" ? !lead.customerPhone : !hasLeadWhatsApp(lead)) || lead.ownerId !== profile.id || lead.status !== "new" || lead.phoneRevealedAt || callingLeadId) return;
     setCallingLeadId(lead.id);
     setError("");
     try {
+      const destination = channel === "call" ? `tel:${lead.customerPhone.replace(/[^\d+]/g, "")}` : leadWhatsAppUrl(lead);
       await revealLeadPhone(lead.id, profile.id);
-      window.location.href = channel === "call"
-        ? `tel:${lead.customerPhone.replace(/[^\d+]/g, "")}`
-        : buildWhatsAppUrl(lead.customerPhone);
+      window.location.href = destination;
       void refreshCases().catch(() => setError("Contact saved. Unable to refresh; retry refresh."));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to contact lead.");
@@ -1975,7 +1975,7 @@ export function CaseDashboard() {
                       <p className="truncate text-xs text-zinc-400">{leadSourceLabels[lead.source]}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}</p>
                       {latestLeadNote(lead) ? <p className="mt-2 break-words whitespace-pre-wrap text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{hideLeadPhoneInNote(latestLeadNote(lead), lead.status === "new" || Boolean(lead.phoneRevealedAt))}</p> : null}
                     </div>
-                    {lead.customerPhone ? <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0"><button type="button" className="lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" aria-busy={callingLeadId === lead.id} disabled={Boolean(callingLeadId)} onClick={() => void contactNewLead(lead, "call")}><PhoneCall className="h-4 w-4" />Call</button><button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void contactNewLead(lead, "whatsapp")}><MessageCircle className="h-4 w-4" />WhatsApp</button></div> : <button type="button" className="secondary-button shrink-0" onClick={() => { setLeadStatusJump("new"); setLeadViewJump("all"); setAppSection("leads"); }}>Add phone</button>}
+                    {lead.customerPhone || hasLeadWhatsApp(lead) ? <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">{lead.customerPhone ? <button type="button" className="lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" aria-busy={callingLeadId === lead.id} disabled={Boolean(callingLeadId)} onClick={() => void contactNewLead(lead, "call")}><PhoneCall className="h-4 w-4" />Call</button> : null}{hasLeadWhatsApp(lead) ? <button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60" disabled={Boolean(callingLeadId)} onClick={() => void contactNewLead(lead, "whatsapp")}><MessageCircle className="h-4 w-4" />WhatsApp</button> : null}</div> : <button type="button" className="secondary-button shrink-0" onClick={() => { setLeadStatusJump("new"); setLeadViewJump("all"); setAppSection("leads"); }}>Add contact</button>}
                   </article>
                 )) : <p className="text-sm text-zinc-500">No new leads to contact.</p>}
               </section>

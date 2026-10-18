@@ -1,3 +1,4 @@
+import { normalizeWhatsAppUsername } from "@/lib/whatsapp-contact";
 import { getSupabaseClient } from "@/lib/supabase";
 import { extractLeadContact } from "../../supabase/functions/_shared/lead-contact";
 import { extractLeadVehicle } from "../../supabase/functions/_shared/lead-vehicle";
@@ -18,6 +19,7 @@ type LeadRow = {
   connector_id: string | null;
   customer_name: string | null;
   customer_phone: string | null;
+  whatsapp_username?: string | null;
   phone_revealed_at: string | null;
   follow_up_activity_at: string | null;
   follow_up_count: number;
@@ -80,6 +82,7 @@ function mapLead(row: LeadRow): LeadRecord {
     connectorId: row.connector_id || "",
     customerName: row.customer_name || "",
     customerPhone: row.customer_phone || "",
+    whatsappUsername: row.whatsapp_username || "",
     phoneRevealedAt: row.phone_revealed_at || "",
     followUpActivityAt: row.follow_up_activity_at || "",
     followUpCount: row.follow_up_count || 0,
@@ -151,6 +154,7 @@ export async function saveLead(
     owner_id: lead.ownerId,
     customer_name: contact.name || null,
     customer_phone: contact.phone || null,
+    whatsapp_username: normalizeWhatsAppUsername(lead.whatsappUsername || "") || null,
     phone_revealed_at: lead.phoneRevealedAt || null,
     email: contact.email || null,
     car_brand: vehicle.brand || null,
@@ -191,20 +195,9 @@ export async function recordLeadFollowUp(leadId: string): Promise<number> {
 }
 
 export async function revealLeadPhone(leadId: string, actorId: string) {
-  const { data, error } = await getSupabaseClient()
-    .from("leads")
-    .update({ phone_revealed_at: new Date().toISOString(), status: "contacted" })
-    .eq("id", leadId)
-    .or("status.eq.new,phone_revealed_at.is.null")
-    .select("id");
+  void actorId; // The database uses the authenticated actor and commits history atomically.
+  const { error } = await getSupabaseClient().rpc("contact_lead", { p_lead_id: leadId });
   if (error) throw error;
-  if (!data?.length) throw new Error("Lead could not be contacted. Please refresh and try again.");
-  const { error: eventError } = await getSupabaseClient().from("lead_events").insert({
-    lead_id: leadId,
-    actor_id: actorId,
-    status: "contacted",
-  });
-  if (eventError) console.warn("Unable to record lead contact event:", eventError);
 }
 
 export async function deleteLead(leadId: string) {

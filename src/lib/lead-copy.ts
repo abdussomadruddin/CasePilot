@@ -3,7 +3,7 @@ import { hideLeadPhoneInNote } from "../../supabase/functions/_shared/lead-conta
 
 type CopyableLead = Pick<LeadRecord,
   "source" | "sourceNote" | "customerName" | "customerPhone" | "email" | "carBrand" | "carModel"
-> & Partial<Pick<LeadRecord, "status">>;
+> & Partial<Pick<LeadRecord, "status" | "whatsappUsername">>;
 
 const sourceTitles: Record<LeadRecord["source"], string> = {
   tiktok_ads: "Tiktok",
@@ -22,6 +22,7 @@ export function formatLeadCopy(lead: CopyableLead, phoneRevealed = true): string
     ? [...missingContact, sourceNote]
     : [lead.customerName, contactVisible ? lead.customerPhone : "", lead.email, lead.carModel || lead.carBrand]
       .map((value) => value.trim()).filter(Boolean);
+  if (lead.whatsappUsername && !details.join("\n").toLowerCase().includes(lead.whatsappUsername.toLowerCase())) details.push(`WhatsApp: @${lead.whatsappUsername}`);
   const body = details.join("\n");
   return `${title}\n\n${body}`.trimEnd();
 }
