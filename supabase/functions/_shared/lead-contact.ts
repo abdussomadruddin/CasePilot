@@ -13,7 +13,7 @@ const formAnswers = new Set([
   "secepat yang boleh (asap)", "1-3 bulan", "3-6 bulan", "survey sahaja",
   "kerja kerajaan", "kerja swasta", "kerajaan", "swasta", "berniaga/freelance",
   "rm2500 - rm3500", "rm3500 - rm5000", "rm5000 keatas",
-  "nak trade-in", "no", "tiada", "tiada (nak full loan)",
+  "ya", "nak trade-in", "no", "tiada", "tiada (nak full loan)",
   "10% deposit", "custom deposit", "nak beli cash tunai",
 ].map(normalizedAnswer));
 const vehicleAnswers = new Set([
