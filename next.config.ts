@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  async headers() {
+    return [{ source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }] }];
+  },
   outputFileTracingIncludes: { "/api/honda-vso": ["./assets/honda-vso-*.pdf"], "/api/invoice": ["./assets/invoice-template.pdf"], "/api/receipt": ["./assets/receipt-template.pdf"], "/api/ehakmilik": ["./assets/ehakmilik-template.pdf"] },
 };
 

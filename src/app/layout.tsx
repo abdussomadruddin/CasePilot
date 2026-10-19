@@ -1,3 +1,4 @@
+import { AppUpdate } from "@/components/app-update";
 import type { Metadata, Viewport } from "next";
 import { ViewportLock } from "@/components/viewport-lock";
 import "./globals.css";
@@ -39,6 +40,7 @@ export default function RootLayout({
     <html lang="en" style={{ backgroundColor: "#101114", colorScheme: "dark" }}>
       <body style={{ backgroundColor: "#101114" }}>
         <ViewportLock />
+        <AppUpdate />
         {children}
       </body>
     </html>

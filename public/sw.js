@@ -1,9 +1,17 @@
+// CasePilot release: 20261019-refresh-1
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    // Only discard CasePilot-owned caches, never authentication or browser storage.
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((key) => key.startsWith("casepilot-")).map((key) => caches.delete(key)));
+    await self.clients.claim();
+    const windows = await self.clients.matchAll({ type: "window" });
+    for (const client of windows) client.postMessage({ type: "CASEPILOT_UPDATE_READY" });
+  })());
 });
 
 self.addEventListener("push", (event) => {
