@@ -3,7 +3,8 @@ import { followUpWhatsAppUrls } from "./follow-up-whatsapp.ts";
 type Contact = { customerPhone: string; whatsappUsername?: string };
 
 export function normalizeWhatsAppUsername(input: string): string {
-  let value = input.trim();
+  // Pasted WhatsApp handles can contain bidi/zero-width marks on mobile.
+  let value = input.normalize("NFKC").replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, "").trim();
   if (!value) return "";
   if (/^https?:|wa\.me\//i.test(value)) {
     let url: URL;
