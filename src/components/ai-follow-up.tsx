@@ -32,7 +32,7 @@ function Dialog({ title, busy = false, onClose, children }: { title: string; bus
 }
 function errorText(e: unknown) { return e instanceof Error ? e.message : "Permintaan gagal. Cuba semula."; }
 
-export function AiFollowUpSettings({ profile, onClose }: { profile: Profile; onClose: () => void }) {
+export function AiFollowUpSettings({ profile, onClose, provider, embedded = false }: { profile: Profile; onClose: () => void; provider?: "murpati" | "openai"; embedded?: boolean }) {
   const admin = profile.role === "admin";
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [openaiKey, setOpenaiKey] = useState("");
@@ -65,33 +65,34 @@ export function AiFollowUpSettings({ profile, onClose }: { profile: Profile; onC
     try { const result = await aiRequest<{ devices: AiDevice[] }>("devices", {}); setDevices(result.devices); setMessage(`${result.devices.length} device biasa ditemui.`); }
     catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
-  return <Dialog title="AI Follow Up" busy={busy} onClose={onClose}>
+  const content = <>
     <p className="text-sm text-zinc-400">Murpati membaca conversation. AI CasePilot menyediakan draf. Penghantaran dibuat sendiri dalam WhatsApp.</p>
     {loading ? <p role="status">Memuatkan tetapan…</p> : settings ? <>
       <div className="rounded-md border border-zinc-700 p-3 text-sm"><p>AI: {settings.configured ? "Key tersimpan" : "Belum disediakan"}</p><p>Murpati: {settings.murpatiConfigured ? "Key tersimpan" : "Belum disambungkan"}</p></div>
       {admin ? <>
         {!settings.encryptionReady ? <p role="alert" className="text-sm text-amber-300">Penyulitan server belum disediakan. Simpan key tersedia selepas konfigurasi keselamatan dipasang.</p> : null}
         <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); void run("save_settings", { revision: settings.revision, openaiKey, murpatiKey, dailyLimit }, "Tetapan disimpan. Key lama telah diganti jika key baharu diisi."); }}>
-          <label className="grid gap-2 text-sm">API key OpenAI<input type="password" autoComplete="new-password" spellCheck={false} className="field w-full min-w-0" maxLength={2048} value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value.trim())} placeholder={settings.configured ? "Isi hanya untuk menggantikan key" : "Masukkan key Admin"} disabled={busy} /></label>
-          <label className="grid gap-2 text-sm">API key Murpati<input type="password" autoComplete="new-password" spellCheck={false} className="field w-full min-w-0" maxLength={2048} value={murpatiKey} onChange={(e) => setMurpatiKey(e.target.value.trim())} placeholder={settings.murpatiConfigured ? "Isi hanya untuk menggantikan key" : "Masukkan key akaun Murpati pusat"} disabled={busy} /></label>
+          {provider !== "murpati" ? <label className="grid gap-2 text-sm">API key OpenAI<input type="password" autoComplete="new-password" spellCheck={false} className="field w-full min-w-0" maxLength={2048} value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value.trim())} placeholder={settings.configured ? "Isi hanya untuk menggantikan key" : "Masukkan key Admin"} disabled={busy} /></label> : null}
+          {provider !== "openai" ? <label className="grid gap-2 text-sm">API key Murpati<input type="password" autoComplete="new-password" spellCheck={false} className="field w-full min-w-0" maxLength={2048} value={murpatiKey} onChange={(e) => setMurpatiKey(e.target.value.trim())} placeholder={settings.murpatiConfigured ? "Isi hanya untuk menggantikan key" : "Masukkan key akaun Murpati pusat"} disabled={busy} /></label> : null}
           <p className="text-xs text-zinc-400">Medan kosong mengekalkan key lama. Mengganti key Murpati memerlukan penetapan device semula. Model AI: GPT-5 mini; kos menggunakan akaun OpenAI Admin.</p>
-          <label className="grid gap-2 text-sm">Had penjanaan seorang sehari<input className="field w-full" type="number" min={1} max={500} value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value))} disabled={busy} /></label>
+          {provider !== "murpati" ? <label className="grid gap-2 text-sm">Had penjanaan seorang sehari<input className="field w-full" type="number" min={1} max={500} value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value))} disabled={busy} /></label> : null}
           <button className="primary-button" disabled={busy || !settings.encryptionReady}><Save className="h-4 w-4" />{busy ? "Menyimpan…" : "Simpan tetapan"}</button>
         </form>
         <div className="flex flex-wrap gap-2">
-          {settings.configured ? <button className="secondary-button" disabled={busy} onClick={() => void run("save_settings", { revision: settings.revision, clearAi: true, dailyLimit }, "Key AI dipadam.")}>Padam key AI</button> : null}
-          {settings.murpatiConfigured ? <button className="secondary-button" disabled={busy} onClick={() => void run("save_settings", { revision: settings.revision, clearMurpati: true, dailyLimit }, "Sambungan Murpati dipadam daripada CasePilot.")}>Putus sambungan Murpati</button> : null}
+          {provider !== "murpati" && settings.configured ? <button className="secondary-button" disabled={busy} onClick={() => void run("save_settings", { revision: settings.revision, clearAi: true, dailyLimit }, "Key AI dipadam.")}>Padam key AI</button> : null}
+          {provider !== "openai" && settings.murpatiConfigured ? <button className="secondary-button" disabled={busy} onClick={() => void run("save_settings", { revision: settings.revision, clearMurpati: true, dailyLimit }, "Sambungan Murpati dipadam daripada CasePilot.")}>Putus sambungan Murpati</button> : null}
         </div>
-        <div className="grid gap-3 border-t border-zinc-800 pt-4"><h3 className="font-semibold">Device dan pemilik</h3><p className="text-xs text-zinc-400">Tetapkan setiap nombor kepada pemiliknya. CS/Broker hanya dapat menggunakan device sendiri. CasePilot tidak mencipta atau memutuskan device dalam Murpati.</p>
+        {provider !== "openai" ? <div className="grid gap-3 border-t border-zinc-800 pt-4"><h3 className="font-semibold">Device dan pemilik</h3><p className="text-xs text-zinc-400">Tetapkan setiap nombor kepada pemiliknya. CS/Broker hanya dapat menggunakan device sendiri. CasePilot tidak mencipta atau memutuskan device dalam Murpati.</p>
           <button className="secondary-button" disabled={busy || !settings.murpatiConfigured} onClick={() => void checkDevices()}><RefreshCw className="h-4 w-4" />Semak device Murpati</button>
           {devices.map((device) => <div key={device.sessionId} className="grid gap-2 rounded-md border border-zinc-700 p-3"><p className="break-words text-sm">{device.name} · {device.phone} · {device.status}</p><label className="sr-only" htmlFor={`owner-${device.sessionId}`}>Pemilik {device.phone}</label><select id={`owner-${device.sessionId}`} className="field w-full min-w-0" disabled={busy} value={owners[device.sessionId] ?? settings.devices.find((d) => d.sessionId === device.sessionId)?.userId ?? ""} onChange={(e) => setOwners((v) => ({ ...v, [device.sessionId]: e.target.value }))}><option value="">Pilih pemilik</option>{settings.members?.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select><button className="secondary-button" disabled={busy || !(owners[device.sessionId] ?? settings.devices.find((d) => d.sessionId === device.sessionId)?.userId)} onClick={() => void run("assign", { sessionId: device.sessionId, userId: owners[device.sessionId] ?? settings.devices.find((d) => d.sessionId === device.sessionId)?.userId }, "Pemilik device disimpan.")}>Tetapkan pemilik</button></div>)}
-        </div>
+        </div> : null}
       </> : <p className="text-sm text-zinc-400">Admin mengurus sambungan dan penetapan nombor. Pilih device anda ketika menjana AI Follow Up.</p>}
-      <div className="grid gap-2"><h3 className="font-semibold">Device ditetapkan</h3>{settings.devices.length ? settings.devices.map((d) => <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-zinc-900 p-3 text-sm" key={d.sessionId}><span className="min-w-0 break-words">{d.name} · {d.phone}{admin ? ` · ${settings.members?.find((m) => m.id === d.userId)?.name || "Pemilik"}` : ""}</span>{admin ? <button className="secondary-button" disabled={busy} onClick={() => void run("unassign", { sessionId: d.sessionId }, "Penetapan ditarik balik.")}>Tarik balik</button> : null}</div>) : <p className="text-sm text-zinc-400">Tiada device ditetapkan.</p>}</div>
+      {provider !== "openai" ? <div className="grid gap-2"><h3 className="font-semibold">Device ditetapkan</h3>{settings.devices.length ? settings.devices.map((d) => <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-zinc-900 p-3 text-sm" key={d.sessionId}><span className="min-w-0 break-words">{d.name} · {d.phone}{admin ? ` · ${settings.members?.find((m) => m.id === d.userId)?.name || "Pemilik"}` : ""}</span>{admin ? <button className="secondary-button" disabled={busy} onClick={() => void run("unassign", { sessionId: d.sessionId }, "Penetapan ditarik balik.")}>Tarik balik</button> : null}</div>) : <p className="text-sm text-zinc-400">Tiada device ditetapkan.</p>}</div> : null}
     </> : null}
     {error ? <div role="alert" className="grid gap-2 text-sm text-red-300"><p>{error}</p><button className="secondary-button" disabled={busy} onClick={() => void load()}>Muat semula tetapan</button></div> : null}
     {message ? <p role="status" className="text-sm text-emerald-300">{message}</p> : null}
-  </Dialog>;
+  </>;
+  return embedded ? <section className="surface-card grid gap-4 p-4">{content}</section> : <Dialog title="AI Follow Up" busy={busy} onClose={onClose}>{content}</Dialog>;
 }
 
 export function AiFollowUpButton({ lead, profile, onRefresh }: { lead: LeadRecord; profile: Profile; onRefresh: () => Promise<void> }) {

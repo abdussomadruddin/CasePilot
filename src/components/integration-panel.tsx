@@ -11,6 +11,7 @@ import {
 } from "@/lib/integration-store";
 import { getSupabaseClient, getSupabaseUrl } from "@/lib/supabase";
 import type { LeadRecord, Profile } from "@/lib/types";
+import { AiFollowUpSettings } from "@/components/ai-follow-up";
 import { createRealtimeRefresh } from "@/lib/realtime-refresh";
 
 const sourceLabels = { meta_ads: "Meta Ads", tiktok_ads: "TikTok Ads" } as const;
@@ -23,7 +24,20 @@ function dateTime(value: string) {
   }).format(new Date(value));
 }
 
-export function IntegrationPanel({ teamMembers, leads }: { teamMembers: Profile[]; leads: LeadRecord[] }) {
+export function IntegrationPanel({ profile, teamMembers, leads, initialProvider = "pabbly" }: { profile: Profile; teamMembers: Profile[]; leads: LeadRecord[]; initialProvider?: "pabbly" | "murpati" | "openai" }) {
+  const [provider, setProvider] = useState(initialProvider);
+  return <section className="grid gap-5">
+    <h2 className="text-xl font-bold text-white">Integration</h2>
+    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Integration provider">
+      {([ ["pabbly", "Pabbly"], ["murpati", "Murpati"], ["openai", "OpenAI Key"] ] as const).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={provider === id} className={provider === id ? "primary-button" : "secondary-button"} onClick={() => setProvider(id)}>{label}</button>)}
+    </div>
+    <div role="tabpanel" aria-label={provider === "openai" ? "OpenAI Key" : provider === "murpati" ? "Murpati" : "Pabbly"}>
+      {provider === "pabbly" ? <PabblyIntegrationPanel teamMembers={teamMembers} leads={leads} /> : <AiFollowUpSettings key={provider} profile={profile} provider={provider} embedded onClose={() => {}} />}
+    </div>
+  </section>;
+}
+
+function PabblyIntegrationPanel({ teamMembers, leads }: { teamMembers: Profile[]; leads: LeadRecord[] }) {
   const owners = teamMembers.filter((member) => member.active && ["customer_service", "broker"].includes(member.role));
   const [connectors, setConnectors] = useState<LeadConnector[]>([]);
   const [source, setSource] = useState<LeadConnector["source"]>("meta_ads");
@@ -143,7 +157,7 @@ export function IntegrationPanel({ teamMembers, leads }: { teamMembers: Profile[
   return (
     <section className="grid gap-5">
       <div className="flex items-center justify-between gap-3">
-        <div><h2 className="text-xl font-bold text-white">Integration</h2><p className="text-sm text-zinc-400">Pabbly Connect</p></div>
+        <div><h3 className="text-lg font-semibold text-white">Pabbly Connect</h3></div>
         <button type="button" className="icon-button" aria-label="Refresh connectors" title="Refresh connectors" onClick={() => void refresh()}><RefreshCw className="h-4 w-4" /></button>
       </div>
       {error ? <p role="alert" className="rounded-md border border-red-800 bg-red-950/60 p-3 text-sm text-red-100">{error}</p> : null}

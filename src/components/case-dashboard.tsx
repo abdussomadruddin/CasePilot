@@ -767,11 +767,15 @@ export function CaseDashboard() {
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [integrationProvider, setIntegrationProvider] = useState<"pabbly" | "murpati" | "openai">("pabbly");
   useEffect(() => {
-    const show = () => setAiSettingsOpen(true);
+    const show = () => {
+      if (profile?.role === "admin") { setIntegrationProvider("murpati"); setAppSection("integration"); }
+      else setAiSettingsOpen(true);
+    };
     window.addEventListener("casepilot:ai-settings", show);
     return () => window.removeEventListener("casepilot:ai-settings", show);
-  }, []);
+  }, [profile?.role]);
   const [accountMode, setAccountMode] = useState<"name" | "password" | null>(null);
   const [logoutStep, setLogoutStep] = useState<0 | 1 | 2>(0);
   const [logoutError, setLogoutError] = useState("");
@@ -2215,7 +2219,7 @@ export function CaseDashboard() {
         </section>
         </> : null}
         {appSection === "team" && role === "admin" ? <TeamManagementPanel members={teamMembers} saving={teamSaving} onCreate={handleCreateTeamMember} onUpdate={handleUpdateTeamMember} onDelete={handleDeleteTeamMember} /> : null}
-        {appSection === "integration" && role === "admin" ? <IntegrationPanel teamMembers={teamMembers} leads={leads} /> : null}
+        {appSection === "integration" && role === "admin" ? <IntegrationPanel key={integrationProvider} initialProvider={integrationProvider} profile={profile!} teamMembers={teamMembers} leads={leads} /> : null}
         {appSection === "leads" && profile && ["admin", "customer_service", "broker"].includes(role) ? <LeadPanel key={`${leadStatusJump}:${funnelSelection?.section === "leads" ? funnelSelection.label : ""}`} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} catalog={carCatalog.map((item) => ({ brand: item.brand, model: item.model }))} initialFilter={leadStatusJump} initialView={leadViewJump} onViewChange={setLeadViewJump} cohortLeadIds={funnelSelection?.section === "leads" ? funnelSelection.ids : undefined} cohortLabel={funnelSelection?.section === "leads" ? funnelSelection.label : undefined} onClearCohort={() => setFunnelSelection(null)} onRefresh={refreshLeadData} onCreateCase={openCreateFromLead} onAppointment={(lead) => { setAppointmentSubject(`lead:${lead.id}`); setAppSection("appointments"); }} /> : null}
         {appSection === "appointments" && profile && ["admin", "customer_service", "broker"].includes(role) ? <AppointmentPanel key={appointmentSubject} profile={profile} teamMembers={teamMembers} leads={leads} cases={visibleCases} appointments={appointments} initialSubject={appointmentSubject} onRefresh={refreshAppointmentData} /> : null}
         </div></MotionSurface>
@@ -2535,7 +2539,7 @@ function ProfileMenu({ profile, open, onToggle, onEditName, onEditPassword, onSi
       {open ? <div className="grid gap-1 pt-1">
         <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-zinc-200 hover:bg-zinc-900" onClick={onEditName}><Pencil className="h-4 w-4" />Edit name</button>
         <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-zinc-200 hover:bg-zinc-900" onClick={onEditPassword}><KeyRound className="h-4 w-4" />Change password</button>
-        {["admin", "customer_service", "broker"].includes(profile.role) ? <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-zinc-200 hover:bg-zinc-900" onClick={onAiSettings}><PlugZap className="h-4 w-4" />AI Follow Up</button> : null}
+        {["customer_service", "broker"].includes(profile.role) ? <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-zinc-200 hover:bg-zinc-900" onClick={onAiSettings}><PlugZap className="h-4 w-4" />AI Follow Up</button> : null}
         <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-red-200 hover:bg-red-950/50" onClick={onSignOut}><LogOut className="h-4 w-4" />Logout</button>
       </div> : null}
     </div>
