@@ -28,7 +28,7 @@ function Dialog({ title, busy = false, onClose, children }: { title: string; bus
     document.addEventListener("keydown", key, true);
     return () => { document.body.style.overflow = overflow; document.removeEventListener("keydown", key, true); if (previous?.isConnected) previous.focus(); };
   }, [busy]);
-  return createPortal(<div className="fixed inset-0 z-[80] overflow-y-auto bg-black/80 p-3 backdrop-blur-sm sm:p-6"><div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className="surface-card mx-auto w-full max-w-xl min-w-0 outline-none"><div className="flex items-center justify-between border-b border-zinc-800 p-4"><h2 className="text-lg font-semibold">{title}</h2><button className="icon-button" type="button" disabled={busy} onClick={onClose} aria-label="Tutup"><X className="h-5 w-5" /></button></div><div className="grid gap-4 p-4">{children}</div></div></div>, document.body);
+  return createPortal(<div className="ai-dialog-overlay fixed z-[80] bg-black/80 backdrop-blur-sm"><div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className="ai-dialog-panel surface-card mx-auto flex w-full max-w-xl min-w-0 flex-col outline-none"><div className="ai-dialog-header flex shrink-0 items-center justify-between gap-3 border-b border-zinc-800 p-4"><h2 className="text-lg font-semibold">{title}</h2><button className="icon-button" type="button" disabled={busy} onClick={onClose} aria-label="Tutup"><X className="h-5 w-5" /></button></div><div className="ai-dialog-body grid min-h-0 gap-4 overflow-y-auto p-4">{children}</div></div></div>, document.body);
 }
 function errorText(e: unknown) { return e instanceof Error ? e.message : "Permintaan gagal. Cuba semula."; }
 
