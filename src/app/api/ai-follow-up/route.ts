@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseUrl } from "@/lib/supabase";
 import { leadWhatsAppUrl } from "@/lib/whatsapp-contact";
 import { followUpWhatsAppUrls } from "@/lib/follow-up-whatsapp";
-import { AiError, chatDigest, conversationContext, encryptionKey, generateDraft, latestMessages, murpatiRead, normalizedPhone, openSecret, optedOut, sealSecret, uuid } from "@/lib/server/ai-follow-up-core";
+import { AiError, chatDigest, conversationContext, encryptionKey, generateDraft, latestMessages, mcpDevices, murpatiRead, normalizedPhone, openSecret, optedOut, sealSecret, uuid } from "@/lib/server/ai-follow-up-core";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -47,6 +47,7 @@ async function ownDevice(actor: Actor, sessionId: string) {
   return device;
 }
 async function sessions(key: string) {
+  if (key.startsWith("https://mcp.murpati.com/")) return mcpDevices(key);
   const result = await murpatiRead(key, "/v1/sessions");
   if (!Array.isArray(result.sessions)) throw new AiError("Senarai device Murpati tidak sah.", 502);
   return result.sessions.filter((s: { session_id: string; pipeline?: string }) => typeof s.session_id === "string" && s.session_id.startsWith("sess_") && s.pipeline !== "official")

@@ -1,3 +1,4 @@
+import { isMcpCredential, MurpatiMcp, murpatiMessageTime, type McpConversation, type McpDevice, type McpMessage } from "./murpati-mcp.ts";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
 export class AiError extends Error {
@@ -50,6 +51,37 @@ export async function murpatiRead(key: string, path: "/v1/sessions" | "/v1/messa
   if (result.success !== true) throw new AiError("Murpati tidak mengesahkan bacaan. Cuba semula.", 502);
   return result;
 }
+export async function mcpDevices(credential: string, fetcher = fetch) {
+  try {
+    const result = await new MurpatiMcp(credential, fetcher).read<{ devices: McpDevice[] | null }>("list_devices", {});
+    if (!Array.isArray(result.devices)) throw new Error("Senarai device MCP tidak lengkap.");
+    return result.devices.filter((d) => d.readable && d.kind === "whatsapp" && d.id.startsWith("sess_")).map((d) => ({ sessionId: d.id, phone: normalizedPhone(d.phone || ""), name: d.name, status: d.status }));
+  } catch (e) { throw new AiError(e instanceof Error ? e.message : "Bacaan MCP gagal.", 502); }
+}
+export async function mcpMessages(credential: string, session: string, phone: string, now = new Date(), fetcher = fetch): Promise<ChatMessage[]> {
+  try {
+    const client = new MurpatiMcp(credential, fetcher);
+    const deviceResult = await client.read<{ devices: McpDevice[] | null }>("list_devices", {});
+    const device = deviceResult.devices?.find((d) => d.id === session && d.kind === "whatsapp" && d.readable && normalizedPhone(d.phone || ""));
+    if (!device?.phone) throw new Error("Device ditetapkan tidak boleh dibaca melalui MCP.");
+    const senderPhone = normalizedPhone(device.phone);
+    const search = await client.read<{ conversations: McpConversation[] | null; total?: number; has_more?: boolean; filter_truncated?: boolean }>("list_conversations", { number: senderPhone, search: phone, limit: 100 });
+    if (!Array.isArray(search.conversations) || search.has_more === true || search.filter_truncated === true || (typeof search.total === "number" && search.total > search.conversations.length)) throw new Error("Carian conversation MCP tidak lengkap. Cuba semula.");
+    const matches = search.conversations.filter((c) => c.channel === "whatsapp" && !c.is_group && normalizedPhone(c.phone_number || "") === phone && normalizedPhone(c.device_phone || "") === senderPhone);
+    if (matches.length === 0) return [];
+    if (matches.length !== 1) throw new Error("Lebih satu conversation sepadan pada nombor ini. Semak Murpati.");
+    const id = matches[0].conversation_id;
+    const read = await client.read<{ conversations: { conversation_id: string; messages: McpMessage[] | null }[] | null; unreadable?: string[] | null }>("read_conversations", { conversation_ids: [id], limit: 100 });
+    const conversation = read.conversations?.find((c) => c.conversation_id === id);
+    if (read.unreadable?.length || !conversation || !Array.isArray(conversation.messages)) throw new Error("Conversation ditemui tetapi mesej tidak dapat dibaca melalui MCP.");
+    return conversation.messages.map((m, index) => {
+      if (typeof m.text !== "string" || !["us", "owner", "customer"].includes(m.from)) throw new Error("Format mesej MCP tidak sah.");
+      const timestamp = murpatiMessageTime(m.at);
+      return { message_id: `${id}:${timestamp}:${index}`, timestamp, is_from_me: m.from === "us" || m.from === "owner", message_type: "text", content: /^\[(?:photo|image|audio|voice note|video|document|sticker)\]$/i.test(m.text.trim()) ? "" : m.text };
+    }).filter((m) => Date.parse(m.timestamp) >= now.getTime() - 30 * 86400000 && Date.parse(m.timestamp) <= now.getTime())
+      .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)).slice(-100);
+  } catch (e) { throw new AiError(e instanceof Error ? e.message : "Bacaan MCP gagal.", 502); }
+}
 export async function resolveChatJid(key: string, session: string, phone: string, fetcher = fetch): Promise<string | null> {
   // Use provider-returned identities. Never infer a chat from its display name or a LID.
   for (let offset = 0, pageNumber = 0; pageNumber < 20; pageNumber++) {
@@ -70,6 +102,7 @@ export async function resolveChatJid(key: string, session: string, phone: string
 }
 export async function latestMessages(key: string, session: string, phone: string, now = new Date(), fetcher = fetch): Promise<ChatMessage[]> {
   if (!phone) return [];
+  if (isMcpCredential(key)) return mcpMessages(key, session, phone, now, fetcher);
   const jid = await resolveChatJid(key, session, phone, fetcher);
   if (!jid) return [];
   const params = { session_id: session, chat_jid: jid, from: new Date(now.getTime() - 30 * 86400000).toISOString(), to: now.toISOString(), limit: "1", offset: "0" };

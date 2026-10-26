@@ -99,3 +99,20 @@ atomic WhatsApp handoff. The 15-minute draft expiry still applies.
 The alternative **OpenAI — API key Admin** generates inside CasePilot and requires
 the central key configured under Integration → OpenAI Key. Switching provider or
 device clears the current draft. Merely opening Murpati never records a follow-up.
+
+### Murpati MCP stored-history reader
+
+Integration → Murpati accepts a connector link from Murpati Settings → API Keys.
+The server validates the exact `mcp.murpati.com` connector endpoint, encrypts the
+credential and exposes only `list_devices`, `list_conversations`, and
+`read_conversations`. No send, approval, queue or write tool can be invoked.
+
+For every read, CasePilot checks the assigned session, resolves its sending phone,
+searches conversations by recipient phone AND sending phone, verifies both numbers
+and the WhatsApp DM channel, then reads only the matched conversation ID. This
+handles WhatsApp privacy LIDs without guessing numbers from LID digits or names.
+Incomplete searches, ambiguous matches and unreadable conversations fail closed.
+MCP owner notes are discarded. Malaysia message times are converted to UTC, and
+only the most recent 100 messages within 30 days are used. Attachment placeholders
+are not interpreted as attachment content. Changing the connector invalidates old
+drafts and requires reviewing device assignments again.
