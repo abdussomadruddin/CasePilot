@@ -12,7 +12,7 @@
     "test:lead-ingest": "node --experimental-strip-types --test scripts/test-lead-ingest.mjs",
     "test:lead-copy": "node --experimental-strip-types --test scripts/test-lead-copy.mjs",
     "stress": "node scripts/stress-test.mjs",
-    "test:ai-follow-up": "node --experimental-strip-types --test scripts/test-ai-follow-up.mjs scripts/test-ai-follow-up-db.mjs scripts/test-ai-follow-up-api.mjs scripts/test-murpati-mcp.mjs"
+    "test:ai-follow-up": "node --experimental-strip-types --test scripts/test-ai-follow-up.mjs scripts/test-ai-follow-up-db.mjs scripts/test-ai-follow-up-api.mjs scripts/test-murpati-mcp.mjs scripts/test-ai-sales-playbook.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.50.0",

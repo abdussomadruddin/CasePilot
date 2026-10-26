@@ -47,9 +47,9 @@ test('draft generation sends no tools, no persistence, safe schema and bounded o
     assert.equal(url, 'https://api.openai.com/v1/responses');
     const body = JSON.parse(options.body);
     assert.equal(body.store,false); assert.equal(body.tools,undefined); assert.equal(body.model,'gpt-6-luna'); assert.equal(body.reasoning.effort,'none'); assert.equal(body.text.format.strict,true);
-    return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({text:'Salam, saya kongsikan perkembangan terkini.',blocked:false,reason:''})}]}]});
+    return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({text:'Salam, saya kongsikan perkembangan terkini.',blocked:false,reason:'',stageId:'FACT_FINDING',previousStageId:'',stageReason:'Semakan dokumen',nextAction:'Minta dokumen',knowledgeIds:[]})}]}]});
   };
-  assert.equal((await generateDraft('fixture',{notes:'context'},fetcher)).blocked,false);
+  assert.equal((await generateDraft('fixture',{conversation:[{from:'adviser',text:'Hantar payslip'}]},fetcher)).blocked,false);
   await assert.rejects(generateDraft('fixture',{},async () => response({status:'incomplete'})), /tidak lengkap/);
   await assert.rejects(generateDraft('fixture',{},async () => response({},401)), /API key/);
   await assert.rejects(generateDraft('fixture',{},async () => response({},429)), /Kuota/);

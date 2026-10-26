@@ -20,19 +20,37 @@ test('transactional AI follow-up permissions, idempotency and existing 4/6 rules
  `);
  await db.exec(await readFile(new URL('../supabase/migrations/20261018155202_lead_whatsapp_username.sql',import.meta.url),'utf8'));
  await db.exec(await readFile(new URL('../supabase/migrations/20261026055750_ai_follow_up.sql',import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../supabase/migrations/20261026120314_ai_sales_playbook.sql',import.meta.url),'utf8'));
  await db.exec(`insert into ai_follow_up_settings(id) values(true); insert into ai_device_assignments values ('sess_owner','${owner}','60123456789','CS',now()),('sess_admin','${admin}','60123456780','Admin',now());`);
  async function lead(status='new',count=0) {
    const id=randomUUID(); await db.query(`insert into leads(id,owner_id,customer_phone,status,follow_up_count,phone_revealed_at) values($1,$2,'60173559147',$3,$4,case when $3='new' then null else now() end)`,[id,owner,status,count]); return id;
  }
  async function draft(leadId,user=owner,session='sess_owner') {
    const id=randomUUID(),ticket=randomUUID();
-   await db.query(`insert into ai_follow_up_drafts(id,user_id,lead_id,session_id,phone,revision,snapshot,ticket,outcome,recipient_phone) values($1,$2,$3,$4,$5,1,ai_lead_snapshot($3),$6,'ready','60173559147')`,[id,user,leadId,session,session==='sess_admin'?'60123456780':'60123456789',ticket]); return {id,ticket};
+   await db.query(`insert into ai_follow_up_drafts(id,user_id,lead_id,session_id,phone,revision,snapshot,ticket,outcome,recipient_phone,playbook_revision) values($1,$2,$3,$4,$5,1,ai_lead_snapshot($3),$6,'ready','60173559147',(select revision from ai_sales_playbook where id))`,[id,user,leadId,session,session==='sess_admin'?'60123456780':'60123456789',ticket]); return {id,ticket};
  }
  async function open(d,user=owner) {
    await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${user}',false)`);
    try { return (await db.query('select open_ai_follow_up($1,$2) as count',[d.id,d.ticket])).rows[0].count; }
    finally { await db.exec('reset role'); }
  }
+ await t.test('playbook and stage CAS are server-only; stale drafts and expired facts cannot hand off',async()=>{
+  const id=await lead('contacted'),d=await draft(id);
+  const b=(await db.query('select revision from ai_sales_playbook')).rows[0].revision;
+  await assert.rejects(db.query("select save_ai_sales_playbook($1,$2,'rules','[]'::jsonb,'[]'::jsonb)",[owner,b]));
+  await db.query("select save_ai_sales_playbook($1,$2,'Updated rules',stages,knowledge) from ai_sales_playbook",[admin,b]);
+  await assert.rejects(db.query("select save_ai_sales_playbook($1,$2,'Old rules',stages,knowledge) from ai_sales_playbook",[admin,b]));
+  await assert.rejects(open(d));
+  const fresh=await draft(id);await db.query("update ai_follow_up_drafts set knowledge_expires_at=now()-interval '1 second' where id=$1",[fresh.id]);await assert.rejects(open(fresh));
+  const current=(await db.query('select revision from ai_sales_playbook')).rows[0].revision;
+  const args=[owner,id,'sess_owner',0,current,'FACT_FINDING','',true,'hash'];
+  await db.query('select save_ai_sales_stage($1,$2,$3,$4,$5,$6,$7,$8,$9)',args);
+  await assert.rejects(db.query('select save_ai_sales_stage($1,$2,$3,$4,$5,$6,$7,$8,$9)',args));
+  await assert.rejects(db.query('select save_ai_sales_stage($1,$2,$3,$4,$5,$6,$7,$8,$9)',[other,id,'sess_owner',1,current,'CLOSING','',true,'hash']));
+  const staged=await draft(id);await db.query('update ai_follow_up_drafts set stage_revision=1 where id=$1',[staged.id]);
+  await db.query('select save_ai_sales_stage($1,$2,$3,$4,$5,$6,$7,$8,$9)',[owner,id,'sess_owner',1,current,'WON','',true,'hash']);await assert.rejects(open(staged));
+  for(const role of ['anon','authenticated']){await db.exec(`set role ${role}`);try{await assert.rejects(db.query('select * from ai_sales_playbook'));await assert.rejects(db.query('select * from ai_sales_stage_state'));await assert.rejects(db.query('select open_ai_follow_up_base($1,$2)',[staged.id,staged.ticket]));}finally{await db.exec('reset role');}}
+ });
  await t.test('new lead: draft unchanged, handoff Contacted, count zero, retry exactly once',async()=>{
   const id=await lead(),d=await draft(id);
   assert.equal((await db.query('select status from leads where id=$1',[id])).rows[0].status,'new');

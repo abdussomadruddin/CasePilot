@@ -116,3 +116,13 @@ MCP owner notes are discarded. Malaysia message times are converted to UTC, and
 only the most recent 100 messages within 30 days are used. Attachment placeholders
 are not interpreted as attachment content. Changing the connector invalidates old
 drafts and requires reviewing device assignments again.
+
+### AI Playbook and Knowledge Base
+
+Admin can edit central closing rules/stages in **Integration → AI Playbook** and approved business facts in **Knowledge Base**. The migration seeds eight editable stages from the supplied sales flow, with an empty knowledge base. Save is explicit and version checked. Failed saves keep local form input; conflicts offer the server version for review before choosing which content to keep.
+
+Drafts use only WhatsApp messages for customer context, plus relevant active knowledge within its Malaysia date window. Model/variant scopes match phrases from the actual conversation (comma-separated aliases are supported); at most eight entries are included. The dialog shows the detected stage, reason, next action and referenced entries. Correcting a stage saves metadata for that Lead/device and regenerates; a correction anchors that stage until conversation changes. WON/LOST stop sales drafts, and opt-out remains a separate block. No lead/case notes, chat archive, persistent draft text, scheduling, scoring or automatic sending is added.
+
+Apply `20261026120314_ai_sales_playbook.sql` before deploying this feature. New tables are server-only with RLS enabled. Both the API and atomic WhatsApp handoff check playbook/stage versions and knowledge expiry. Existing generated drafts must be regenerated after rollout. No production migration or deployment is implied by a local test.
+
+`pnpm test:ai-follow-up` covers defaults, knowledge selection/expiry, structured output validation, Admin/owner/device access, optimistic concurrency, terminal stages, handoff invalidation and existing follow-up counts. Sales scenarios use deterministic provider fixtures; they do not send customer messages or assert live-model wording quality.

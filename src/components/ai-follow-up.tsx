@@ -133,6 +133,16 @@ function DraftDialog({ lead, onRefresh, onClose }: { lead: LeadRecord; onRefresh
     automaticAttempt.current = attempt;
     void generate();
   }, [loading, settings, device, stale, provider, lead.id, generate]);
+  async function correctStage(stageId: string) {
+    if (!draft || clickLock.current || stale) return;
+    clickLock.current=true;setBusy(true);setError("");
+    try {
+      await aiRequest("correct_stage",{leadId:lead.id,sessionId:device,draftId:draft.id,stageId,revision:draft.stageRevision,bookRevision:draft.playbookRevision});
+      setDraft(null);setText("");setCopied(false);
+      clickLock.current=false;setBusy(false);
+      await generate();
+    } catch(e) {setError(errorText(e));} finally {clickLock.current=false;setBusy(false);}
+  }
   async function handoff() {
     if (!draft || clickLock.current || stale) return;
     if (!lead.customerPhone && !copied) { setError("Copy ayat dahulu untuk ditampal dalam chat username WhatsApp."); return; }
@@ -157,6 +167,14 @@ function DraftDialog({ lead, onRefresh, onClose }: { lead: LeadRecord; onRefresh
     </> : <button className="secondary-button" onClick={() => void load()}>Cuba semula</button>}
     {stale ? <p role="alert" className="text-sm text-amber-300">Maklumat Lead berubah. Tutup dan buka semula AI Follow Up.</p> : null}
     {draft ? <>
+      {draft.stages?.length ? <div className="grid gap-3 rounded-lg border border-zinc-700 p-3 text-sm">
+        <label className="grid gap-1">Fasa closing<select className="field w-full min-w-0" value={draft.stageId || ""} disabled={busy || stale} onChange={e=>void correctStage(e.target.value)}><option value="" disabled>Belum dikesan</option>{draft.stages.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+        {draft.previousStageId?<p className="text-zinc-400">Sambung fasa: {draft.stages.find(s=>s.id===draft.previousStageId)?.name || draft.previousStageId}</p>:null}
+        {draft.stageReason?<p><span className="text-zinc-400">Sebab: </span>{draft.stageReason}</p>:null}
+        {draft.nextAction?<p><span className="text-zinc-400">Langkah seterusnya: </span>{draft.nextAction}</p>:null}
+        <p className="text-xs text-zinc-400">Betulkan fasa untuk membuat semula draf. Playbook v{draft.playbookRevision}.</p>
+        {draft.references?.length?<div><p className="text-zinc-400">Rujukan Knowledge Base</p><ul className="list-inside list-disc">{draft.references.map(k=><li key={k.id}>{k.title}</li>)}</ul></div>:<p className="text-xs text-zinc-500">Tiada fakta Knowledge Base dirujuk.</p>}
+      </div>:null}
       {draft.provider === "murpati_manual" && !draft.blocked ? <div className="grid gap-3 rounded-md border border-zinc-700 p-3 text-sm"><p>1. Buka Inbox Murpati dan pilih nombor penghantar <strong>{draft.device.phone}</strong>.</p><p>2. Cari penerima <strong>{draft.recipient}</strong>, semak conversation dan gunakan butang AI untuk menulis follow-up. Setiap penjanaan menggunakan kredit Murpati.</p><p>3. Copy ayat, kembali ke CasePilot dan tampal dalam medan di bawah. Jangan hantar atau simpan jadual penghantaran di Murpati.</p><a className="secondary-button" href="https://murpati.com/inbox" target="_blank" rel="noopener noreferrer">Buka Inbox Murpati</a><button className="secondary-button" onClick={async () => { try { await navigator.clipboard.writeText(draft.recipient); setError(""); } catch { setError("Salin nombor penerima secara manual."); } }}>Copy penerima untuk carian</button><p className="text-xs text-zinc-400">Jika tiada conversation, semak nombor, device dan sync Murpati. Nota Lead tidak digunakan untuk draf.</p></div> : null}
       <p className="text-xs text-zinc-400">{draft.source === "conversation" ? `Berdasarkan conversation · ${draft.lastMessageAt ? new Date(draft.lastMessageAt).toLocaleString("en-MY") : ""}` : "Conversation tidak dapat disahkan"}</p>
       {draft.blocked ? <p role="alert" className="text-sm text-amber-300">{draft.reason}</p> : <>

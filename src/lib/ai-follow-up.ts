@@ -5,6 +5,8 @@ export type AiSettings = {
   members?: { id: string; name: string }[];
 };
 export type AiDraft = {
+  stageId?: string; previousStageId?: string; stageReason?: string; nextAction?: string; stageRevision?: number; playbookRevision?: number;
+  stages?: {id:string;name:string}[]; references?: {id:string;title:string}[]; knowledgeIds?: string[];
   provider?: "openai" | "murpati_manual";
   id: string; text: string; blocked: boolean; reason: string; device: AiDevice;
   recipient: string; customerName: string; source: "conversation" | "notes";

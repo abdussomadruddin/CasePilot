@@ -1,5 +1,7 @@
 "use client";
 
+import { AiSalesPlaybookEditor } from "@/components/ai-sales-playbook";
+
 import { Check, Copy, KeyRound, Plus, RefreshCw, RotateCw, ShieldX, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import {
@@ -25,14 +27,15 @@ function dateTime(value: string) {
 }
 
 export function IntegrationPanel({ profile, teamMembers, leads, initialProvider = "pabbly" }: { profile: Profile; teamMembers: Profile[]; leads: LeadRecord[]; initialProvider?: "pabbly" | "murpati" | "openai" }) {
-  const [provider, setProvider] = useState(initialProvider);
+  const [provider, setProvider] = useState<"pabbly" | "murpati" | "openai" | "playbook" | "knowledge">(initialProvider);
+  const [dirty,setDirty] = useState(false);
   return <section className="grid gap-5">
     <h2 className="text-xl font-bold text-white">Integration</h2>
     <div className="flex flex-wrap gap-2" role="tablist" aria-label="Integration provider">
-      {([ ["pabbly", "Pabbly"], ["murpati", "Murpati"], ["openai", "OpenAI Key"] ] as const).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={provider === id} className={provider === id ? "primary-button" : "secondary-button"} onClick={() => setProvider(id)}>{label}</button>)}
+      {([ ["pabbly", "Pabbly"], ["murpati", "Murpati"], ["openai", "OpenAI Key"], ...(profile.role === "admin" ? [["playbook", "AI Playbook"], ["knowledge", "Knowledge Base"]] as const : []) ] as const).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={provider === id} className={provider === id ? "primary-button" : "secondary-button"} onClick={() => { if(id===provider) return; if(!dirty || window.confirm("Buang perubahan tetapan yang belum disimpan?")) {setDirty(false);setProvider(id);} }}>{label}</button>)}
     </div>
-    <div role="tabpanel" aria-label={provider === "openai" ? "OpenAI Key" : provider === "murpati" ? "Murpati" : "Pabbly"}>
-      {provider === "pabbly" ? <PabblyIntegrationPanel teamMembers={teamMembers} leads={leads} /> : <AiFollowUpSettings key={provider} profile={profile} provider={provider} embedded onClose={() => {}} />}
+    <div role="tabpanel" aria-label={provider === "playbook" ? "AI Playbook" : provider === "knowledge" ? "Knowledge Base" : provider === "openai" ? "OpenAI Key" : provider === "murpati" ? "Murpati" : "Pabbly"}>
+      {provider === "playbook" || provider === "knowledge" ? (profile.role === "admin" ? <AiSalesPlaybookEditor key={provider} section={provider} onDirty={setDirty}/> : null) : provider === "pabbly" ? <PabblyIntegrationPanel teamMembers={teamMembers} leads={leads} /> : <AiFollowUpSettings key={provider} profile={profile} provider={provider} embedded onClose={() => {}} />}
     </div>
   </section>;
 }

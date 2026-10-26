@@ -1,3 +1,4 @@
+import { validateSalesPlaybook, selectKnowledge, knowledgeExpiry, terminalStage, type SalesPlaybook, type SalesState } from "@/lib/ai-sales-playbook";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
@@ -29,6 +30,20 @@ async function authenticate(req: NextRequest) {
 }
 type Actor = Awaited<ReturnType<typeof authenticate>>;
 async function settings(db: SupabaseClient) { return checked(await db.from("ai_follow_up_settings").select("*").eq("id", true).maybeSingle()); }
+async function salesBook(db: SupabaseClient): Promise<SalesPlaybook> {
+  const row = checked(await db.from("ai_sales_playbook").select("revision,rules,stages,knowledge,updated_at,updated_by").eq("id",true).single());
+  if (!row) throw new AiError("AI Playbook belum dipasang. Hubungi Admin.",503);
+  return { ...validateSalesPlaybook(row), updatedAt:row.updated_at, updatedBy:row.updated_by };
+}
+async function salesState(actor: Actor, leadId: string, sessionId: string): Promise<SalesState | null> {
+  const row = checked(await actor.db.from("ai_sales_stage_state").select("stage_id,previous_stage_id,revision,corrected,conversation_hash").eq("lead_id",leadId).eq("session_id",sessionId).maybeSingle());
+  return row ? { stageId:row.stage_id, previousStageId:row.previous_stage_id, revision:row.revision, corrected:row.corrected, conversationHash:row.conversation_hash } : null;
+}
+async function saveStage(actor: Actor, leadId: string, sessionId: string, bookRevision: number, old: SalesState | null, stageId: string, previousStageId: string, corrected: boolean, hash: string): Promise<number> {
+  const {data,error} = await actor.db.rpc("save_ai_sales_stage", {p_actor:actor.userId,p_lead:leadId,p_session:sessionId,p_revision:old?.revision || 0,p_book_revision:bookRevision,p_stage:stageId,p_previous:previousStageId,p_corrected:corrected,p_hash:hash});
+  if (error) throw new AiError("Fasa atau tetapan berubah. Muat semula dan cuba lagi.",409);
+  return data;
+}
 async function snapshot(db: SupabaseClient, id: string): Promise<string> { return checked(await db.rpc("ai_lead_snapshot", { p_lead_id: id })); }
 async function leadFor(actor: Actor, id: string, contactRequired = true) {
   if (!uuid(id)) throw new AiError("Lead tidak sah.");
@@ -74,6 +89,13 @@ async function handleGet(req: NextRequest) {
   const actor = await authenticate(req);
   const action = req.nextUrl.searchParams.get("action");
   if (action === "settings") return json(await viewSettings(actor));
+  if (action === "sales_playbook") return json(await salesBook(actor.db));
+  if (action === "sales_stage") {
+    const lead = await leadFor(actor,req.nextUrl.searchParams.get("leadId") || "");
+    const session = req.nextUrl.searchParams.get("sessionId") || "";
+    await ownDevice(actor,session);
+    return json({state:await salesState(actor,lead.id,session)});
+  }
   if (action === "history") {
     const leadId = req.nextUrl.searchParams.get("leadId") || "";
     await leadFor(actor, leadId, false);
@@ -83,12 +105,38 @@ async function handleGet(req: NextRequest) {
 }
 async function handlePost(req: NextRequest) {
   const actor = await authenticate(req);
-  if (Number(req.headers.get("content-length")) > 20000) throw new AiError("Permintaan terlalu besar.");
+  if (Number(req.headers.get("content-length")) > 140000) throw new AiError("Permintaan terlalu besar.");
   const raw = await req.text();
-  if (raw.length > 20000) throw new AiError("Permintaan terlalu besar.");
+  if (raw.length > 140000) throw new AiError("Permintaan terlalu besar.");
   let p;
   try { p = JSON.parse(raw); } catch { throw new AiError("Permintaan tidak sah."); }
   if (!p || typeof p !== "object" || Array.isArray(p)) throw new AiError("Permintaan tidak sah.");
+  if (p.action === "save_playbook") {
+    if (!actor.admin) throw new AiError("Tetapan ini untuk Admin sahaja.",403);
+    let book: SalesPlaybook;
+    try { book = validateSalesPlaybook(p.playbook); } catch(e) { throw new AiError(e instanceof Error ? e.message : "Playbook tidak sah."); }
+    const {error} = await actor.db.rpc("save_ai_sales_playbook",{p_actor:actor.userId,p_revision:book.revision,p_rules:book.rules,p_stages:book.stages,p_knowledge:book.knowledge});
+    if (error) throw new AiError("Playbook berubah atau belum dapat disimpan. Input dikekalkan; muat versi terkini untuk semak konflik.",409);
+    return json(await salesBook(actor.db));
+  }
+  if (raw.length > 20000) throw new AiError("Permintaan terlalu besar.");
+  if (p.action === "correct_stage") {
+    const lead = await leadFor(actor,p.leadId); await ownDevice(actor,p.sessionId);
+    const book = await salesBook(actor.db), old = await salesState(actor,lead.id,p.sessionId);
+    if (p.bookRevision !== book.revision || p.revision !== (old?.revision || 0)) throw new AiError("Fasa atau playbook berubah. Muat semula dahulu.",409);
+    if (!book.stages.some(s=>s.id===p.stageId && s.active)) throw new AiError("Pilih fasa aktif yang sah.");
+    const candidate = old && !["FOLLOW_UP","OBJECTION_HANDLING","WON","LOST"].includes(old.stageId) ? old.stageId : old?.previousStageId || "";
+    const previous = ["FOLLOW_UP","OBJECTION_HANDLING"].includes(p.stageId) && book.stages.some(s=>s.id===candidate && s.active && !terminalStage(s.id) && s.id!=="FOLLOW_UP") ? candidate : "";
+    let hash = old?.conversationHash || "";
+    if (p.draftId !== undefined) {
+      if (!uuid(p.draftId)) throw new AiError("Draf tidak sah.");
+      const d = checked(await actor.db.from("ai_follow_up_drafts").select("conversation_hash,stage_revision,playbook_revision").eq("id",p.draftId).eq("user_id",actor.userId).eq("lead_id",lead.id).eq("session_id",p.sessionId).maybeSingle());
+      if (!d || d.stage_revision !== p.revision || d.playbook_revision !== book.revision) throw new AiError("Draf berubah. Buka semula AI Follow Up.",409);
+      hash = d.conversation_hash;
+    }
+    await saveStage(actor,lead.id,p.sessionId,book.revision,old,p.stageId,previous,true,hash);
+    return json({state:await salesState(actor,lead.id,p.sessionId)});
+  }
   if (["save_settings", "devices", "assign", "unassign"].includes(p.action)) {
     if (!actor.admin) throw new AiError("Tetapan ini untuk Admin sahaja.", 403);
     const config = await settings(actor.db);
@@ -140,26 +188,36 @@ async function handlePost(req: NextRequest) {
     const key = openSecret(config.murpati_secret, "murpati");
     // Validate assignment before any external read, and claim a cross-server lease before API usage.
     await ownDevice(actor, p.sessionId);
+    const book = await salesBook(actor.db);
+    const state = await salesState(actor,lead.id,p.sessionId);
     const id = randomUUID();
     const claimed = checked(await actor.db.rpc("claim_ai_generation", { p_user_id: actor.userId, p_request_id: id }));
     if (!claimed) throw new AiError("Penjanaan lain masih berjalan. Tunggu dan cuba semula.", 429);
     try {
       const version = await snapshot(actor.db, lead.id);
       lead = await leadFor(actor, lead.id);
-      checked(await actor.db.from("ai_follow_up_drafts").insert({ id, user_id: actor.userId, lead_id: lead.id, session_id: p.sessionId, phone: "", revision: config.revision, snapshot: version, recipient_phone: lead.customer_phone || "", recipient_username: lead.whatsapp_username || "" }));
+      checked(await actor.db.from("ai_follow_up_drafts").insert({ id, user_id: actor.userId, lead_id: lead.id, session_id: p.sessionId, phone: "", revision: config.revision, snapshot: version, recipient_phone: lead.customer_phone || "", recipient_username: lead.whatsapp_username || "", playbook_revision:book.revision, stage_revision:state?.revision || 0 }));
       const device = await verifiedDevice(actor, key, p.sessionId);
       const messages = await latestMessages(key, device.sessionId, normalizedPhone(lead.customer_phone || ""));
       const context = conversationContext(messages);
       if (version !== await snapshot(actor.db, lead.id)) throw new AiError("Maklumat Lead atau Case berubah. Jana semula.", 409);
       const blocked = optedOut(messages);
-      const result = blocked ? { text: "", blocked: true, reason: "Pelanggan meminta supaya tidak dihubungi. Draf jualan disekat." } : manual ? { text: "", blocked: false, reason: "" } : await generateDraft(openSecret(config.openai_secret, "openai"), context);
+      const knowledge = selectKnowledge(book.knowledge,messages.map(m=>m.content).join("\n"));
+      const terminal = Boolean(state && terminalStage(state.stageId));
+      let result = { text:"", blocked:blocked || terminal, reason:blocked ? "Pelanggan meminta supaya tidak dihubungi. Draf jualan disekat." : terminal ? "Fasa WON/LOST: follow-up jualan dihentikan. Betulkan fasa jika tersalah." : "", stageId:state?.stageId || "",previousStageId:state?.previousStageId || "",stageReason:"",nextAction:"",knowledgeIds:[] as string[] };
+      if (!blocked && !terminal && !manual) result = await generateDraft(openSecret(config.openai_secret,"openai"),context,fetch,{playbook:book,state,knowledge,stageLock:state?.corrected && state.conversationHash===chatDigest(messages) ? state.stageId : undefined});
       // Revalidate permissions and configuration after the external generation.
       await leadFor(actor, lead.id); await ownDevice(actor, device.sessionId);
       const current = await settings(actor.db);
       if (current?.revision !== config.revision || version !== await snapshot(actor.db, lead.id)) throw new AiError("Maklumat atau tetapan berubah. Jana semula.", 409);
+      if ((await salesBook(actor.db)).revision !== book.revision || ((await salesState(actor,lead.id,device.sessionId))?.revision || 0) !== (state?.revision || 0)) throw new AiError("Playbook atau fasa berubah. Buat draf semula.",409);
+      let stageRevision = state?.revision || 0;
+      if (!blocked && !terminal && !manual) stageRevision = await saveStage(actor,lead.id,device.sessionId,book.revision,state,result.stageId,result.previousStageId,Boolean(state?.corrected && state.conversationHash===chatDigest(messages)),chatDigest(messages));
+      const knowledgeExpiresAt = knowledgeExpiry(knowledge);
+      if (knowledgeExpiresAt && Date.parse(knowledgeExpiresAt)<=Date.now()) throw new AiError("Knowledge tamat tempoh. Buat draf semula.",409);
       const expiresAt = new Date(Date.now() + 15 * 60000).toISOString();
-      checked(await actor.db.from("ai_follow_up_drafts").update({ outcome: result.blocked ? "blocked" : "ready", phone: device.phone, conversation_hash: chatDigest(messages), expires_at: expiresAt }).eq("id", id));
-      return json({ id, ...result, provider: manual ? "murpati_manual" : "openai", device, recipient: lead.customer_phone || `@${lead.whatsapp_username}`, customerName: lead.customer_name || "Lead", source: "conversation", lastMessageAt: messages.at(-1)?.timestamp || null, expiresAt });
+      checked(await actor.db.from("ai_follow_up_drafts").update({ outcome: result.blocked ? "blocked" : "ready", phone: device.phone, conversation_hash: chatDigest(messages), expires_at: expiresAt, stage_revision:stageRevision, knowledge_expires_at:knowledgeExpiresAt }).eq("id", id));
+      return json({ id, ...result, stageRevision, playbookRevision:book.revision, stages:book.stages.filter(s=>s.active).map(s=>({id:s.id,name:s.name})), references:knowledge.filter(k=>result.knowledgeIds.includes(k.id)).map(k=>({id:k.id,title:k.title})), provider: manual ? "murpati_manual" : "openai", device, recipient: lead.customer_phone || `@${lead.whatsapp_username}`, customerName: lead.customer_name || "Lead", source: "conversation", lastMessageAt: messages.at(-1)?.timestamp || null, expiresAt });
     } catch (error) {
       await actor.db.from("ai_follow_up_drafts").update({ outcome: "failed" }).eq("id", id).eq("outcome", "generating");
       throw error;
@@ -173,6 +231,8 @@ async function handlePost(req: NextRequest) {
     if ((lead.customer_phone || "") !== d.recipient_phone || (lead.whatsapp_username || "") !== d.recipient_username) throw new AiError("Penerima berubah. Jana semula.", 409);
     const config = await settings(actor.db);
     if (!config?.murpati_secret || config.revision !== d.revision) throw new AiError("Tetapan berubah. Jana semula.", 409);
+    const book = await salesBook(actor.db), state = await salesState(actor,d.lead_id,d.session_id);
+    if (book.revision !== d.playbook_revision || (state?.revision || 0) !== d.stage_revision || (state && terminalStage(state.stageId)) || (d.knowledge_expires_at && Date.parse(d.knowledge_expires_at)<=Date.now())) throw new AiError("Playbook, fasa atau knowledge berubah/tamat tempoh. Buat draf semula.",409);
     const key = openSecret(config.murpati_secret, "murpati");
     await verifiedDevice(actor, key, d.session_id);
     if (d.outcome !== "opened") {
