@@ -7,6 +7,7 @@ import { sealSecret } from '../src/lib/server/ai-follow-up-core.ts';
 const owner='00000000-0000-0000-0000-000000000001',other='00000000-0000-0000-0000-000000000002',leadId='00000000-0000-0000-0000-000000000010';
 process.env.SUPABASE_SERVICE_ROLE_KEY='fixture-service';
 process.env.AI_SETTINGS_ENCRYPTION_KEY=randomBytes(32).toString('base64');
+let noHistory=false;
 let role='customer_service',active=true,snapshot='snapshot-one',claimed=true,external=[],records=[],writes=0;
 const config={id:true,revision:1,daily_limit:50,openai_secret:sealSecret('fixture-openai','openai'),murpati_secret:sealSecret('fixture-murpati','murpati')};
 const devices=[{session_id:'sess_owner',user_id:owner,phone:'60177498085',name:'Owner'},{session_id:'sess_other',user_id:other,phone:'60111111111',name:'Other'}];
@@ -54,10 +55,11 @@ globalThis.fetch=async(url,options={})=>{
  const u=new URL(url);external.push({host:u.host,path:u.pathname,method:options.method||'GET'});
  let body;
  if(u.host==='api.murpati.com'){
-  assert.equal(options.method,'GET');assert.ok(['/v1/sessions','/v1/messages'].includes(u.pathname));
-  body=u.pathname==='/v1/sessions'?{success:true,sessions:devices.map(d=>({session_id:d.session_id,phone_number:d.phone,device_name:d.name,status:'connected',pipeline:'unofficial'}))}:{success:true,total_count:0,messages:[]};
+  assert.equal(options.method,'GET');assert.ok(['/v1/sessions','/v1/messages','/v1/chats'].includes(u.pathname));
+  body=u.pathname==='/v1/sessions'?{success:true,sessions:devices.map(d=>({session_id:d.session_id,phone_number:d.phone,device_name:d.name,status:'connected',pipeline:'unofficial'}))}:u.pathname==='/v1/chats'?{success:true,total_count:1,has_more:false,chats:[{chat_jid:'60173559147@c.us',chat_type:'dm'}]}:noHistory?{success:true,total_count:0,messages:[],has_more:false}:{success:true,total_count:1,has_more:false,messages:[{message_id:'m1',timestamp:new Date().toISOString().slice(0,10)+'T00:00:00Z',is_from_me:true,message_type:'text',content:'Untuk semakan kelayakan, hantar 3 bulan latest payslip'}]};
  }else{
   assert.equal(u.host,'api.openai.com');
+  const prompt=JSON.parse(options.body); const context=JSON.parse(prompt.input); assert.equal(context.lead,undefined); assert.equal(context.case,undefined); assert.match(context.last_message.text,/payslip/);
   body={status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({text:'Salam, saya ada perkembangan untuk dikongsi.',blocked:false,reason:''})}]}]};
  }
  return new Response(JSON.stringify(body),{status:200,headers:{'Content-Type':'application/json'}});
@@ -83,6 +85,11 @@ test('API access and read-only Murpati contract',async(t)=>{
   assert.equal((await post({action:'draft',leadId,sessionId:'sess_owner'})).status,403);lead.owner_id=owner;
   assert.equal((await post({action:'draft',leadId,sessionId:'sess_other'})).status,403);assert.equal(external.length,0);
  });
+ await t.test('empty conversation blocks before OpenAI; notes are never fallback',async()=>{
+  noHistory=true;external=[];
+  try { const res=await post({action:'draft',leadId,sessionId:'sess_owner',provider:'openai'}); assert.equal(res.status,409);assert.match((await res.json()).error,/Draf tidak dibuat daripada nota/);assert.ok(external.every(c=>c.host!=='api.openai.com')); }
+  finally {noHistory=false;records=[];}
+ });
  await t.test('manual Murpati works without OpenAI key and never calls OpenAI',async()=>{
   const saved=config.openai_secret;config.openai_secret=null;external=[];
   try {
@@ -94,10 +101,10 @@ test('API access and read-only Murpati contract',async(t)=>{
    assert.equal((await post({action:'draft',leadId,sessionId:'sess_owner',provider:'unknown'})).status,400);
   } finally {config.openai_secret=saved;records=[];}
  });
- await t.test('one cross-server generation and no chat fallback draft; no contact writes until handoff',async()=>{
+ await t.test('one cross-server generation using WhatsApp context; no contact writes until handoff',async()=>{
   claimed=false;assert.equal((await post({action:'draft',leadId,sessionId:'sess_owner'})).status,429);claimed=true;
   const res=await post({action:'draft',leadId,sessionId:'sess_owner'});assert.equal(res.status,200);
-  const draft=await res.json();assert.equal(draft.source,'notes');assert.equal(writes,0);assert.equal(records[0].outcome,'ready');assert.equal(records[0].text,undefined);
+  const draft=await res.json();assert.equal(draft.source,'conversation');assert.equal(writes,0);assert.equal(records[0].outcome,'ready');assert.equal(records[0].text,undefined);
   snapshot='changed';assert.equal((await post({action:'handoff',id:draft.id,text:draft.text})).status,409);assert.equal(writes,0);snapshot='snapshot-one';
   const handoff=await post({action:'handoff',id:draft.id,text:'Draf disunting'});assert.equal(handoff.status,200);
   const body=await handoff.json();assert.equal(body.url,'https://wa.me/60173559147?text=Draf%20disunting');assert.equal(writes,1);

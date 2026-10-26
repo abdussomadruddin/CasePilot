@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseUrl } from "@/lib/supabase";
 import { leadWhatsAppUrl } from "@/lib/whatsapp-contact";
 import { followUpWhatsAppUrls } from "@/lib/follow-up-whatsapp";
-import { AiError, chatDigest, encryptionKey, generateDraft, latestMessages, murpatiRead, normalizedPhone, openSecret, optedOut, redactContext, sealSecret, uuid } from "@/lib/server/ai-follow-up-core";
+import { AiError, chatDigest, conversationContext, encryptionKey, generateDraft, latestMessages, murpatiRead, normalizedPhone, openSecret, optedOut, sealSecret, uuid } from "@/lib/server/ai-follow-up-core";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -32,7 +32,7 @@ async function settings(db: SupabaseClient) { return checked(await db.from("ai_f
 async function snapshot(db: SupabaseClient, id: string): Promise<string> { return checked(await db.rpc("ai_lead_snapshot", { p_lead_id: id })); }
 async function leadFor(actor: Actor, id: string, contactRequired = true) {
   if (!uuid(id)) throw new AiError("Lead tidak sah.");
-  let query = actor.db.from("leads").select("id,owner_id,customer_name,customer_phone,whatsapp_username,car_brand,car_model,status,source_note,receipt_id").eq("id", id).is("deleted_at", null);
+  let query = actor.db.from("leads").select("id,owner_id,customer_name,customer_phone,whatsapp_username,status,receipt_id").eq("id", id).is("deleted_at", null);
   if (!actor.admin) query = query.eq("owner_id", actor.userId);
   const lead = checked(await query.maybeSingle());
   if (!lead || (contactRequired && lead.status === "rejected")) throw new AiError("Lead tidak tersedia atau akses ditolak.", 403);
@@ -148,23 +148,17 @@ async function handlePost(req: NextRequest) {
       checked(await actor.db.from("ai_follow_up_drafts").insert({ id, user_id: actor.userId, lead_id: lead.id, session_id: p.sessionId, phone: "", revision: config.revision, snapshot: version, recipient_phone: lead.customer_phone || "", recipient_username: lead.whatsapp_username || "" }));
       const device = await verifiedDevice(actor, key, p.sessionId);
       const messages = await latestMessages(key, device.sessionId, normalizedPhone(lead.customer_phone || ""));
-      const notes = checked(await actor.db.from("lead_notes").select("body").eq("lead_id", lead.id).order("created_at", { ascending: false }).limit(10));
-      const linkedCase = checked(await actor.db.from("cases").select("car_model,status,remark").eq("lead_id", lead.id).eq("owner_id", lead.owner_id).is("deleted_at", null).maybeSingle());
+      const context = conversationContext(messages);
       if (version !== await snapshot(actor.db, lead.id)) throw new AiError("Maklumat Lead atau Case berubah. Jana semula.", 409);
       const blocked = optedOut(messages);
-      const result = blocked ? { text: "", blocked: true, reason: "Pelanggan meminta supaya tidak dihubungi. Draf jualan disekat." } : manual ? { text: "", blocked: false, reason: "" } : await generateDraft(openSecret(config.openai_secret, "openai"), {
-        lead: { name: redactContext(lead.customer_name || ""), brand: lead.car_brand, model: lead.car_model, status: lead.status,
-          inquiry: redactContext((lead.source_note || "").slice(0, 4000)), notes: notes?.map((n) => redactContext(n.body.slice(0, 2000))) },
-        case: linkedCase ? { model: linkedCase.car_model, status: linkedCase.status, remark: redactContext((linkedCase.remark || "").slice(0, 3000)) } : null,
-        conversation: messages.map((m) => ({ at: m.timestamp, from: m.is_from_me ? "adviser" : "customer", text: redactContext(m.content.slice(0, 2000)) })),
-      });
+      const result = blocked ? { text: "", blocked: true, reason: "Pelanggan meminta supaya tidak dihubungi. Draf jualan disekat." } : manual ? { text: "", blocked: false, reason: "" } : await generateDraft(openSecret(config.openai_secret, "openai"), context);
       // Revalidate permissions and configuration after the external generation.
       await leadFor(actor, lead.id); await ownDevice(actor, device.sessionId);
       const current = await settings(actor.db);
       if (current?.revision !== config.revision || version !== await snapshot(actor.db, lead.id)) throw new AiError("Maklumat atau tetapan berubah. Jana semula.", 409);
       const expiresAt = new Date(Date.now() + 15 * 60000).toISOString();
       checked(await actor.db.from("ai_follow_up_drafts").update({ outcome: result.blocked ? "blocked" : "ready", phone: device.phone, conversation_hash: chatDigest(messages), expires_at: expiresAt }).eq("id", id));
-      return json({ id, ...result, provider: manual ? "murpati_manual" : "openai", device, recipient: lead.customer_phone || `@${lead.whatsapp_username}`, customerName: lead.customer_name || "Lead", source: messages.length ? "conversation" : "notes", lastMessageAt: messages.at(-1)?.timestamp || null, expiresAt });
+      return json({ id, ...result, provider: manual ? "murpati_manual" : "openai", device, recipient: lead.customer_phone || `@${lead.whatsapp_username}`, customerName: lead.customer_name || "Lead", source: "conversation", lastMessageAt: messages.at(-1)?.timestamp || null, expiresAt });
     } catch (error) {
       await actor.db.from("ai_follow_up_drafts").update({ outcome: "failed" }).eq("id", id).eq("outcome", "generating");
       throw error;

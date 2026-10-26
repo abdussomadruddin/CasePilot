@@ -69,16 +69,16 @@ Before enabling the feature:
 
 Generation is explicit, with one request per user at a time and a default limit of
 50 generation attempts per user per Malaysia calendar day (Admin can change 1–500).
-The app reads the latest 100 messages within 30 days using an exact phone JID.
+The app resolves the exact phone number against Murpati chat-list identities, then reads the latest 100 messages within 30 days. It never matches by display name or treats an opaque LID as a phone number.
 No conversation polling, media download, Murpati send, or Murpati queue calls occur.
+AI receives WhatsApp conversation text only, with the final exchange prioritised. Lead and Case notes are never passed to the model. Empty or unreadable history stops generation instead of producing a notes-based fallback.
 The app stores action metadata and encrypted credentials only, never chat/draft text.
 OpenAI calls use `store:false`; provider-level retention policies still apply.
 
 Drafts expire after 15 minutes and are rechecked against recipient, receipt, Lead,
 notes, Case, settings, assignment, device connection and conversation before handoff.
 A successful handoff records **AI Follow Up — WhatsApp dibuka**, then opens a wa.me
-link with prefilled text. Sending remains manual in WhatsApp. A username-only lead
-uses notes and requires copying the draft before opening WhatsApp. Actual sending,
+link with prefilled text. Sending remains manual in WhatsApp. A username-only lead cannot generate a contextual draft until a phone-linked conversation can be verified. Actual sending,
 delivery and the active WhatsApp account on the user's device cannot be confirmed.
 
 Run `pnpm test:ai-follow-up`, `pnpm lint`, `pnpm typecheck`, and `pnpm build` before
