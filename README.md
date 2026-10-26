@@ -60,7 +60,7 @@ Before enabling the feature:
    The encryption key must be base64 encoding of 32 cryptographically random bytes.
    Keep it stable and backed up. Never use a `NEXT_PUBLIC_` variable for either secret.
 3. Admin enters the OpenAI and Murpati keys in the app. The OpenAI model is
-   `gpt-5-mini`; AI billing belongs to the Admin's OpenAI account. Murpati is read-only.
+   `gpt-6-luna`; AI billing belongs to the Admin's OpenAI account. Murpati is read-only.
 4. Check Murpati devices, then assign each regular device to its number's owner.
    Changing the Murpati key clears assignments so the new account must be reviewed.
    Official Cloud API devices are excluded because Murpati REST history does not

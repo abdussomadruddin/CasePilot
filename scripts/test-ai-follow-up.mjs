@@ -44,7 +44,7 @@ test('draft generation sends no tools, no persistence, safe schema and bounded o
   const fetcher = async (url, options) => {
     assert.equal(url, 'https://api.openai.com/v1/responses');
     const body = JSON.parse(options.body);
-    assert.equal(body.store,false); assert.equal(body.tools,undefined); assert.equal(body.model,'gpt-5-mini'); assert.equal(body.text.format.strict,true);
+    assert.equal(body.store,false); assert.equal(body.tools,undefined); assert.equal(body.model,'gpt-6-luna'); assert.equal(body.reasoning.effort,'none'); assert.equal(body.text.format.strict,true);
     return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({text:'Salam, saya kongsikan perkembangan terkini.',blocked:false,reason:''})}]}]});
   };
   assert.equal((await generateDraft('fixture',{notes:'context'},fetcher)).blocked,false);

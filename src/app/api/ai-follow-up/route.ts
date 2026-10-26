@@ -101,7 +101,7 @@ async function handlePost(req: NextRequest) {
       if (p.murpatiKey) { await sessions(p.murpatiKey); values.murpati_secret = sealSecret(p.murpatiKey, "murpati"); }
       if (p.openaiKey) {
         let res;
-        try { res = await fetch("https://api.openai.com/v1/models/gpt-5-mini", { headers: { Authorization: `Bearer ${p.openaiKey}` }, signal: AbortSignal.timeout(15000), cache: "no-store" }); }
+        try { res = await fetch("https://api.openai.com/v1/models/gpt-6-luna", { headers: { Authorization: `Bearer ${p.openaiKey}` }, signal: AbortSignal.timeout(15000), cache: "no-store" }); }
         catch { throw new AiError("OpenAI tidak dapat dihubungi. Key belum disimpan.", 502); }
         if (!res.ok) throw new AiError("Key AI atau akses model tidak dapat disahkan. Key belum disimpan.", 400);
         values.openai_secret = sealSecret(p.openaiKey, "openai");

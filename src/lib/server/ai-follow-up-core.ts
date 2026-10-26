@@ -71,7 +71,7 @@ export async function generateDraft(key: string, context: unknown, fetcher = fet
   try {
     res = await fetcher("https://api.openai.com/v1/responses", {
       method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, cache: "no-store", signal: AbortSignal.timeout(45000),
-      body: JSON.stringify({ model: "gpt-5-mini", store: false, reasoning: { effort: "minimal" }, max_output_tokens: 1800,
+      body: JSON.stringify({ model: "gpt-6-luna", store: false, reasoning: { effort: "none" }, max_output_tokens: 1800,
         instructions: draftInstructions, input: JSON.stringify(context),
         text: { format: { type: "json_schema", name: "follow_up", strict: true, schema: { type: "object", properties: { text: { type: "string" }, blocked: { type: "boolean" }, reason: { type: "string" } }, required: ["text", "blocked", "reason"], additionalProperties: false } } },
       }),

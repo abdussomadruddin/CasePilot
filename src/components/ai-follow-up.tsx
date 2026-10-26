@@ -74,7 +74,7 @@ export function AiFollowUpSettings({ profile, onClose, provider, embedded = fals
         <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); void run("save_settings", { revision: settings.revision, openaiKey, murpatiKey, dailyLimit }, "Tetapan disimpan. Key lama telah diganti jika key baharu diisi."); }}>
           {provider !== "murpati" ? <label className="grid gap-2 text-sm">API key OpenAI<input type="password" autoComplete="new-password" spellCheck={false} className="field w-full min-w-0" maxLength={2048} value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value.trim())} placeholder={settings.configured ? "Isi hanya untuk menggantikan key" : "Masukkan key Admin"} disabled={busy} /></label> : null}
           {provider !== "openai" ? <label className="grid gap-2 text-sm">API key Murpati<input type="password" autoComplete="new-password" spellCheck={false} className="field w-full min-w-0" maxLength={2048} value={murpatiKey} onChange={(e) => setMurpatiKey(e.target.value.trim())} placeholder={settings.murpatiConfigured ? "Isi hanya untuk menggantikan key" : "Masukkan key akaun Murpati pusat"} disabled={busy} /></label> : null}
-          <p className="text-xs text-zinc-400">Medan kosong mengekalkan key lama. Mengganti key Murpati memerlukan penetapan device semula. OpenAI adalah pilihan: GPT-5 mini menggunakan key Admin. AI Murpati manual menggunakan kredit di Inbox Murpati.</p>
+          <p className="text-xs text-zinc-400">Medan kosong mengekalkan key lama. Mengganti key Murpati memerlukan penetapan device semula. OpenAI adalah pilihan: GPT-6 Luna menggunakan key Admin. AI Murpati manual menggunakan kredit di Inbox Murpati.</p>
           {provider !== "murpati" ? <label className="grid gap-2 text-sm">Had penjanaan seorang sehari<input className="field w-full" type="number" min={1} max={500} value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value))} disabled={busy} /></label> : null}
           <button className="primary-button" disabled={busy || !settings.encryptionReady}><Save className="h-4 w-4" />{busy ? "Menyimpan…" : "Simpan tetapan"}</button>
         </form>
@@ -103,28 +103,36 @@ export function AiFollowUpButton({ lead, profile, onRefresh }: { lead: LeadRecor
 function DraftDialog({ lead, onRefresh, onClose }: { lead: LeadRecord; onRefresh: () => Promise<void>; onClose: () => void }) {
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [device, setDevice] = useState("");
-  const [provider, setProvider] = useState<"openai" | "murpati_manual">("murpati_manual");
+  const [provider, setProvider] = useState<"openai" | "murpati_manual">("openai");
   const [draft, setDraft] = useState<AiDraft | null>(null);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const automaticAttempt = useRef("");
   const initialLead = useRef(`${lead.id}|${lead.updatedAt}|${lead.receiptId}`);
   const clickLock = useRef(false);
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    try { const s = await aiRequest<AiSettings>("settings"); setSettings(s); setDevice(s.devices[0]?.sessionId || ""); }
+    try { const s = await aiRequest<AiSettings>("settings"); setSettings(s); setProvider(s.configured ? "openai" : "murpati_manual"); setDevice(s.devices.length === 1 ? s.devices[0].sessionId : ""); }
     catch (e) { setError(errorText(e)); } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
   const stale = initialLead.current !== `${lead.id}|${lead.updatedAt}|${lead.receiptId}`;
-  async function generate() {
+  const generate = useCallback(async () => {
     if (clickLock.current || stale) return;
     clickLock.current = true; setBusy(true); setError(""); setDraft(null); setText(""); setCopied(false);
     try { const d = await aiRequest<AiDraft>("draft", { leadId: lead.id, sessionId: device, provider }); setDraft(d); setText(d.text); }
     catch (e) { setError(errorText(e)); } finally { setBusy(false); clickLock.current = false; }
-  }
+  }, [device, lead.id, provider, stale]);
+  useEffect(() => {
+    if (loading || !settings?.murpatiConfigured || !device || stale || (provider === "openai" && !settings.configured)) return;
+    const attempt = `${lead.id}|${device}|${provider}`;
+    if (automaticAttempt.current === attempt) return;
+    automaticAttempt.current = attempt;
+    void generate();
+  }, [loading, settings, device, stale, provider, lead.id, generate]);
   async function handoff() {
     if (!draft || clickLock.current || stale) return;
     if (!lead.customerPhone && !copied) { setError("Copy ayat dahulu untuk ditampal dalam chat username WhatsApp."); return; }
@@ -140,11 +148,11 @@ function DraftDialog({ lead, onRefresh, onClose }: { lead: LeadRecord; onRefresh
   return <Dialog title="AI Follow Up" busy={busy} onClose={onClose}>
     <p className="break-words font-medium">{draft?.customerName || lead.customerName || "Lead"} · {draft?.recipient || lead.customerPhone || `@${lead.whatsappUsername}`}</p>
     {loading ? <p role="status">Memuatkan device…</p> : settings ? <>
-      <div className="grid gap-2 text-sm"><label htmlFor="ai-follow-up-provider">Penyedia AI</label><select id="ai-follow-up-provider" className="field w-full min-w-0" disabled={busy} value={provider} onChange={(e) => { setProvider(e.target.value as "openai" | "murpati_manual"); setDraft(null); setText(""); setCopied(false); setError(""); }}><option value="murpati_manual">AI Murpati — kredit sedia ada (manual)</option><option value="openai">OpenAI — API key Admin</option></select></div>
+      <div className="grid gap-2 text-sm"><label htmlFor="ai-follow-up-provider">Penyedia AI</label><select id="ai-follow-up-provider" className="field w-full min-w-0" disabled={busy} value={provider} onChange={(e) => { setProvider(e.target.value as "openai" | "murpati_manual"); setDraft(null); setText(""); setCopied(false); setError(""); automaticAttempt.current = ""; }}><option value="murpati_manual">AI Murpati — kredit sedia ada (manual)</option><option value="openai">OpenAI — API key Admin</option></select></div>
       {provider === "murpati_manual" ? <p className="text-sm text-zinc-400">Jana ayat dalam Inbox Murpati menggunakan kredit akaun anda, kemudian Copy dan tampal di sini. CasePilot tidak menjana ayat melalui API Murpati.</p> : null}
       {(provider === "openai" && !settings.configured) || !settings.murpatiConfigured || !settings.devices.length ? <><p className="text-sm text-amber-300">{(provider === "openai" && !settings.configured) || !settings.murpatiConfigured ? "AI Follow Up belum disediakan." : "Tiada device ditetapkan kepada anda."} Hubungi Admin atau buka tetapan.</p><button className="secondary-button" onClick={() => { onClose(); openAiSettings(); }}>Buka tetapan AI Follow Up</button></> : <>
-        <div className="grid gap-2 text-sm"><label htmlFor="ai-follow-up-device">Nombor WhatsApp anda</label><select id="ai-follow-up-device" className="field w-full min-w-0" value={device} disabled={busy} onChange={(e) => { setDevice(e.target.value); setDraft(null); setText(""); setCopied(false); }}>{settings.devices.map((d) => <option key={d.sessionId} value={d.sessionId}>{d.name} · {d.phone}</option>)}</select></div>
-        <button className="secondary-button" disabled={busy || stale || !device} onClick={() => void generate()}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{provider === "murpati_manual" ? draft ? "Semak semula konteks" : "Sediakan draf manual" : draft ? "Jana semula" : "Jana draf"}</button>
+        <div className="grid gap-2 text-sm"><label htmlFor="ai-follow-up-device">Nombor WhatsApp anda</label><select id="ai-follow-up-device" className="field w-full min-w-0" value={device} disabled={busy} onChange={(e) => { setDevice(e.target.value); setDraft(null); setText(""); setCopied(false); setError(""); automaticAttempt.current = ""; }}><option value="">Pilih nombor WhatsApp anda</option>{settings.devices.map((d) => <option key={d.sessionId} value={d.sessionId}>{d.name} · {d.phone}</option>)}</select></div>
+        {busy ? <p role="status" className="flex items-center gap-2 text-sm text-zinc-300"><LoaderCircle className="h-4 w-4 animate-spin" />{provider === "openai" ? "Membaca conversation dan menyediakan draf…" : "Menyemak conversation…"}</p> : draft || error ? <button className="secondary-button" disabled={stale || !device} onClick={() => void generate()}><RefreshCw className="h-4 w-4" />{error && !draft ? "Cuba semula" : provider === "openai" ? "Buat draf baharu" : "Semak semula konteks"}</button> : null}
       </>}
     </> : <button className="secondary-button" onClick={() => void load()}>Cuba semula</button>}
     {stale ? <p role="alert" className="text-sm text-amber-300">Maklumat Lead berubah. Tutup dan buka semula AI Follow Up.</p> : null}
