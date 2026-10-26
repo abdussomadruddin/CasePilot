@@ -5,6 +5,7 @@ export type AiSettings = {
   members?: { id: string; name: string }[];
 };
 export type AiDraft = {
+  provider?: "openai" | "murpati_manual";
   id: string; text: string; blocked: boolean; reason: string; device: AiDevice;
   recipient: string; customerName: string; source: "conversation" | "notes";
   lastMessageAt: string | null; expiresAt: string;

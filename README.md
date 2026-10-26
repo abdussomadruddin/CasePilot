@@ -85,3 +85,17 @@ Run `pnpm test:ai-follow-up`, `pnpm lint`, `pnpm typecheck`, and `pnpm build` be
 release. Database tests use an isolated embedded PostgreSQL fixture, not production.
 Do not send real customer messages for smoke tests. Migration application and a
 production deployment are separate release steps.
+
+### Manual Murpati AI option
+
+AI Follow Up defaults to **AI Murpati — kredit sedia ada (manual)**. It does not
+require an OpenAI key. Prepare the manual draft, open Murpati Inbox in a separate
+tab, select your assigned sending number and the exact recipient, generate with
+Murpati AI credits, then copy/paste the text back into CasePilot. No Murpati draft
+API or automatic transfer is used. No message should be sent or scheduled in
+Murpati for this flow. CasePilot checks access and conversation before its normal
+atomic WhatsApp handoff. The 15-minute draft expiry still applies.
+
+The alternative **OpenAI — API key Admin** generates inside CasePilot and requires
+the central key configured under Integration → OpenAI Key. Switching provider or
+device clears the current draft. Merely opening Murpati never records a follow-up.

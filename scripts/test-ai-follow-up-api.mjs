@@ -83,6 +83,17 @@ test('API access and read-only Murpati contract',async(t)=>{
   assert.equal((await post({action:'draft',leadId,sessionId:'sess_owner'})).status,403);lead.owner_id=owner;
   assert.equal((await post({action:'draft',leadId,sessionId:'sess_other'})).status,403);assert.equal(external.length,0);
  });
+ await t.test('manual Murpati works without OpenAI key and never calls OpenAI',async()=>{
+  const saved=config.openai_secret;config.openai_secret=null;external=[];
+  try {
+   const res=await post({action:'draft',leadId,sessionId:'sess_owner',provider:'murpati_manual'});
+   assert.equal(res.status,200);const draft=await res.json();
+   assert.equal(draft.provider,'murpati_manual');assert.equal(draft.text,'');assert.equal(writes,0);
+   assert.ok(external.every(c=>c.host==='api.murpati.com'&&c.method==='GET'));
+   assert.equal((await post({action:'draft',leadId,sessionId:'sess_owner',provider:'openai'})).status,409);
+   assert.equal((await post({action:'draft',leadId,sessionId:'sess_owner',provider:'unknown'})).status,400);
+  } finally {config.openai_secret=saved;records=[];}
+ });
  await t.test('one cross-server generation and no chat fallback draft; no contact writes until handoff',async()=>{
   claimed=false;assert.equal((await post({action:'draft',leadId,sessionId:'sess_owner'})).status,429);claimed=true;
   const res=await post({action:'draft',leadId,sessionId:'sess_owner'});assert.equal(res.status,200);

@@ -133,7 +133,9 @@ async function handlePost(req: NextRequest) {
   if (p.action === "draft") {
     let lead = await leadFor(actor, p.leadId);
     const config = await settings(actor.db);
-    if (!config?.murpati_secret || !config.openai_secret) throw new AiError("AI Follow Up belum disediakan. Buka Account → AI Follow Up atau hubungi Admin.", 409);
+    const manual = p.provider === "murpati_manual";
+    if (p.provider !== undefined && !["openai", "murpati_manual"].includes(p.provider)) throw new AiError("Penyedia AI tidak sah.");
+    if (!config?.murpati_secret || (!manual && !config.openai_secret)) throw new AiError("AI Follow Up belum disediakan. Buka Account → AI Follow Up atau hubungi Admin.", 409);
     const key = openSecret(config.murpati_secret, "murpati");
     // Validate assignment before any external read, and claim a cross-server lease before API usage.
     await ownDevice(actor, p.sessionId);
@@ -150,7 +152,7 @@ async function handlePost(req: NextRequest) {
       const linkedCase = checked(await actor.db.from("cases").select("car_model,status,remark").eq("lead_id", lead.id).eq("owner_id", lead.owner_id).is("deleted_at", null).maybeSingle());
       if (version !== await snapshot(actor.db, lead.id)) throw new AiError("Maklumat Lead atau Case berubah. Jana semula.", 409);
       const blocked = optedOut(messages);
-      const result = blocked ? { text: "", blocked: true, reason: "Pelanggan meminta supaya tidak dihubungi. Draf jualan disekat." } : await generateDraft(openSecret(config.openai_secret, "openai"), {
+      const result = blocked ? { text: "", blocked: true, reason: "Pelanggan meminta supaya tidak dihubungi. Draf jualan disekat." } : manual ? { text: "", blocked: false, reason: "" } : await generateDraft(openSecret(config.openai_secret, "openai"), {
         lead: { name: redactContext(lead.customer_name || ""), brand: lead.car_brand, model: lead.car_model, status: lead.status,
           inquiry: redactContext((lead.source_note || "").slice(0, 4000)), notes: notes?.map((n) => redactContext(n.body.slice(0, 2000))) },
         case: linkedCase ? { model: linkedCase.car_model, status: linkedCase.status, remark: redactContext((linkedCase.remark || "").slice(0, 3000)) } : null,
@@ -162,7 +164,7 @@ async function handlePost(req: NextRequest) {
       if (current?.revision !== config.revision || version !== await snapshot(actor.db, lead.id)) throw new AiError("Maklumat atau tetapan berubah. Jana semula.", 409);
       const expiresAt = new Date(Date.now() + 15 * 60000).toISOString();
       checked(await actor.db.from("ai_follow_up_drafts").update({ outcome: result.blocked ? "blocked" : "ready", phone: device.phone, conversation_hash: chatDigest(messages), expires_at: expiresAt }).eq("id", id));
-      return json({ id, ...result, device, recipient: lead.customer_phone || `@${lead.whatsapp_username}`, customerName: lead.customer_name || "Lead", source: messages.length ? "conversation" : "notes", lastMessageAt: messages.at(-1)?.timestamp || null, expiresAt });
+      return json({ id, ...result, provider: manual ? "murpati_manual" : "openai", device, recipient: lead.customer_phone || `@${lead.whatsapp_username}`, customerName: lead.customer_name || "Lead", source: messages.length ? "conversation" : "notes", lastMessageAt: messages.at(-1)?.timestamp || null, expiresAt });
     } catch (error) {
       await actor.db.from("ai_follow_up_drafts").update({ outcome: "failed" }).eq("id", id).eq("outcome", "generating");
       throw error;
