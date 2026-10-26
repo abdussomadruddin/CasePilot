@@ -53,6 +53,7 @@ import { createPortal } from "react-dom";
 import { createRealtimeRefresh, createScopedRealtimeRefresh, mergeRealtimeRows } from "@/lib/realtime-refresh";
 import { MotionSurface, useTabScroll } from "@/components/motion-surface";
 import { readUiContext, writeUiContext } from "@/lib/ui-context";
+import { AiFollowUpSettings } from "@/components/ai-follow-up";
 import { PriorContactBadge } from "@/components/prior-contact-badge";
 import { hideLeadPhoneInNote } from "../../supabase/functions/_shared/lead-contact";
 
@@ -765,6 +766,12 @@ export function CaseDashboard() {
   const [pushMessage, setPushMessage] = useState("");
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  useEffect(() => {
+    const show = () => setAiSettingsOpen(true);
+    window.addEventListener("casepilot:ai-settings", show);
+    return () => window.removeEventListener("casepilot:ai-settings", show);
+  }, []);
   const [accountMode, setAccountMode] = useState<"name" | "password" | null>(null);
   const [logoutStep, setLogoutStep] = useState<0 | 1 | 2>(0);
   const [logoutError, setLogoutError] = useState("");
@@ -1465,6 +1472,7 @@ export function CaseDashboard() {
 
   const accountOverlays = profile ? (
     <>
+      {aiSettingsOpen && ["admin", "customer_service", "broker"].includes(profile.role) ? <AiFollowUpSettings profile={profile} onClose={() => setAiSettingsOpen(false)} /> : null}
       {accountMode ? (
         <AccountSettingsDialog
           key={accountMode}
@@ -1859,7 +1867,7 @@ export function CaseDashboard() {
     return (
       <>
         <RequiredNotificationSetup status={pushStatus} message={pushMessage} onEnable={handleEnableAlerts} onOpenMenu={() => setDrawerOpen(true)} />
-        {profile ? <AccountDrawer profile={profile} open={drawerOpen} profileMenuOpen={profileMenuOpen} onClose={() => { setDrawerOpen(false); setProfileMenuOpen(false); }} onToggleProfile={() => setProfileMenuOpen((current) => !current)} onEditName={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("name"); }} onEditPassword={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("password"); }} onSignOut={requestSignOut} /> : null}
+        {profile ? <AccountDrawer profile={profile} open={drawerOpen} profileMenuOpen={profileMenuOpen} onClose={() => { setDrawerOpen(false); setProfileMenuOpen(false); }} onToggleProfile={() => setProfileMenuOpen((current) => !current)} onEditName={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("name"); }} onEditPassword={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("password"); }} onAiSettings={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAiSettingsOpen(true); }} onSignOut={requestSignOut} /> : null}
         {accountOverlays}
       </>
     );
@@ -2263,7 +2271,7 @@ export function CaseDashboard() {
             </button>
           );
           })}
-          {profile ? <ProfileMenu profile={profile} open={profileMenuOpen} onToggle={() => setProfileMenuOpen((current) => !current)} onEditName={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("name"); }} onEditPassword={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("password"); }} onSignOut={requestSignOut} /> : null}
+          {profile ? <ProfileMenu profile={profile} open={profileMenuOpen} onToggle={() => setProfileMenuOpen((current) => !current)} onEditName={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("name"); }} onEditPassword={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAccountMode("password"); }} onAiSettings={() => { setDrawerOpen(false); setProfileMenuOpen(false); setAiSettingsOpen(true); }} onSignOut={requestSignOut} /> : null}
         </nav>
       </div>
 
@@ -2275,7 +2283,7 @@ export function CaseDashboard() {
         ] : []),
         { id: "cases", label: "Case", icon: FolderKanban, count: navigationCounts.cases },
         ...(["admin", "customer_service", "broker"].includes(role) ? [{ id: "appointments", label: "Appointment", icon: CalendarDays, count: navigationCounts.appointments }] : []),
-      ]} activeId={appSection === "leads" && leadViewJump === "followup" ? "lead_followup" : appSection} onNavigate={navigateSection} disabled={drawerOpen || isFormOpen || Boolean(accountMode)} /> : null}
+      ]} activeId={appSection === "leads" && leadViewJump === "followup" ? "lead_followup" : appSection} onNavigate={navigateSection} disabled={drawerOpen || isFormOpen || Boolean(accountMode) || aiSettingsOpen} /> : null}
 
       {isFormOpen ? (
         <CaseForm
@@ -2514,9 +2522,10 @@ type ProfileMenuProps = {
   onEditName: () => void;
   onEditPassword: () => void;
   onSignOut: () => void;
+  onAiSettings: () => void;
 };
 
-function ProfileMenu({ profile, open, onToggle, onEditName, onEditPassword, onSignOut }: ProfileMenuProps) {
+function ProfileMenu({ profile, open, onToggle, onEditName, onEditPassword, onSignOut, onAiSettings }: ProfileMenuProps) {
   return (
     <div className="mt-auto border-t border-zinc-800 pt-3">
       <button type="button" className="flex w-full items-center gap-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={onToggle} aria-expanded={open} aria-label="Account options">
@@ -2526,18 +2535,19 @@ function ProfileMenu({ profile, open, onToggle, onEditName, onEditPassword, onSi
       {open ? <div className="grid gap-1 pt-1">
         <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-zinc-200 hover:bg-zinc-900" onClick={onEditName}><Pencil className="h-4 w-4" />Edit name</button>
         <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-zinc-200 hover:bg-zinc-900" onClick={onEditPassword}><KeyRound className="h-4 w-4" />Change password</button>
+        {["admin", "customer_service", "broker"].includes(profile.role) ? <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-zinc-200 hover:bg-zinc-900" onClick={onAiSettings}><PlugZap className="h-4 w-4" />AI Follow Up</button> : null}
         <button type="button" className="flex items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-red-200 hover:bg-red-950/50" onClick={onSignOut}><LogOut className="h-4 w-4" />Logout</button>
       </div> : null}
     </div>
   );
 }
 
-function AccountDrawer({ profile, open, profileMenuOpen, onClose, onToggleProfile, onEditName, onEditPassword, onSignOut }: Omit<ProfileMenuProps, "onToggle"> & { profileMenuOpen: boolean; onClose: () => void; onToggleProfile: () => void }) {
+function AccountDrawer({ profile, open, profileMenuOpen, onClose, onToggleProfile, onEditName, onEditPassword, onSignOut, onAiSettings }: Omit<ProfileMenuProps, "onToggle"> & { profileMenuOpen: boolean; onClose: () => void; onToggleProfile: () => void }) {
   return <div className={`casepilot-drawer fixed inset-0 z-50 ${open ? "casepilot-drawer-open" : ""}`} role={open ? "dialog" : undefined} aria-modal={open ? "true" : undefined} aria-label="Navigation" aria-hidden={!open} inert={!open}>
     <button type="button" className="casepilot-drawer-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm" aria-label="Close navigation" onClick={onClose} />
     <nav className="casepilot-drawer-panel absolute inset-y-0 left-0 flex w-[min(19rem,84vw)] flex-col border-r border-zinc-700 bg-zinc-950 p-5 shadow-2xl" aria-label="Main navigation">
       <div className="flex items-center justify-between"><strong>CasePilot</strong><button type="button" className="icon-button" onClick={onClose} aria-label="Close navigation"><X className="h-5 w-5" /></button></div>
-      <ProfileMenu profile={profile} open={profileMenuOpen} onToggle={onToggleProfile} onEditName={onEditName} onEditPassword={onEditPassword} onSignOut={onSignOut} />
+      <ProfileMenu profile={profile} open={profileMenuOpen} onToggle={onToggleProfile} onEditName={onEditName} onEditPassword={onEditPassword} onAiSettings={onAiSettings} onSignOut={onSignOut} />
     </nav>
   </div>;
 }
