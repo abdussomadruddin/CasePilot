@@ -67,12 +67,12 @@ Before enabling the feature:
    support them. Users can choose only devices assigned to them; they cannot assign
    devices themselves. Each session has one owner.
 
-Generation is explicit, with one request per user at a time and a default limit of
+Manual and morning generation share one request per user at a time and a default limit of
 50 generation attempts per user per Malaysia calendar day (Admin can change 1–500).
 The app resolves the exact phone number against Murpati chat-list identities, then reads the latest 100 messages within 30 days. It never matches by display name or treats an opaque LID as a phone number.
 No conversation polling, media download, Murpati send, or Murpati queue calls occur.
 AI receives WhatsApp conversation text only, with the final exchange prioritised. Lead and Case notes are never passed to the model. Empty or unreadable history stops generation instead of producing a notes-based fallback.
-The app stores action metadata and encrypted credentials only, never chat/draft text.
+The app stores action metadata, encrypted credentials and temporary encrypted morning drafts. Conversation text is not archived.
 OpenAI calls use `store:false`; provider-level retention policies still apply.
 
 Drafts expire after 15 minutes and are rechecked against recipient, receipt, Lead,
@@ -121,8 +121,16 @@ drafts and requires reviewing device assignments again.
 
 Admin can edit central closing rules/stages in **Integration → AI Playbook** and approved business facts in **Knowledge Base**. The migration seeds eight editable stages from the supplied sales flow, with an empty knowledge base. Save is explicit and version checked. Failed saves keep local form input; conflicts offer the server version for review before choosing which content to keep.
 
-Drafts use only WhatsApp messages for customer context, plus relevant active knowledge within its Malaysia date window. Model/variant scopes match phrases from the actual conversation (comma-separated aliases are supported); at most eight entries are included. The dialog shows the detected stage, reason, next action and referenced entries. Correcting a stage saves metadata for that Lead/device and regenerates; a correction anchors that stage until conversation changes. WON/LOST stop sales drafts, and opt-out remains a separate block. No lead/case notes, chat archive, persistent draft text, scheduling, scoring or automatic sending is added.
+Drafts use only WhatsApp messages for customer context, plus relevant active knowledge within its Malaysia date window. Model/variant scopes match phrases from the actual conversation (comma-separated aliases are supported); at most eight entries are included. The dialog shows the detected stage, reason, next action and referenced entries. Correcting a stage saves metadata for that Lead/device and regenerates; a correction anchors that stage until conversation changes. WON/LOST stop sales drafts, and opt-out remains a separate block. No lead/case notes, chat archive, scoring or automatic sending is added.
 
 Apply `20261026120314_ai_sales_playbook.sql` before deploying this feature. New tables are server-only with RLS enabled. Both the API and atomic WhatsApp handoff check playbook/stage versions and knowledge expiry. Existing generated drafts must be regenerated after rollout. No production migration or deployment is implied by a local test.
 
 `pnpm test:ai-follow-up` covers defaults, knowledge selection/expiry, structured output validation, Admin/owner/device access, optimistic concurrency, terminal stages, handoff invalidation and existing follow-up counts. Sales scenarios use deterministic provider fixtures; they do not send customer messages or assert live-model wording quality.
+
+### Morning prepared drafts
+
+At 08:30 Malaysia time, prepare drafts for contacted Leads due at 09:30 (last follow-up activity at least 24 hours earlier, count below four). Preparation runs in a bounded server queue until noon, with at most three attempts per job. It shares the existing daily OpenAI allowance and never changes contact status or follow-up counts. Accounts without an assigned device, ambiguous device selection, disabled preferences, terminal stages or unavailable conversation are skipped/blocked.
+
+Users can disable preparation and choose their own primary device in AI Follow Up settings. Drafts use the existing WhatsApp-only context, Playbook and Knowledge Base. The encrypted payload is available only to its owner/device until the end of the Malaysia day; handoff clears it and the next morning queue purges expired payloads. Cached drafts load immediately, while opening WhatsApp still rechecks current conversation and versions. Changed context requires regeneration. No customer message is sent automatically.
+
+Release order: apply `20261027163001_ai_morning_drafts.sql`, deploy the application, then apply `20261027163043_ai_morning_drafts.sql` to activate the schedule. The scheduler uses a dedicated Vault credential, not the service role key. Existing reminder schedules remain unchanged. Verify cron activation and a read-only production check during release; local implementation does not activate the schedule.

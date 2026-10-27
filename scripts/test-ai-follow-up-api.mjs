@@ -4,20 +4,21 @@ import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import ts from 'typescript';
 import { defaultSalesPlaybook } from '../src/lib/ai-sales-playbook.ts';
+import { morningDay,morningCutoff,morningExpiry,draftPurpose } from '../src/lib/ai-morning-drafts.ts';
 import { sealSecret } from '../src/lib/server/ai-follow-up-core.ts';
 const owner='00000000-0000-0000-0000-000000000001',other='00000000-0000-0000-0000-000000000002',leadId='00000000-0000-0000-0000-000000000010';
 process.env.SUPABASE_SERVICE_ROLE_KEY='fixture-service';
 process.env.AI_SETTINGS_ENCRYPTION_KEY=randomBytes(32).toString('base64');
 let noHistory=false,optOut=false;
 let role='customer_service',active=true,snapshot='snapshot-one',claimed=true,external=[],records=[],writes=0;
-let book=defaultSalesPlaybook(),stageState=null;
+let book=defaultSalesPlaybook(),stageState=null,preference=null,workerJobs=[];
 const config={id:true,revision:1,daily_limit:50,openai_secret:sealSecret('fixture-openai','openai'),murpati_secret:sealSecret('fixture-murpati','murpati')};
 const devices=[{session_id:'sess_owner',user_id:owner,phone:'60177498085',name:'Owner'},{session_id:'sess_other',user_id:other,phone:'60111111111',name:'Other'}];
 const lead={id:leadId,owner_id:owner,customer_name:'Fixture',customer_phone:'60173559147',whatsapp_username:null,car_brand:'Honda',car_model:'City',status:'new',source_note:'City',receipt_id:'receipt'};
 function builder(table){
- let operation='read',payload,filters=[];
+ let operation='read',payload,filters=[],notEqual=[],includes=[],take=Infinity;
  const b={
-  select(){return b},eq(k,v){filters.push([k,v]);return b},is(){return b},order(){return b},limit(){return b},in(){return b},neq(){return b},
+  select(){return b},eq(k,v){filters.push([k,v]);return b},is(){return b},order(){return b},limit(n){take=n;return b},in(k,v){includes.push([k,v]);return b},neq(k,v){notEqual.push([k,v]);return b},
   insert(v){operation='insert';payload=v;return b},update(v){operation='update';payload=v;return b},delete(){operation='delete';return b},upsert(v){operation='upsert';payload=v;return b},
   async single(){return execute(true)},async maybeSingle(){return execute(true)},then(resolve,reject){return execute(false).then(resolve,reject)}
  };
@@ -28,11 +29,14 @@ function builder(table){
   if(table==='ai_sales_playbook')rows=[{id:true,...book}];
   if(table==='ai_sales_stage_state')rows=stageState?[stageState]:[];
   if(table==='ai_device_assignments')rows=devices;
+  if(table==='ai_morning_preferences')rows=preference?[preference]:[];
+  if(table==='ai_morning_jobs')rows=workerJobs;
   if(table==='leads')rows=[lead];
   if(table==='lead_notes')rows=[{body:'City, tidak perlu reka harga.'}];
   if(table==='ai_follow_up_drafts')rows=records;
-  rows=rows.filter(row=>filters.every(([k,v])=>row[k]===v));
+  rows=rows.filter(row=>filters.every(([k,v])=>row[k]===v)&&notEqual.every(([k,v])=>row[k]!==v)&&includes.every(([k,v])=>v.includes(row[k]))).slice(0,take);
   if(operation==='insert'&&table==='ai_follow_up_drafts')records.push({...payload,ticket:'00000000-0000-0000-0000-000000000030',outcome:'generating',expires_at:new Date(Date.now()+900000).toISOString()});
+  if(operation==='upsert'&&table==='ai_morning_preferences')preference=payload;
   if(operation==='update')for(const row of rows)Object.assign(row,payload);
   return {data:single?(rows[0]||null):rows,error:null};
  }
@@ -41,6 +45,8 @@ function builder(table){
 const client={auth:{getUser:async()=>({data:{user:{id:owner}},error:null})},from:builder,rpc:async(name,p)=>{
  if(name==='save_ai_sales_playbook') { if(p.p_revision!==book.revision)return {data:null,error:{message:'conflict'}};book={revision:book.revision+1,rules:p.p_rules,stages:p.p_stages,knowledge:p.p_knowledge};return {data:book.revision,error:null}; }
  if(name==='save_ai_sales_stage') {if(p.p_revision!==(stageState?.revision||0))return {data:null,error:{message:'conflict'}};stageState={lead_id:p.p_lead,session_id:p.p_session,stage_id:p.p_stage,previous_stage_id:p.p_previous,revision:(stageState?.revision||0)+1,corrected:p.p_corrected,conversation_hash:p.p_hash};return {data:stageState.revision,error:null};}
+ if(name==='authorize_ai_morning_worker')return {data:p.p_token==='fixture-worker',error:null};
+ if(name==='claim_ai_morning_jobs')return {data:workerJobs.filter(j=>j.status==='running'),error:null};
  if(name==='ai_lead_snapshot')return {data:snapshot,error:null};
  if(name==='claim_ai_generation')return {data:claimed,error:null};
  if(name==='open_ai_follow_up'){writes++;const row=records.find(r=>r.id===p.p_draft_id);row.outcome='opened';return {data:0,error:null};}
@@ -53,6 +59,7 @@ source=source.replace(/import \{ createClient, type SupabaseClient \} from "@sup
  .replace(/import \{ getSupabaseUrl \} from "@\/lib\/supabase";/,'const getSupabaseUrl = () => "https://fixture.supabase.co";')
  .replaceAll('"@/lib/whatsapp-contact"',JSON.stringify(new URL('../src/lib/whatsapp-contact.ts',import.meta.url).href))
  .replaceAll('"@/lib/follow-up-whatsapp"',JSON.stringify(new URL('../src/lib/follow-up-whatsapp.ts',import.meta.url).href))
+ .replaceAll('"@/lib/ai-morning-drafts"',JSON.stringify(new URL('../src/lib/ai-morning-drafts.ts',import.meta.url).href))
  .replaceAll('"@/lib/ai-sales-playbook"',JSON.stringify(new URL('../src/lib/ai-sales-playbook.ts',import.meta.url).href))
  .replaceAll('"@/lib/server/ai-follow-up-core"',JSON.stringify(new URL('../src/lib/server/ai-follow-up-core.ts',import.meta.url).href));
 const output=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
@@ -144,6 +151,42 @@ test('API access and read-only Murpati contract',async(t)=>{
   assert.equal((await post({action:'handoff',id:draft.id,text:'Beli lagi'})).status,409);stageState=null;
   optOut=true;external=[];
   try {const response=await post({action:'draft',leadId,sessionId:'sess_owner'});assert.equal(response.status,200);const body=await response.json();assert.equal(body.blocked,true);assert.equal(body.text,'');assert.match(body.reason,/tidak dihubungi/);assert.ok(!external.some(c=>c.host==='api.openai.com'));assert.equal((await post({action:'handoff',id:body.id,text:'Follow-up'})).status,409);}finally{optOut=false;}
+ });
+ await t.test('prepared ciphertext is owner/device/date scoped and stale versions never returned; cache retrieval uses no provider tokens',async()=>{
+  records=[];stageState=null;lead.status='contacted';lead.follow_up_count=0;lead.follow_up_activity_at=new Date(morningCutoff().getTime()-86400000-60000).toISOString();
+  const id='00000000-0000-0000-0000-000000000055',payload={id,text:'Draf pagi',blocked:false,provider:'openai',preparedAt:new Date().toISOString()};
+  records.push({id,user_id:owner,lead_id:leadId,session_id:'sess_owner',phone:devices[0].phone,recipient_phone:lead.customer_phone,recipient_username:'',prepared_for:morningDay(),outcome:'ready',revision:config.revision,playbook_revision:book.revision,stage_revision:0,snapshot,expires_at:morningExpiry(),cached_payload:sealSecret(JSON.stringify(payload),draftPurpose(owner,id))});
+  async function cached(session='sess_owner'){const req=new Request('http://localhost/api/ai-follow-up?action=prepared&leadId='+leadId+'&sessionId='+session,{headers:{Authorization:'Bearer fixture'}});req.nextUrl=new URL(req.url);return api.GET(req);}
+  external=[];let response=await cached();assert.equal(response.status,200);assert.equal((await response.json()).draft.text,'Draf pagi');assert.equal(external.length,0);assert.ok(!records[0].cached_payload.includes('Draf pagi'));
+  assert.equal((await cached('sess_other')).status,403);
+  book.revision++;assert.equal((await (await cached()).json()).draft,null);book.revision--;
+  snapshot='new context';assert.equal((await (await cached()).json()).draft,null);snapshot='snapshot-one';
+  lead.customer_phone='60199999999';assert.equal((await (await cached()).json()).draft,null);lead.customer_phone='60173559147';
+  records[0].prepared_for='2020-01-01';assert.equal((await (await cached()).json()).draft,null);records=[];
+ });
+ await t.test('morning worker prepares encrypted drafts, reuses cache and skips disabled owners',async()=>{
+  const NativeDate=globalThis.Date,fixed=NativeDate.parse('2026-10-28T01:00:00Z');
+  globalThis.Date=class extends NativeDate { constructor(...args){super(...(args.length?args:[fixed]));} static now(){return fixed;} };
+  try {
+   records=[];stageState=null;preference=null;external=[];
+   lead.status='contacted';lead.follow_up_count=0;lead.follow_up_activity_at='2026-10-27T01:30:00Z';
+   const job={id:'job-one',user_id:owner,lead_id:leadId,session_id:'sess_owner',batch_day:morningDay(),attempts:1,lease_id:'lease-one',status:'running'};
+   workerJobs=[job];
+   const run=()=>api.POST(new Request('http://localhost/api/ai-follow-up',{method:'POST',headers:{'x-casepilot-ai-worker':'fixture-worker'},body:'{}'}));
+   const beforeWrites=writes;
+   let response=await run();assert.equal(response.status,200);assert.equal((await response.json()).ready,1);
+   assert.equal(job.status,'ready');assert.ok(records[0].cached_payload);assert.ok(!records[0].cached_payload.includes('payslip'));assert.equal(writes,beforeWrites);assert.equal(lead.follow_up_count,0);
+   const calls=external.length;job.status='running';response=await run();assert.equal((await response.json()).ready,1);assert.equal(external.length,calls);
+   active=false;job.status='running';await run();assert.equal(job.status,'skipped');assert.equal(external.length,calls);active=true;
+   records=[];stageState=null;claimed=false;job.status='running';await run();assert.equal(job.status,'queued');
+   job.status='running';job.attempts=3;await run();assert.equal(job.status,'failed');claimed=true;
+  } finally {globalThis.Date=NativeDate;active=true;claimed=true;workerJobs=[];records=[];stageState=null;}
+ });
+ await t.test('morning preference cannot choose another user device; worker rejects forged credentials',async()=>{
+  assert.equal((await post({action:'morning_preference',enabled:true,sessionId:'sess_other'})).status,403);
+  assert.equal((await post({action:'morning_preference',enabled:true,sessionId:'sess_owner'})).status,200);
+  assert.equal(preference.session_id,'sess_owner');
+  for(const token of ['','wrong']){const response=await api.POST(new Request('http://localhost/api/ai-follow-up',{method:'POST',headers:{'Content-Type':'application/json','x-casepilot-ai-worker':token},body:'{}'}));assert.equal(response.status,401);}
  });
  }finally{globalThis.fetch=originalFetch;}
 });

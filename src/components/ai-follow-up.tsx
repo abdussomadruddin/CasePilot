@@ -87,6 +87,7 @@ export function AiFollowUpSettings({ profile, onClose, provider, embedded = fals
           {devices.map((device) => <div key={device.sessionId} className="grid gap-2 rounded-md border border-zinc-700 p-3"><p className="break-words text-sm">{device.name} · {device.phone} · {device.status}</p><label className="sr-only" htmlFor={`owner-${device.sessionId}`}>Pemilik {device.phone}</label><select id={`owner-${device.sessionId}`} className="field w-full min-w-0" disabled={busy} value={owners[device.sessionId] ?? settings.devices.find((d) => d.sessionId === device.sessionId)?.userId ?? ""} onChange={(e) => setOwners((v) => ({ ...v, [device.sessionId]: e.target.value }))}><option value="">Pilih pemilik</option>{settings.members?.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select><button className="secondary-button" disabled={busy || !(owners[device.sessionId] ?? settings.devices.find((d) => d.sessionId === device.sessionId)?.userId)} onClick={() => void run("assign", { sessionId: device.sessionId, userId: owners[device.sessionId] ?? settings.devices.find((d) => d.sessionId === device.sessionId)?.userId }, "Pemilik device disimpan.")}>Tetapkan pemilik</button></div>)}
         </div> : null}
       </> : <p className="text-sm text-zinc-400">Admin mengurus sambungan dan penetapan nombor. Pilih device anda ketika menjana AI Follow Up.</p>}
+      {provider !== "openai" ? <div className="grid gap-3 border-t border-zinc-800 pt-4"><h3 className="font-semibold">Draf Follow Up Due pagi</h3><p className="text-sm text-zinc-400">Mula 8:30 pagi Malaysia untuk Lead yang due pada 9:30 pagi. Menggunakan token OpenAI Admin dan had harian sedia ada. Tiada penghantaran automatik.</p>{settings.morningSummary?<p className="text-xs text-zinc-400">Hari ini: {settings.morningSummary.ready} siap · {settings.morningSummary.pending} menunggu · {settings.morningSummary.blocked} disekat · {settings.morningSummary.failed} gagal/dilangkau</p>:null}<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.morningEnabled!==false} disabled={busy} onChange={e=>void run("morning_preference",{enabled:e.target.checked,sessionId:settings.selectedDevice},"Tetapan draf pagi disimpan.")}/>Sediakan draf pagi untuk akaun saya</label><label className="grid gap-1 text-sm">Device untuk draf pagi<select className="field w-full min-w-0" disabled={busy} value={settings.selectedDevice} onChange={e=>void run("morning_preference",{enabled:settings.morningEnabled!==false,sessionId:e.target.value},"Device draf pagi disimpan.")}><option value="">{settings.devices.filter(d=>d.userId===profile.id || !d.userId).length>1?"Pilih satu device sendiri":"Tiada device sendiri / pilih device"}</option>{settings.devices.filter(d=>d.userId===profile.id || !d.userId).map(d=><option key={d.sessionId} value={d.sessionId}>{d.name} · {d.phone}</option>)}</select></label>{!settings.selectedDevice?<p className="text-xs text-amber-300">Tiada device utama: draf pagi dilangkau. Tetapkan satu device milik anda.</p>:null}</div>:null}
       {provider !== "openai" ? <div className="grid gap-2"><h3 className="font-semibold">Device ditetapkan</h3>{settings.devices.length ? settings.devices.map((d) => <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-zinc-900 p-3 text-sm" key={d.sessionId}><span className="min-w-0 break-words">{d.name} · {d.phone}{admin ? ` · ${settings.members?.find((m) => m.id === d.userId)?.name || "Pemilik"}` : ""}</span>{admin ? <button className="secondary-button" disabled={busy} onClick={() => void run("unassign", { sessionId: d.sessionId }, "Penetapan ditarik balik.")}>Tarik balik</button> : null}</div>) : <p className="text-sm text-zinc-400">Tiada device ditetapkan.</p>}</div> : null}
     </> : null}
     {error ? <div role="alert" className="grid gap-2 text-sm text-red-300"><p>{error}</p><button className="secondary-button" disabled={busy} onClick={() => void load()}>Muat semula tetapan</button></div> : null}
@@ -115,15 +116,22 @@ function DraftDialog({ lead, onRefresh, onClose }: { lead: LeadRecord; onRefresh
   const clickLock = useRef(false);
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    try { const s = await aiRequest<AiSettings>("settings"); setSettings(s); setProvider(s.configured ? "openai" : "murpati_manual"); setDevice(s.devices.length === 1 ? s.devices[0].sessionId : ""); }
+    try { const s = await aiRequest<AiSettings>("settings"); setSettings(s); setProvider(s.configured ? "openai" : "murpati_manual"); setDevice(s.selectedDevice || (s.devices.length === 1 ? s.devices[0].sessionId : "")); }
     catch (e) { setError(errorText(e)); } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
   const stale = initialLead.current !== `${lead.id}|${lead.updatedAt}|${lead.receiptId}`;
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (preferPrepared = false) => {
     if (clickLock.current || stale) return;
     clickLock.current = true; setBusy(true); setError(""); setDraft(null); setText(""); setCopied(false);
-    try { const d = await aiRequest<AiDraft>("draft", { leadId: lead.id, sessionId: device, provider }); setDraft(d); setText(d.text); }
+    try {
+      if (preferPrepared && provider==="openai") {
+        const cached=await aiRequest<{draft:AiDraft|null;preparation?:{status:string;last_error?:string}|null}>("prepared",undefined,undefined,{leadId:lead.id,sessionId:device});
+        if (cached.draft) {setDraft(cached.draft);setText(cached.draft.text);return;}
+        if (cached.preparation && ["queued","running"].includes(cached.preparation.status)) throw new Error("Draf pagi sedang disediakan di server. Cuba semula sebentar lagi.");
+      }
+      const d = await aiRequest<AiDraft>("draft", { leadId: lead.id, sessionId: device, provider }); setDraft(d); setText(d.text);
+    }
     catch (e) { setError(errorText(e)); } finally { setBusy(false); clickLock.current = false; }
   }, [device, lead.id, provider, stale]);
   useEffect(() => {
@@ -131,7 +139,7 @@ function DraftDialog({ lead, onRefresh, onClose }: { lead: LeadRecord; onRefresh
     const attempt = `${lead.id}|${device}|${provider}`;
     if (automaticAttempt.current === attempt) return;
     automaticAttempt.current = attempt;
-    void generate();
+    void generate(true);
   }, [loading, settings, device, stale, provider, lead.id, generate]);
   async function correctStage(stageId: string) {
     if (!draft || clickLock.current || stale) return;
@@ -167,6 +175,7 @@ function DraftDialog({ lead, onRefresh, onClose }: { lead: LeadRecord; onRefresh
     </> : <button className="secondary-button" onClick={() => void load()}>Cuba semula</button>}
     {stale ? <p role="alert" className="text-sm text-amber-300">Maklumat Lead berubah. Tutup dan buka semula AI Follow Up.</p> : null}
     {draft ? <>
+      {draft.preparedAt?<p role="status" className="rounded-md border border-emerald-900 bg-emerald-950/30 p-3 text-sm text-emerald-200">Draf pagi sudah siap · {new Date(draft.preparedAt).toLocaleString("en-MY",{timeZone:"Asia/Kuala_Lumpur"})}. Conversation disemak semula sebelum WhatsApp dibuka.</p>:null}
       {draft.stages?.length ? <div className="grid gap-3 rounded-lg border border-zinc-700 p-3 text-sm">
         <label className="grid gap-1">Fasa closing<select className="field w-full min-w-0" value={draft.stageId || ""} disabled={busy || stale} onChange={e=>void correctStage(e.target.value)}><option value="" disabled>Belum dikesan</option>{draft.stages.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         {draft.previousStageId?<p className="text-zinc-400">Sambung fasa: {draft.stages.find(s=>s.id===draft.previousStageId)?.name || draft.previousStageId}</p>:null}

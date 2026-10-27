@@ -21,6 +21,7 @@ test('transactional AI follow-up permissions, idempotency and existing 4/6 rules
  await db.exec(await readFile(new URL('../supabase/migrations/20261018155202_lead_whatsapp_username.sql',import.meta.url),'utf8'));
  await db.exec(await readFile(new URL('../supabase/migrations/20261026055750_ai_follow_up.sql',import.meta.url),'utf8'));
  await db.exec(await readFile(new URL('../supabase/migrations/20261026120314_ai_sales_playbook.sql',import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../supabase/migrations/20261027163001_ai_morning_drafts.sql',import.meta.url),'utf8'));
  await db.exec(`insert into ai_follow_up_settings(id) values(true); insert into ai_device_assignments values ('sess_owner','${owner}','60123456789','CS',now()),('sess_admin','${admin}','60123456780','Admin',now());`);
  async function lead(status='new',count=0) {
    const id=randomUUID(); await db.query(`insert into leads(id,owner_id,customer_phone,status,follow_up_count,phone_revealed_at) values($1,$2,'60173559147',$3,$4,case when $3='new' then null else now() end)`,[id,owner,status,count]); return id;
@@ -98,6 +99,31 @@ test('transactional AI follow-up permissions, idempotency and existing 4/6 rules
   assert.equal((await db.query('select claim_ai_generation($1,$2) as ok',[owner,randomUUID()])).rows[0].ok,false);
   await db.exec('delete from ai_generation_locks; update ai_follow_up_settings set daily_limit=1');
   await assert.rejects(db.query('select claim_ai_generation($1,$2)',[owner,randomUUID()]),/Had harian/);
+ });
+ await t.test('morning queue is daily/idempotent, uses 9:30 cutoff and only own unambiguous device, bounds leases/retries and does not contact leads',async()=>{
+  await db.exec("delete from ai_generation_locks;update ai_follow_up_settings set daily_limit=50,openai_secret='fixture',murpati_secret='fixture'");
+  const day='2026-10-28',at=day+'T00:30:00Z';
+  const a=await lead('contacted'),b=await lead('contacted'),later=await lead('contacted'),capped=await lead('contacted',4);
+  await db.query("update leads set follow_up_activity_at='2026-10-27T01:30:00Z' where id=any($1::uuid[])",[[a,b,capped]]);
+  await db.query("update leads set follow_up_activity_at='2026-10-27T01:30:01Z' where id=$1",[later]);
+  assert.equal((await db.query('select enqueue_ai_morning_jobs($1) as n',[day+'T00:29:00Z'])).rows[0].n,0);
+  assert.equal((await db.query('select enqueue_ai_morning_jobs($1) as n',[at])).rows[0].n,2);
+  assert.equal((await db.query('select enqueue_ai_morning_jobs($1) as n',[at])).rows[0].n,0);
+  await db.query('update ai_morning_jobs set next_attempt_at=$1',[at]);
+  let jobs=(await db.query('select * from claim_ai_morning_jobs($1)',[at])).rows;assert.equal(jobs.length,1);assert.equal(jobs[0].attempts,1);
+  assert.equal((await db.query('select * from claim_ai_morning_jobs($1)',[at])).rows.length,0);
+  await db.query("update ai_morning_jobs set lease_until=$1 where status='running'",[at]);
+  await db.query("update ai_morning_jobs set next_attempt_at='2026-10-29' where id<>$1",[jobs[0].id]);
+  jobs=(await db.query('select * from claim_ai_morning_jobs($1)',[at])).rows;assert.equal(jobs.length,1);assert.equal(jobs[0].attempts,2);
+  await db.exec("update ai_morning_jobs set status='running',attempts=3,lease_until='2026-10-28T00:00:00Z'");
+  await db.query('select * from claim_ai_morning_jobs($1)',[at]);assert.equal((await db.query("select count(*)::int n from ai_morning_jobs where status='failed'")).rows[0].n,2);
+  assert.equal((await db.query('select follow_up_count from leads where id=$1',[a])).rows[0].follow_up_count,0);
+  assert.equal((await db.query("select count(*)::int n from lead_follow_up_actions where lead_id=any($1::uuid[])",[[a,b]])).rows[0].n,0);
+  const d1=await draft(a),d2=await draft(b);await db.query("update ai_follow_up_drafts set cached_payload='encrypted' where id=any($1::uuid[])",[[d1.id,d2.id]]);
+  await db.exec('delete from ai_generation_locks');await db.query('select claim_ai_generation($1,$2)',[owner,randomUUID()]);
+  assert.equal((await db.query("select count(*)::int n from ai_follow_up_drafts where id=any($1::uuid[]) and outcome='ready'",[[d1.id,d2.id]])).rows[0].n,2);
+  await open(d1);assert.equal((await db.query('select cached_payload from ai_follow_up_drafts where id=$1',[d1.id])).rows[0].cached_payload,null);
+  for(const role of ['anon','authenticated']){await db.exec(`set role ${role}`);try{await assert.rejects(db.query('select * from ai_morning_jobs'));await assert.rejects(db.query('select * from ai_morning_preferences'));await assert.rejects(db.query('select claim_ai_morning_jobs()'));}finally{await db.exec('reset role');}}
  });
  await db.close();
 });
