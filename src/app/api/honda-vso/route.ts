@@ -20,9 +20,11 @@ export async function POST(request: NextRequest) {
     const payload = await request.json();
     const data: VsoData = emptyVsoData();
     for (const key of vsoFields) {
-      if (typeof payload[key] !== "string" || payload[key].length > (key === "address" ? 1000 : 200)) throw new Error("Maklumat borang tidak sah.");
+      if (key.startsWith("dealer") && payload[key] === undefined) continue;
+      if (typeof payload[key] !== "string" || payload[key].length > (key === "dealerSnapshot" ? 5000 : key === "address" || key === "dealerAddress" ? 1000 : 200)) throw new Error("Maklumat borang tidak sah.");
       data[key] = payload[key].trim();
     }
+    if (data.dealerId && !data.dealerName) throw new Error("Isi nama dealer sebelum menjana PDF.");
     data.clearCustomerSignature = payload.clearCustomerSignature !== false;
     if (!data.customerName || !/^\d{4}-\d{2}-\d{2}$/.test(data.bookingDate)) throw new Error("Isi nama customer dan tarikh.");
     const numbers = ["sellingPrice", "discount", "numberPlate", "roadTax", "registrationFee", "ownershipFee", "accessories", "miscSales", "insurance", "ncd", "totalAmount", "bookingFeePaid", "totalOutstanding"] as const;

@@ -1,5 +1,6 @@
 import { rgb } from "pdf-lib";
 const FIELD_IDS = [
+  "dealerId", "dealerVersion", "dealerSnapshot", "dealerName", "dealerRegistration", "dealerAddress", "dealerPhone", "dealerEmail", "dealerFax",
   "bookingDate",
   "customerName",
   "nric",
@@ -121,6 +122,7 @@ export async function buildVsoPdf(template, data) {
  const bold = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
  if (data.clearCustomerSignature) cover(page, 32, 172, 160, 45);
  restoreFillLines(page, data);
+ drawDealerHeader(page, regular, bold, data);
  drawCustomer(page, regular, data);
  drawVehicle(page, regular, data);
  drawPricing(page, regular, bold, data, resolvePricing(data));
@@ -199,6 +201,21 @@ function drawPricing(page, font, bold, data, pricing) {
   drawFit(page, upper(data.paymentRef), 341, 293.8, 104, { font, size: 8.8, align: "center" });
 }
 
+function drawDealerHeader(page, font, bold, data) {
+  if (!data.dealerName) return; // Preserve original header for legacy drafts.
+  cover(page, 17, 773, 405, 50);
+  // The template has the old dealer's cheque payee and signed staff signatures.
+  cover(page, 67, 93, 510, 10);
+  drawFit(page, `3. All payment by CHEQUE should be crossed and made payable to ${data.dealerName}`, 68.04, 95.31, 505, { font, size: 6 });
+  cover(page, 255, 174, 135, 38);
+  cover(page, 440, 174, 135, 38);
+  drawFit(page, upper(data.dealerName), 18, 813.6, 398, { font: bold, size: 10 });
+  const address = wrapText(upperMultiline(data.dealerAddress), font, 7.5, 398, 2);
+  if (data.dealerRegistration) drawFit(page, `REG: ${upper(data.dealerRegistration)}`, 18, 804, 398, { font, size: 7.5 });
+  address.forEach((line, i) => drawFit(page, line, 18, 795 - i * 8.5, 398, { font, size: 7.5 }));
+  const contact = [data.dealerPhone && `Tel: ${data.dealerPhone}`, data.dealerFax && `Fax: ${data.dealerFax}`, data.dealerEmail].filter(Boolean).join("  |  ");
+  drawFit(page, contact, 18, 776.5, 398, { font, size: 7.5 });
+}
 function drawDealer(page, font, data) {
   drawFit(page, upper(data.salesAdvisorName), 279, 157, 107, { font, size: 7.1, align: "center" });
   drawFit(page, upper(data.salesAdvisorNric), 279, 141, 107, { font, size: 7.1, align: "center" });

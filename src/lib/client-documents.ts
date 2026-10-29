@@ -71,5 +71,5 @@ export async function saveBundle(bundle: ClientBundle, saveToken: string): Promi
   return data as ClientBundle;
 }
 export function asInvoice(data: DocumentData) { return data as InvoiceData; }
-export function asVso(data: DocumentData) { return data as VsoData; }
+export function asVso(data: DocumentData) { return { ...emptyVsoData(), ...data } as VsoData; }
 export function asReceipt(data: DocumentData) { return data as ReceiptData; }

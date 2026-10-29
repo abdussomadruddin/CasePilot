@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+import { emptyVsoData, buildVsoPdf } from '../src/lib/honda-vso.mjs';
+import { emptyDealer, validateDealer } from '../src/lib/vso-dealers.ts';
+test('dealer validation and legacy PDF remain compatible', async()=>{
+ assert.throws(()=>validateDealer(emptyDealer()));
+ const data=emptyVsoData();assert.equal(data.dealerName,'');
+ const template=await readFile(new URL('../assets/honda-vso-no-signature.pdf',import.meta.url));
+ const bytes=await buildVsoPdf(template,data);assert.ok(bytes.length>1000);
+ const profile=validateDealer({...emptyDealer(),dealerName:'Dealer Test',dealerAddress:'45 Jalan Test\n30100 Ipoh',dealerPhone:'05-1234567'});
+ const next={...data,...profile,customerName:'CUSTOMER TEST'};
+ assert.ok((await buildVsoPdf(template,next)).length>1000);
+ await assert.rejects(buildVsoPdf(template,{...next,dealerAddress:Array(100).fill('Alamat panjang').join(' ')}),/Alamat terlalu panjang/);
+});
+test('dealer RLS, Admin-only writes and compare-and-set conflict',async()=>{
+ const db=new PGlite();
+ const ids=['00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003'];
+ await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;create table profiles(id uuid primary key,role text,active boolean);grant select on profiles to authenticated;insert into profiles values('${ids[0]}','admin',true),('${ids[1]}','broker',true),('${ids[2]}','sales_manager',true);`);
+ await db.exec(await readFile(new URL('../supabase/migrations/20261029094737_vso_dealer_profiles.sql',import.meta.url),'utf8'));
+ const id='00000000-0000-0000-0000-000000000099';
+ const act=async(user,fn)=>{await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','${user}',false)`);try{return await fn();}finally{await db.exec('reset role');}};
+ const save=(version,active=true)=>db.query('select * from save_vso_dealer($1,$2,$3,$4)',[id,version,{...emptyDealer(),dealerName:'Dealer A'},active]);
+ await act(ids[0],()=>save(0));
+ await assert.rejects(act(ids[1],()=>save(1)),/Access denied/);
+ assert.equal((await act(ids[1],()=>db.query('select * from vso_dealers'))).rows.length,1);
+ assert.equal((await act(ids[2],()=>db.query('select * from vso_dealers'))).rows.length,0);
+ await assert.rejects(act(ids[2],()=>save(1)),/Access denied/);
+ await act(ids[0],()=>save(1,false));
+ await assert.rejects(act(ids[0],()=>save(1)),/DEALER_CONFLICT/);
+ assert.equal((await db.query('select version,active from vso_dealers')).rows[0].version,2);
+ await db.close();
+});

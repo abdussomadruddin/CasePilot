@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import { CarFront, FileCheck2, FileText, LoaderCircle, RotateCcw, Store, UserRound, Wallet, ClipboardList } from "lucide-react";
+import { VsoDealerPicker } from "@/components/vso-dealer-picker";
 import { exampleVsoData } from "@/lib/honda-vso-example";
 import { SavedPdfDownload } from "@/components/saved-pdf-download";
 import { getValidAccessToken } from "@/lib/auth";
@@ -13,7 +14,7 @@ const sections = [
   { title: "Customer", icon: UserRound, fields: [["bookingDate", "Tarikh", "date"], ["customerName", "Nama customer", "text"], ["nric", "NRIC / Passport", "text"], ["mobilePhone", "H/P", "tel"], ["homePhone", "Home", "tel"], ["officePhone", "Office", "tel"], ["address", "Alamat", "textarea"]] },
   { title: "Kenderaan", icon: CarFront, fields: [["model", "Model", "text"], ["variant", "Variant", "text"], ["colour", "Warna", "text"], ["salesType", "Sales type", "select"], ["estimatedDelivery", "Estimated delivery", "text"], ["referenceDealer", "Reference dealer", "text"], ["chassisNo", "Chassis no.", "text"], ["engineNo", "Engine no.", "text"]] },
   { title: "Harga", icon: Wallet, fields: [["sellingPrice", "Selling price", "number"], ["discount", "Discount", "number"], ["numberPlate", "Number plate", "number"], ["roadTax", "Road tax", "number"], ["registrationFee", "Registration fee", "number"], ["ownershipFee", "Ownership fee", "number"], ["accessories", "Accessories", "number"], ["miscSales", "Misc sales", "number"], ["insurance", "Insurance", "number"], ["ncd", "NCD %", "number"], ["bookingFeePaid", "Booking fee paid", "number"], ["paymentRef", "Cheque / ref no.", "text"]] },
-  { title: "Dealer", icon: Store, fields: [["salesAdvisorName", "Sales advisor", "text"], ["salesAdvisorNric", "SA NRIC", "text"], ["salesManagerName", "Sales manager", "text"], ["salesManagerNric", "Manager NRIC", "text"]] },
+  { title: "Dealer", icon: Store, fields: [["dealerName", "Nama syarikat / dealer", "text"], ["dealerRegistration", "No. pendaftaran", "text"], ["dealerAddress", "Alamat dealer", "textarea"], ["dealerPhone", "Telefon dealer", "tel"], ["dealerEmail", "Email dealer", "text"], ["dealerFax", "Fax", "text"], ["salesAdvisorName", "Sales advisor", "text"], ["salesAdvisorNric", "SA NRIC", "text"], ["salesManagerName", "Sales manager", "text"], ["salesManagerNric", "Manager NRIC", "text"]] },
 ] as const;
 const money = (value: number | null) => value === null ? "-" : `RM ${value.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -47,7 +48,7 @@ export function PdfPreview({ url }: { url: string }) {
   return error ? <p role="alert" className="p-4 text-sm text-amber-300">{error}</p> : <canvas ref={canvasRef} aria-label="Preview PDF VSO halaman pertama" className="block h-auto w-full bg-white" />;
 }
 
-export function HondaVsoPanel({ data, onChange, onSample, onSave }: { data: VsoData; onSave: () => Promise<boolean>; onChange: (value: VsoData) => void; onSample: (value: VsoData) => void }) {
+export function HondaVsoPanel({ data, onChange, onSample, onSave, admin }: { admin: boolean; data: VsoData; onSave: () => Promise<boolean>; onChange: (value: VsoData) => void; onSample: (value: VsoData) => void }) {
   const setData = (value: SetStateAction<VsoData>) => onChange(typeof value === "function" ? value(data) : value);
   const [totalOverride, setTotalOverride] = useState(Boolean(data.totalAmount));
   const [balanceOverride, setBalanceOverride] = useState(Boolean(data.totalOutstanding));
@@ -90,6 +91,7 @@ export function HondaVsoPanel({ data, onChange, onSample, onSave }: { data: VsoD
         <fieldset disabled={busy} className="min-w-0">
           {sections.map(({ title, icon: Icon, fields }) => <section key={title} className="mb-6 border-b border-zinc-800 pb-6">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200"><Icon className="h-4 w-4 text-zinc-400" />{title}</h2>
+            {title === "Dealer" ? <VsoDealerPicker data={data} onChange={onChange} admin={admin} /> : null}
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
               {fields.map(([name, label, type]) => <label key={name} className={`grid min-w-0 gap-1.5 text-xs text-zinc-400 ${type === "textarea" ? "sm:col-span-2" : ""}`}>
                 <span>{label}</span>
