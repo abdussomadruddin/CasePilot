@@ -180,3 +180,20 @@ test("expanded catalog models cannot become an unlabelled lead name", () => {
     assert.equal(contact.name, "Abdussomad Ruddin", model);
   }
 });
+
+test("Pabbly repairs redundant Malaysian prefix zeroes and repairs phone numbers in notes", () => {
+ for (const phone of ["+6001161221544", "+600001161221544", "006001161221544", "001161221544"]) {
+  const lead=parseIngestPayload({phone_number:phone});
+  assert.equal(lead.phone,"+601161221544");
+  assert.ok(lead.note.includes("+601161221544"));
+ }
+ for (const phone of ["+601161221544", "+60 11-6122 1544", "+441234567890"]) assert.equal(parseIngestPayload({phone}).phone,phone);
+ assert.equal(parseIngestPayload({note:"Phone: +6001161221544"}).phone,"+601161221544");
+});
+
+test("phone repair preserves salary, prices and unrelated note numbers",()=>{
+ const lead=parseIngestPayload({note:"Phone: +6001161221544\nGaji: RM6000\nHarga: 6001161221544\nModel: City"});
+ assert.ok(lead.note.includes("Phone: +601161221544"));
+ assert.ok(lead.note.includes("Gaji: RM6000"));
+ assert.ok(lead.note.includes("Harga: 6001161221544"));
+});

@@ -27,6 +27,8 @@ try {
   await db.exec(base.slice(base.indexOf("create or replace function public.queue_new_lead_alert"),base.indexOf("drop trigger queue_new_lead_alert")));
   await db.exec("create trigger queue_new_lead_alert after insert or update of owner_id,receipt_id on leads for each row execute function queue_new_lead_alert();");
   await db.exec(await readFile(new URL("../supabase/migrations/20261017140927_retain_returning_lead_owner.sql", import.meta.url),"utf8"));
+  await db.exec("create index leads_normalized_phone_active on leads(public.normalize_lead_phone(customer_phone),updated_at desc) where deleted_at is null");
+  await db.exec(await readFile(new URL("../supabase/migrations/20261103090051_repair_ingest_phone_zero_prefix.sql",import.meta.url),"utf8"));
   const ingest = async (connector, phone, note, email="test@example.com") => (await db.query("select * from ingest_external_lead($1,$2::jsonb)",[connector,JSON.stringify({customer_name:"Test",customer_phone:phone,email,source_note:note})])).rows[0];
   const first = await ingest(id(11),"0171234567","Original inquiry");
   await db.query("update leads set status='contacted',phone_revealed_at=now(),follow_up_count=3 where id=$1",[first.lead_id]);
@@ -43,7 +45,7 @@ try {
   assert.deepEqual(recipients.map(r=>r.owner),[id(1),id(1)]);
   const event = (await db.query("select * from lead_events")).rows[0];
   assert.equal(event.actor_id,id(1)); assert.equal(event.previous_owner_id,id(1));
-  const duplicate = await ingest(id(12),"60171234567","Should be throttled");
+  const duplicate = await ingest(id(12),"6000171234567","Should be throttled");
   assert.equal(duplicate.duplicate,true);
   assert.equal((await db.query("select count(*)::int as n from net.requests")).rows[0].n,2);
   await db.exec("update lead_ingest_windows set last_accepted_at=now()-interval '11 minutes'");

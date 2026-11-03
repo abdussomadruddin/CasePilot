@@ -46,9 +46,23 @@ function buildNote(input: Record<string, unknown>): string {
     .filter(Boolean).join("\n").slice(0, 16000);
 }
 
+export function repairMalaysiaPhone(value: string): string {
+  if (!/^\+?\d[\d\s().-]*$/.test(value)) return value;
+  const digits = value.replace(/\D/g, "");
+  const repaired = digits.startsWith("0060") ? digits.slice(2).replace(/^600+/, "60")
+    : digits.startsWith("60") ? digits.replace(/^600+/, "60")
+    : digits.replace(/^00+(?=1)/, "0");
+  const national = repaired.startsWith("60") ? repaired : repaired.startsWith("0") ? `60${repaired.slice(1)}` : repaired;
+  return repaired !== digits && /^601\d{8,9}$/.test(national) ? `+${national}` : value;
+}
+
 export function parseIngestPayload(input: Record<string, unknown>): IngestPayload {
   const sourceLeadId = value(input, ["source_lead_id", "lead_id", "id"], 200);
-  const note = buildNote(input);
+  const note = buildNote(input).split("\n").map(line => {
+    const labelled = /^(\s*(?:phone(?: number)?|customer phone|no phone|telefon|mobile|whatsapp|no hp|no tel|nombor telefon)\s*[:=]\s*)(.+)$/i.exec(line);
+    if (labelled) return labelled[1] + repairMalaysiaPhone(labelled[2].trim());
+    return line.replace(/(?<![\w])\+600+1[0-9 \t().-]*[0-9]/g, match => repairMalaysiaPhone(match));
+  }).join("\n");
   const contact = extractLeadContact(note, {
     name: value(input, ["name", "full_name", "customer_name"], 200),
     phone: value(input, ["phone", "phone_number", "customer_phone"], 50),
@@ -66,7 +80,7 @@ export function parseIngestPayload(input: Record<string, unknown>): IngestPayloa
   return {
     sourceLeadId,
     name: contact.name,
-    phone: contact.phone,
+    phone: repairMalaysiaPhone(contact.phone),
     email: contact.email,
     brand: vehicle.brand,
     model: vehicle.model,
