@@ -76,7 +76,7 @@ Deno.serve(async (request) => {
     return reply({ ok: false, error: "Unable to save lead." }, 500);
   }
 
-  // The accepted lead can belong to an earlier owner across connectors.
+  // Confirm the owner of the accepted owner-scoped lead.
   const { data: savedLead, error: savedLeadError } = await supabase.from("leads")
     .select("owner_id").eq("id", lead.lead_id).single();
   if (savedLeadError || !savedLead) {
