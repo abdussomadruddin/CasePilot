@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-const { PGlite } = await import(process.env.PGLITE_MODULE || "/tmp/casepilot-sql-tests/node_modules/@electric-sql/pglite/dist/index.js");
+const { PGlite } = await import(process.env.PGLITE_MODULE || "@electric-sql/pglite");
 const db = new PGlite();
 const uuid = n => `11111111-1111-4111-8111-${String(n).padStart(12, "0")}`;
 const actor = async n => { await db.exec(`reset role; set request.jwt.claim.sub = '${uuid(n)}'; set role authenticated;`); };

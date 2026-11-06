@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
@@ -15,6 +15,7 @@ const pdf = await PDFDocument.load(bytes);
 assert.equal(pdf.getPageCount(), 1);
 assert.ok(Math.abs(pdf.getPage(0).getWidth() - 595.28) < 1);
 assert.ok(pdf.getPage(0).getHeight() > pdf.getPage(0).getWidth());
+await mkdir("/tmp/ehak-preview", { recursive: true });
 await writeFile("/tmp/ehak-preview/sample.pdf", bytes);
 await writeFile("/tmp/ehak-preview/long.pdf", await buildEhakmilik(template, { ...data, customerName: "NUR AIN BINTI ABDUL RAHMAN BIN MOHAMAD", model: "Honda City Hatchback", variant: "1.5L e:HEV RS", bankerName: "NAMA BANKER DENGAN NAMA PANJANG" }));
 await assert.rejects(buildEhakmilik(template, { ...data, customerName: "Nama Panjang ".repeat(50) }), /terlalu panjang/);

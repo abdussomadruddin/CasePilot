@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const {PGlite}=await import(process.env.PGLITE_MODULE || '/tmp/casepilot-sql-tests/node_modules/@electric-sql/pglite/dist/index.js');
+const {PGlite}=await import(process.env.PGLITE_MODULE || "@electric-sql/pglite");
 const db=new PGlite();
 try {
  await db.exec(`create role anon; create role authenticated; create schema auth;

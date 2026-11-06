@@ -4,3 +4,7 @@ onlyBuiltDependencies:
 allowBuilds:
   sharp: true
   unrs-resolver: true
+overrides:
+  postcss: ^8.5.23
+  nanoid: ^3.3.18
+  source-map-js: ^1.2.2

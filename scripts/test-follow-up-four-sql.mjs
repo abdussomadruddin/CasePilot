@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 // Isolated PostgreSQL business-rule test, not a substitute for production RLS checks.
-// npm install --prefix /tmp/casepilot-sql-tests @electric-sql/pglite
-const { PGlite } = await import(process.env.PGLITE_MODULE || "/tmp/casepilot-sql-tests/node_modules/@electric-sql/pglite/dist/index.js");
+const { PGlite } = await import(process.env.PGLITE_MODULE || "@electric-sql/pglite");
 const db = new PGlite();
 try {
   await db.exec(`

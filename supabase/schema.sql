@@ -1,3 +1,4 @@
+-- Early baseline only. Current structure = this file + supabase/migrations in order.
 create extension if not exists "pgcrypto";
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
@@ -289,23 +290,15 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  requested_role public.app_role;
 begin
-  begin
-    requested_role := coalesce(new.raw_user_meta_data ->> 'role', 'customer_service')::public.app_role;
-  exception
-    when invalid_text_representation then
-      requested_role := 'customer_service'::public.app_role;
-  end;
-
-  insert into public.profiles (id, email, full_name, phone, role)
+  insert into public.profiles (id, email, full_name, phone, role, active)
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data ->> 'full_name', new.email),
     new.raw_user_meta_data ->> 'phone',
-    requested_role
+    'customer_service'::public.app_role,
+    false
   )
   on conflict (id) do nothing;
 
@@ -317,6 +310,28 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_user();
+
+create or replace function public.protect_profile_access()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null
+    and (new.role is distinct from old.role or new.active is distinct from old.active)
+    and public.current_app_role() is distinct from 'admin'::public.app_role then
+    raise exception 'Only an admin can change role or active status.' using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_profile_access on public.profiles;
+create trigger protect_profile_access
+before update on public.profiles
+for each row execute function public.protect_profile_access();
 
 alter table public.profiles enable row level security;
 alter table public.cases enable row level security;
@@ -471,7 +486,7 @@ drop policy if exists "push subscriptions update active device" on public.push_s
 create policy "push subscriptions update active device"
 on public.push_subscriptions for update
 to authenticated
-using (true)
+using (user_id = auth.uid())
 with check (user_id = auth.uid());
 
 drop policy if exists "push subscriptions delete own" on public.push_subscriptions;

@@ -24,15 +24,16 @@ Open `http://localhost:3000`.
 ## Supabase setup
 
 1. Create a Supabase project.
-2. Run `supabase/schema.sql` in the Supabase SQL editor.
-3. Create app users in Supabase Auth.
-4. Add a row in `profiles` for each user with `full_name`, `phone`, and one of these roles:
+2. Apply everything in `supabase/migrations` in order. `supabase/schema.sql` is only the early baseline and does not contain newer tables.
+3. Keep public signup disabled in Supabase Auth. Admin creates users from the Team screen.
+4. Each user has a `profiles` row with `full_name`, `phone`, `active`, and one of these roles:
    - `admin`
    - `customer_service`
    - `finance`
    - `caller`
    - `operator`
    - `sales_manager`
+   - `broker`
 5. Copy `.env.example` to `.env.local` and fill in the project URL, anon key, VAPID public key, and Google Drive credentials.
 6. Set Edge Function secrets: `SUPABASE_SERVICE_ROLE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, and the same Google Drive credentials used by the app.
 7. Deploy `supabase/functions/send-push-notifications` for live status-change alerts.

@@ -77,8 +77,8 @@ export async function POST(request: NextRequest) {
 
     if (action === "create") {
       if (!email) return response({ ok: false, error: "Email is required." }, 400);
-      if (password.length < 6) {
-        return response({ ok: false, error: "Password must be at least 6 characters." }, 400);
+      if (password.length < 8) {
+        return response({ ok: false, error: "Password must be at least 8 characters." }, 400);
       }
 
       const { data: created, error } = await serviceClient.auth.admin.createUser({
@@ -111,8 +111,8 @@ export async function POST(request: NextRequest) {
 
     if (action === "update") {
       if (!id) return response({ ok: false, error: "User id is required." }, 400);
-      if (password && password.length < 6) {
-        return response({ ok: false, error: "Password must be at least 6 characters." }, 400);
+      if (password && password.length < 8) {
+        return response({ ok: false, error: "Password must be at least 8 characters." }, 400);
       }
 
       const userUpdate: Parameters<typeof serviceClient.auth.admin.updateUserById>[1] = {

@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { WebSocketServer } = require(process.env.FIXTURE_WS_MODULE || "/tmp/casepilot-vso-20261016/node_modules/next/dist/compiled/ws");
-const { PGlite } = await import(process.env.PGLITE_MODULE || "/tmp/casepilot-sql-tests/node_modules/@electric-sql/pglite/dist/index.js");
+const { PGlite } = await import(process.env.PGLITE_MODULE || "@electric-sql/pglite");
 const db = new PGlite();
 const id = "11111111-1111-4111-8111-111111111111";
 await db.exec(`create role anon; create role authenticated; create schema auth;

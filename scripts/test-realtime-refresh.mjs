@@ -3,6 +3,7 @@ import { createRealtimeRefresh } from "../src/lib/realtime-refresh.ts";
 
 const applied = [];
 const waiting = [];
+const settle = () => new Promise((resolve) => setTimeout(resolve, 120));
 let disposed = false;
 const refresh = createRealtimeRefresh(
   () => new Promise((resolve) => waiting.push(resolve)),
@@ -12,6 +13,8 @@ const refresh = createRealtimeRefresh(
 );
 const first = refresh();
 assert.equal(refresh(), first);
+await settle();
+refresh();
 waiting.shift()("stale");
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepEqual(applied, []);
@@ -19,6 +22,7 @@ waiting.shift()("latest");
 await first;
 assert.deepEqual(applied, ["latest"]);
 const last = refresh();
+await settle();
 disposed = true;
 waiting.shift()("after unmount");
 await last;

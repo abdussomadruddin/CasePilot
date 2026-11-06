@@ -12,6 +12,8 @@ const oldSupabaseUrl = "https://rfqwyhafvfvafiqrcmxa.supabase.co";
 const driveScope = "https://www.googleapis.com/auth/drive";
 const tokenEndpoint = "https://oauth2.googleapis.com/token";
 const allowedUploaderRoles = new Set(["admin", "customer_service", "broker"]);
+const maxUploadBytes = 10 * 1024 * 1024;
+const blockedExtensions = /\.(html?|svg|js|mjs|exe|bat|cmd|sh|msi|apk|dmg)$/i;
 
 type DriveFile = {
   id: string;
@@ -81,6 +83,30 @@ async function authenticateUploader(request: NextRequest) {
       profile.role &&
       allowedUploaderRoles.has(profile.role),
   );
+}
+
+// RLS decides visibility, so a broker can only upload to their own cases.
+async function canAccessCase(request: NextRequest, caseId: string) {
+  const configuredSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const useDefaultProject =
+    !configuredSupabaseUrl || configuredSupabaseUrl === oldSupabaseUrl;
+  const supabaseUrl = useDefaultProject ? defaultSupabaseUrl : configuredSupabaseUrl;
+  const supabaseAnonKey = useDefaultProject
+    ? defaultSupabaseKey
+    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || defaultSupabaseKey;
+  const result = await fetch(
+    `${supabaseUrl}/rest/v1/cases?id=eq.${encodeURIComponent(caseId)}&select=id&limit=1`,
+    {
+      headers: {
+        apikey: supabaseAnonKey,
+        authorization: request.headers.get("authorization") || "",
+        accept: "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+  if (!result.ok) return false;
+  return ((await result.json()) as unknown[]).length > 0;
 }
 
 function base64Url(value: string | Buffer) {
@@ -411,6 +437,14 @@ export async function POST(request: NextRequest) {
 
   if (!caseId) {
     return Response.json({ error: "Missing case ID." }, { status: 400 });
+  }
+
+  if (!/^[0-9a-f-]{36}$/i.test(caseId) || !(await canAccessCase(request, caseId))) {
+    return Response.json({ error: "Not allowed to upload to this case." }, { status: 403 });
+  }
+
+  if (file.size > maxUploadBytes || blockedExtensions.test(file.name)) {
+    return Response.json({ error: "File type or size is not allowed." }, { status: 400 });
   }
 
   try {

@@ -85,13 +85,22 @@ export async function enablePushNotifications(profile: Profile) {
   }
 
   const supabase = getSupabaseClient();
-  const { error } = await supabase.from("push_subscriptions").upsert(
+  const p256dh = keys.p256dh || arrayBufferToBase64(subscription.getKey("p256dh"));
+  const auth = keys.auth || arrayBufferToBase64(subscription.getKey("auth"));
+  const registered = await supabase.rpc("register_push_subscription", {
+    p_endpoint: subscription.endpoint,
+    p_p256dh: p256dh,
+    p_auth: auth,
+    p_user_agent: navigator.userAgent,
+  });
+  // Keeps alerts working until the migration adding this RPC is applied.
+  const { error } = registered.error?.code !== "PGRST202" ? registered : await supabase.from("push_subscriptions").upsert(
     {
       user_id: profile.id,
       role: profile.role,
       endpoint: subscription.endpoint,
-      p256dh: keys.p256dh || arrayBufferToBase64(subscription.getKey("p256dh")),
-      auth: keys.auth || arrayBufferToBase64(subscription.getKey("auth")),
+      p256dh,
+      auth,
       user_agent: navigator.userAgent,
       active: true,
       last_seen_at: new Date().toISOString(),

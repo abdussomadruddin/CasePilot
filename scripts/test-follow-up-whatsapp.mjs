@@ -15,65 +15,14 @@ test("normalizes Malaysian mobile formats and encodes optional message", () => {
   assert.throws(() => followUpWhatsAppUrls("not a phone"), /Invalid Malaysian mobile number/);
 });
 
-test("tries Business, regular WhatsApp, then web when the page remains visible", async () => {
+test("opens wa.me directly", async () => {
   const previousWindow = globalThis.window;
-  const previousDocument = globalThis.document;
   const attempted = [];
-  const timers = [];
-  const listeners = new Map();
-  globalThis.window = {
-    location: { assign: (url) => attempted.push(url) },
-    setTimeout: (callback) => { timers.push(callback); return timers.length; },
-    clearTimeout: () => {},
-    addEventListener: (type, callback) => listeners.set(`window:${type}`, callback),
-    removeEventListener: (type) => listeners.delete(`window:${type}`),
-  };
-  globalThis.document = {
-    hidden: false,
-    addEventListener: (type, callback) => listeners.set(`document:${type}`, callback),
-    removeEventListener: (type) => listeners.delete(`document:${type}`),
-  };
+  globalThis.window = { location: { assign: (url) => attempted.push(url) } };
   try {
-    const opened = openFollowUpWhatsApp("0173559147");
-    assert.deepEqual(attempted, ["whatsapp-business://send?phone=60173559147"]);
-    timers.shift()();
-    timers.shift()();
-    await opened;
-    assert.deepEqual(attempted, followUpWhatsAppUrls("0173559147"));
-    assert.equal(listeners.size, 0);
+    await openFollowUpWhatsApp("0173559147", "Hai");
+    assert.deepEqual(attempted, ["https://wa.me/60173559147?text=Hai"]);
   } finally {
     globalThis.window = previousWindow;
-    globalThis.document = previousDocument;
-  }
-});
-
-test("stops fallback after an app takes the page to the background", async () => {
-  const previousWindow = globalThis.window;
-  const previousDocument = globalThis.document;
-  const attempted = [];
-  const timers = [];
-  const listeners = new Map();
-  globalThis.window = {
-    location: { assign: (url) => attempted.push(url) },
-    setTimeout: (callback) => { timers.push(callback); return timers.length; },
-    clearTimeout: () => {},
-    addEventListener: (type, callback) => listeners.set(`window:${type}`, callback),
-    removeEventListener: (type) => listeners.delete(`window:${type}`),
-  };
-  globalThis.document = {
-    hidden: false,
-    addEventListener: (type, callback) => listeners.set(`document:${type}`, callback),
-    removeEventListener: (type) => listeners.delete(`document:${type}`),
-  };
-  try {
-    const opened = openFollowUpWhatsApp("0173559147");
-    globalThis.document.hidden = true;
-    listeners.get("document:visibilitychange")();
-    await opened;
-    timers.shift()();
-    assert.deepEqual(attempted, ["whatsapp-business://send?phone=60173559147"]);
-  } finally {
-    globalThis.window = previousWindow;
-    globalThis.document = previousDocument;
   }
 });
