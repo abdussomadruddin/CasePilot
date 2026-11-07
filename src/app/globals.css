@@ -606,3 +606,19 @@ a:focus-visible {
   .lead-card-actions > select, .modal-actions > select { grid-column: 1 / -1; order: -1; font-size: 16px; }
   .app-modal .field { font-size: 16px; }
 }
+
+/* Mobile performance: no live blur, light transitions, case detail slide */
+@media (max-width: 767px) {
+  .floating-navigation { -webkit-backdrop-filter: none; backdrop-filter: none; background: #16171c; }
+}
+@media (max-width: 639px) {
+  .dashboard-header, .app-modal-panel > div:first-child, .case-form-overlay > div > div:first-child, .ai-dialog-overlay, .app-modal { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .dashboard-header { background: #16171d; }
+  .app-modal-panel > div:first-child, .case-form-overlay > div > div:first-child { background: #16171c; }
+  .mobile-dashboard :where(button, a, input, textarea, select) { transition-property: color, background-color, border-color, opacity, transform; }
+  .surface-card { transition: none; }
+}
+@media (max-width: 639px) and (prefers-reduced-motion: no-preference) {
+  .case-detail-screen { animation: case-detail-in 220ms cubic-bezier(.22, 1, .36, 1); }
+}
+@keyframes case-detail-in { from { transform: translate3d(100%, 0, 0); } to { transform: translate3d(0, 0, 0); } }

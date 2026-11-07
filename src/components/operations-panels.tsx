@@ -15,7 +15,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { motion, useAnimationControls, useReducedMotion } from "motion/react";
 import { readUiContext, writeUiContext } from "@/lib/ui-context";
 import { AiFollowUpButton, AiFollowUpHistory } from "@/components/ai-follow-up";
@@ -105,6 +105,15 @@ const followUpColors = [
 
 function followUpButtonClass(count: number) {
   return `inline-flex min-h-11 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${followUpColors[Math.min(Math.max(count, 0), maxLeadFollowUps - 1)]}`;
+}
+
+function subscribePhoneLayout(onChange: () => void) {
+  const query = window.matchMedia("(max-width: 639px)");
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+function usePhoneLayout() {
+  return useSyncExternalStore(subscribePhoneLayout, () => window.matchMedia("(max-width: 639px)").matches, () => false);
 }
 
 function Modal({
@@ -254,6 +263,7 @@ export function LeadPanel({
     return () => { cancelled = true; };
   }, [selectedSummary, historyRetry]);
   const reduce = useReducedMotion();
+  const isPhone = usePhoneLayout();
   const listRef = useRef<HTMLDivElement>(null);
   const anchor = useRef<{ id: string; top: number; scroll: number } | null>(null);
   const [notice, setNotice] = useState("");
@@ -549,7 +559,7 @@ export function LeadPanel({
       </div>
       <motion.div ref={listRef} className="grid gap-2" animate={listMotion}>
         {shown.map((lead) => (
-          <motion.article key={lead.id} layout={reduce ? false : "position"} data-lead-id={lead.id} transition={{ type: "spring", visualDuration: .26, bounce: 0 }} className="mobile-lead-card surface-card min-w-0 p-4">
+          <motion.article key={lead.id} layout={reduce || isPhone ? false : "position"} data-lead-id={lead.id} transition={{ type: "spring", visualDuration: .26, bounce: 0 }} className="mobile-lead-card surface-card min-w-0 p-4">
             <div className="flex items-start justify-between gap-3">
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }} aria-label={`Open ${lead.customerName} details`}>
                 <span className="block truncate font-semibold text-white">{leadName(lead)}</span>

@@ -1,15 +1,14 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { ReactNode, useLayoutEffect, useRef } from "react";
 import { readUiContext, writeUiContext } from "@/lib/ui-context";
 
 export function MotionSurface({ children, screenKey }: { children: ReactNode; screenKey: string }) {
   const reduce = useReducedMotion();
-  return <div className="relative"><AnimatePresence mode="popLayout" initial={false}><motion.div key={screenKey} className="grid gap-5" initial={{ opacity: reduce ? 1 : .65, y: reduce ? 0 : 12 }}
-    animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: reduce ? 0 : .1 } }} transition={reduce ? { duration: 0 } : { type: "spring", visualDuration: .26, bounce: 0 }}>
+  return <motion.div key={screenKey} className="grid gap-5" initial={reduce ? false : { opacity: 0.6 }} animate={{ opacity: 1 }} transition={{ duration: reduce ? 0 : 0.16, ease: "easeOut" }}>
     {children}
-  </motion.div></AnimatePresence></div>;
+  </motion.div>;
 }
 
 export function useTabScroll(key: string, ready: boolean) {
