@@ -970,7 +970,6 @@ export function CaseDashboard() {
       const deltaX = (event.changedTouches[0]?.clientX ?? 0) - startX;
       const deltaY = (event.changedTouches[0]?.clientY ?? 0) - startY;
       if (Math.abs(deltaX) < 80 || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return;
-      if (!drawerOpen && deltaX > 0) setDrawerOpen(true);
       if (drawerOpen && deltaX < 0) setDrawerOpen(false);
     };
     window.addEventListener("touchstart", touchStart, { passive: true });
