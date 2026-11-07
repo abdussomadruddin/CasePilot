@@ -15,7 +15,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { motion, useAnimationControls, useReducedMotion } from "motion/react";
 import { readUiContext, writeUiContext } from "@/lib/ui-context";
 import { AiFollowUpButton, AiFollowUpHistory } from "@/components/ai-follow-up";
@@ -105,6 +105,15 @@ const followUpColors = [
 
 function followUpButtonClass(count: number) {
   return `inline-flex min-h-11 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${followUpColors[Math.min(Math.max(count, 0), maxLeadFollowUps - 1)]}`;
+}
+
+function subscribePhoneLayout(onChange: () => void) {
+  const query = window.matchMedia("(max-width: 639px)");
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+function usePhoneLayout() {
+  return useSyncExternalStore(subscribePhoneLayout, () => window.matchMedia("(max-width: 639px)").matches, () => false);
 }
 
 function Modal({
@@ -254,6 +263,7 @@ export function LeadPanel({
     return () => { cancelled = true; };
   }, [selectedSummary, historyRetry]);
   const reduce = useReducedMotion();
+  const isPhone = usePhoneLayout();
   const listRef = useRef<HTMLDivElement>(null);
   const anchor = useRef<{ id: string; top: number; scroll: number } | null>(null);
   const [notice, setNotice] = useState("");
@@ -536,7 +546,7 @@ export function LeadPanel({
         <button type="button" role="tab" aria-selected={view === "contacted"} className={view === "contacted" ? "primary-button" : "secondary-button"} onClick={() => { setView("contacted"); onViewChange?.("contacted"); }}>Contacted <span>{contactedLeads.length}</span></button>
         <button type="button" role="tab" aria-selected={view === "followup"} className={view === "followup" ? "primary-button" : "secondary-button"} onClick={() => { setView("followup"); onViewChange?.("followup"); }}>Follow Up Due <span>{dueLeads.length}</span></button>
       </div> : null}
-      <div className="grid gap-2 sm:flex sm:flex-wrap">
+      <div className="lead-filters grid gap-2 sm:flex sm:flex-wrap">
         {profile.role === "admin" ? <OwnerFilterSelect value={ownerFilter} onChange={setOwnerFilter} members={teamMembers} records={scopedLeads} className="sm:max-w-xs" /> : null}
         {view === "all" ? <select className="field min-w-0 sm:max-w-xs" value={filter} onChange={(event) => setFilter(event.target.value as LeadStatus | "all")} aria-label="Filter leads by status">
           <option value="all">All statuses ({ownerLeads.length})</option>
@@ -549,7 +559,7 @@ export function LeadPanel({
       </div>
       <motion.div ref={listRef} className="grid gap-2" animate={listMotion}>
         {shown.map((lead) => (
-          <motion.article key={lead.id} layout={reduce ? false : "position"} data-lead-id={lead.id} transition={{ type: "spring", visualDuration: .26, bounce: 0 }} className="mobile-lead-card surface-card min-w-0 p-4">
+          <motion.article key={lead.id} layout={reduce || isPhone ? false : "position"} data-lead-id={lead.id} transition={{ type: "spring", visualDuration: .26, bounce: 0 }} className="mobile-lead-card surface-card min-w-0 p-4">
             <div className="flex items-start justify-between gap-3">
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }} aria-label={`Open ${lead.customerName} details`}>
                 <span className="block truncate font-semibold text-white">{leadName(lead)}</span>
@@ -564,8 +574,8 @@ export function LeadPanel({
                 {view === "followup" && lead.status !== "rejected" && lead.phoneRevealedAt && hasLeadWhatsApp(lead) ? <button className={followUpButtonClass(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount))} type="button" aria-busy={followingUpId === lead.id} disabled={Boolean(followingUpId)} title={canRecordLeadFollowUp(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount), lead.status) ? "Record follow-up and open WhatsApp" : "Open WhatsApp"} onClick={() => void followUpLead(lead)}><MessageCircle className="h-4 w-4" />{followUpLabel(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount))}</button> : view !== "followup" ? <button className="icon-button" type="button" aria-label={`Open ${leadName(lead)} details`} title="Open lead details" onClick={() => { setNote(""); setError(""); setSelectedId(lead.id); }}><ChevronDown className="h-4 w-4" /></button> : null}
               </div>
             </div>
-            {latestLeadNote(lead) ? <p className="mt-3 break-words whitespace-pre-wrap border-t border-zinc-800 pt-3 text-sm text-zinc-300"><span className="font-medium text-zinc-400">Latest note: </span>{hideLeadPhoneInNote(latestLeadNote(lead), lead.status === "new" || Boolean(lead.phoneRevealedAt))}</p> : null}
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
+            {latestLeadNote(lead) ? <p className="mt-3 line-clamp-2 break-words whitespace-pre-wrap border-t border-zinc-800 pt-3 text-sm text-zinc-300 sm:line-clamp-none"><span className="font-medium text-zinc-400">Latest note: </span>{hideLeadPhoneInNote(latestLeadNote(lead), lead.status === "new" || Boolean(lead.phoneRevealedAt))}</p> : null}
+            <div className="lead-card-actions mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
               {lead.customerPhone ? <button className={lead.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white disabled:opacity-60"} type="button" aria-busy={contactingLeadId === lead.id} disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(lead, "call")}><PhoneCall className="h-4 w-4" /> Call</button> : !hasLeadWhatsApp(lead) ? <button className="secondary-button" type="button" onClick={() => { setDraft(lead); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Edit contact</button> : null}
               {lead.status === "new" && hasLeadWhatsApp(lead) ? <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:opacity-60" type="button" aria-busy={contactingLeadId === lead.id} disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(lead, "whatsapp")}><MessageCircle className="h-4 w-4" /> WhatsApp</button> : null}
               {view !== "followup" && lead.status !== "rejected" && lead.phoneRevealedAt && hasLeadWhatsApp(lead) ? <button className={followUpButtonClass(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount))} type="button" aria-busy={followingUpId === lead.id} disabled={Boolean(followingUpId)} title={canRecordLeadFollowUp(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount), lead.status) ? "Record follow-up and open WhatsApp" : "Open WhatsApp"} onClick={() => void followUpLead(lead)}><MessageCircle className="h-4 w-4" /> {followUpLabel(Math.max(followUpCounts[lead.receiptId || lead.id] ?? 0, lead.followUpCount))}</button> : null}
@@ -584,7 +594,7 @@ export function LeadPanel({
           <div className="px-4 pt-3"><PriorContactBadge lead={selected} /></div>
           <div className="grid gap-4 p-4">
             <div className="grid gap-1 text-sm"><p className="text-zinc-400">{selected.customerPhone ? selected.phoneRevealedAt ? selected.customerPhone : "Phone hidden" : "No phone number"}{selected.email ? ` · ${selected.email}` : ""}</p>{selected.whatsappUsername ? <p className="break-words text-emerald-300">WhatsApp: @{selected.whatsappUsername}</p> : null}{selected.carBrand || selected.carModel ? <p>{[selected.carBrand, selected.carModel].filter(Boolean).join(" · ")}</p> : null}<p className="text-zinc-400">{ownerLabel(selected.ownerId, teamMembers)}</p><p className="text-zinc-300">Source: {leadSourceLabels[selected.source]}{selected.sourceDetail ? ` · ${selected.sourceDetail}` : ""}</p>{selected.sourceNote ? <p className="whitespace-pre-wrap text-zinc-300">Inquiry: {hideLeadPhoneInNote(selected.sourceNote, selected.status === "new" || Boolean(selected.phoneRevealedAt))}</p> : null}<p className="text-xs text-zinc-500">Created {displayTime(selected.createdAt)}</p></div>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="modal-actions grid gap-2 sm:grid-cols-2">
               {selected.customerPhone ? <button className={selected.phoneRevealedAt ? "secondary-button" : "lead-call-pending inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-red-400 px-4 py-2 font-semibold text-white"} type="button" aria-busy={contactingLeadId === selected.id} disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(selected, "call")}><PhoneCall className="h-4 w-4" /> Call</button> : !hasLeadWhatsApp(selected) ? <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Edit contact</button> : null}
               {selected.status === "new" && hasLeadWhatsApp(selected) ? <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-600 disabled:opacity-60" type="button" aria-busy={contactingLeadId === selected.id} disabled={saving || Boolean(contactingLeadId)} onClick={() => void contactLead(selected, "whatsapp")}><MessageCircle className="h-4 w-4" /> WhatsApp</button> : null}
               {selected.status !== "rejected" && selected.phoneRevealedAt && hasLeadWhatsApp(selected) ? <button className={followUpButtonClass(Math.max(followUpCounts[selected.receiptId || selected.id] ?? 0, selected.followUpCount))} type="button" aria-busy={followingUpId === selected.id} disabled={Boolean(followingUpId)} title={canRecordLeadFollowUp(Math.max(followUpCounts[selected.receiptId || selected.id] ?? 0, selected.followUpCount), selected.status) ? "Record follow-up and open WhatsApp" : "Open WhatsApp"} onClick={() => void followUpLead(selected)}><MessageCircle className="h-4 w-4" /> {followUpLabel(Math.max(followUpCounts[selected.receiptId || selected.id] ?? 0, selected.followUpCount))}</button> : null}
@@ -599,7 +609,7 @@ export function LeadPanel({
               ...selected.followUps.map((entry) => ({ id: entry.id, time: entry.createdAt, text: `Follow Up ${entry.number}` })),
             ].sort((a, b) => +new Date(b.time) - +new Date(a.time)).map((entry) => <p key={entry.id} className="rounded-md bg-zinc-900 p-2"><span className="text-xs text-zinc-500">{displayTime(entry.time)}</span><br />{entry.text}</p>)}</div> : null}
             {["admin", "customer_service", "broker"].includes(profile.role) ? <AiFollowUpHistory leadId={selected.id} /> : null}
-            <div className="grid gap-2 border-t border-zinc-800 pt-3 sm:grid-cols-2">
+            <div className="modal-actions grid gap-2 border-t border-zinc-800 pt-3 sm:grid-cols-2">
               {selected.phoneRevealedAt || selected.status === "new" ? <button className="secondary-button" type="button" onClick={() => { setDraft(selected); setSelectedId(""); }}><Pencil className="h-4 w-4" /> Edit</button> : null}
               <button className="secondary-button" type="button" onClick={() => { onAppointment(selected); setSelectedId(""); }}><CalendarClock className="h-4 w-4" /> Appointment</button>
               {cases.some((item) => item.leadId === selected.id) ? <span className="flex items-center gap-2 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4" /> Case created</span> : <button className="primary-button" type="button" onClick={() => { onCreateCase(selected); setSelectedId(""); }}><FilePlus2 className="h-4 w-4" /> Create Case</button>}
@@ -630,6 +640,26 @@ export function LeadPanel({
       ) : null}
     </section>
   );
+}
+
+const klDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit" });
+const klDayLabel = new Intl.DateTimeFormat("ms-MY", { timeZone: "Asia/Kuala_Lumpur", weekday: "long", day: "numeric", month: "short" });
+const klClock = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", minute: "2-digit" });
+
+function appointmentClock(value: string) {
+  return klClock.format(new Date(value));
+}
+
+function groupByDay(items: AppointmentRecord[]) {
+  const today = klDay.format(new Date());
+  const tomorrow = klDay.format(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  const groups = new Map<string, AppointmentRecord[]>();
+  for (const item of items) {
+    const day = klDay.format(new Date(item.startsAt));
+    const label = day === today ? "Hari ini" : day === tomorrow ? "Esok" : klDayLabel.format(new Date(item.startsAt));
+    groups.set(label, [...(groups.get(label) || []), item]);
+  }
+  return [...groups.entries()];
 }
 
 function appointmentInputTime(value: string) {
@@ -756,9 +786,8 @@ export function AppointmentPanel({
   function appointmentItem(appointment: AppointmentRecord) {
     const subject = subjectOptions.find((item) => item.value === (appointment.leadId ? `lead:${appointment.leadId}` : `case:${appointment.caseId}`));
     return <div key={appointment.id} className="surface-card grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-      {profile.role === "admin" ? <button type="button" className="secondary-button justify-self-end text-red-300 sm:col-span-2" disabled={saving} onClick={async () => { if (!window.confirm("Padam appointment ini? Reminder akan dihentikan.")) return; setSaving(true); setError(""); try { await deleteAppointment(appointment.id); await onRefresh(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to delete appointment."); } finally { setSaving(false); } }}><Trash2 className="h-4 w-4" />Delete</button> : null}
-      <div className="min-w-0"><p className="font-semibold text-white">{appointment.kind === "test_drive" ? "Test Drive" : "Delivery"} · {subject?.label || appointment.customerName}</p><p className="text-sm text-zinc-300">{displayTime(appointment.startsAt)}</p>{appointment.customerPhone ? <a className="text-sm text-emerald-200" href={`tel:${appointment.customerPhone.replace(/[^\d+]/g, "")}`}>{appointment.customerPhone}</a> : null}<p className="text-xs text-zinc-500">{ownerLabel(appointment.ownerId, teamMembers)}{appointment.location ? ` · ${appointment.location}` : ""}</p>{appointment.notes ? <p className="mt-2 break-words text-sm text-zinc-400">{appointment.notes}</p> : null}</div>
-      {appointment.status === "scheduled" ? <div className="flex flex-wrap gap-2"><button type="button" className="secondary-button" onClick={() => openEdit(appointment)}><Pencil className="h-4 w-4" /> Edit</button>{+new Date(appointment.startsAt) <= now ? <><button type="button" className="secondary-button text-emerald-200" disabled={saving} onClick={() => void updateStatus(appointment, "show_up")}><CheckCircle2 className="h-4 w-4" /> Show Up</button><button type="button" className="secondary-button text-amber-200" disabled={saving} onClick={() => void updateStatus(appointment, "no_show")}><X className="h-4 w-4" /> Tidak Hadir</button></> : null}<button type="button" className="secondary-button" disabled={saving} onClick={() => void updateStatus(appointment, "completed")}><CheckCircle2 className="h-4 w-4" /> Done</button><button type="button" className="secondary-button border-red-900 text-red-200" disabled={saving} onClick={() => void updateStatus(appointment, "cancelled")}><X className="h-4 w-4" /> Cancel</button></div> : <span className="text-sm text-zinc-500">{{ completed: "Done", cancelled: "Cancelled", show_up: "Show Up", no_show: "Tidak Hadir" }[appointment.status]}</span>}
+      <div className="min-w-0"><p className="text-base font-semibold text-white">{appointmentClock(appointment.startsAt)} <span className="font-normal text-zinc-400">· {appointment.kind === "test_drive" ? "Test Drive" : "Delivery"}</span></p><p className="mt-0.5 truncate text-sm font-medium text-zinc-200">{subject?.label || appointment.customerName}</p>{appointment.customerPhone ? <a className="inline-flex min-h-8 items-center text-sm text-emerald-200" href={`tel:${appointment.customerPhone.replace(/[^\d+]/g, "")}`}>{appointment.customerPhone}</a> : null}<p className="text-xs text-zinc-500">{displayTime(appointment.startsAt)} · {ownerLabel(appointment.ownerId, teamMembers)}{appointment.location ? ` · ${appointment.location}` : ""}</p>{appointment.notes ? <p className="mt-2 line-clamp-3 break-words text-sm text-zinc-400 sm:line-clamp-none">{appointment.notes}</p> : null}</div>
+      {appointment.status === "scheduled" ? <div className="appointment-actions flex flex-wrap gap-2"><button type="button" className="secondary-button" onClick={() => openEdit(appointment)}><Pencil className="h-4 w-4" /> Edit</button>{+new Date(appointment.startsAt) <= now ? <><button type="button" className="secondary-button text-emerald-200" disabled={saving} onClick={() => void updateStatus(appointment, "show_up")}><CheckCircle2 className="h-4 w-4" /> Show Up</button><button type="button" className="secondary-button text-amber-200" disabled={saving} onClick={() => void updateStatus(appointment, "no_show")}><X className="h-4 w-4" /> Tidak Hadir</button></> : null}<button type="button" className="secondary-button" disabled={saving} onClick={() => void updateStatus(appointment, "completed")}><CheckCircle2 className="h-4 w-4" /> Done</button><button type="button" className="secondary-button border-red-900 text-red-200" disabled={saving} onClick={() => void updateStatus(appointment, "cancelled")}><X className="h-4 w-4" /> Cancel</button>{profile.role === "admin" ? <button type="button" className="secondary-button text-red-300" disabled={saving} onClick={async () => { if (!window.confirm("Padam appointment ini? Reminder akan dihentikan.")) return; setSaving(true); setError(""); try { await deleteAppointment(appointment.id); await onRefresh(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to delete appointment."); } finally { setSaving(false); } }}><Trash2 className="h-4 w-4" />Delete</button> : null}</div> : <div className="flex flex-wrap items-center justify-between gap-2"><span className="rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300">{{ completed: "Done", cancelled: "Cancelled", show_up: "Show Up", no_show: "Tidak Hadir" }[appointment.status]}</span>{profile.role === "admin" ? <button type="button" className="secondary-button text-red-300" disabled={saving} onClick={async () => { if (!window.confirm("Padam appointment ini? Reminder akan dihentikan.")) return; setSaving(true); setError(""); try { await deleteAppointment(appointment.id); await onRefresh(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to delete appointment."); } finally { setSaving(false); } }}><Trash2 className="h-4 w-4" />Delete</button> : null}</div>}
     </div>;
   }
 
@@ -769,7 +798,7 @@ export function AppointmentPanel({
     <h3 className="text-sm font-semibold text-zinc-300">Upcoming</h3>
     {notice ? <p className="text-sm text-emerald-300" role="status">{notice}</p> : null}
     {saving ? <p className="flex items-center gap-2 text-sm text-zinc-400" role="status"><LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" />Saving...</p> : null}
-    <div className="grid gap-2">{upcoming.length ? upcoming.map(appointmentItem) : <p className="surface-card p-6 text-sm text-zinc-400">No upcoming appointments.</p>}</div>
+    {upcoming.length ? groupByDay([...upcoming].sort((a, b) => +new Date(a.startsAt) - +new Date(b.startsAt))).map(([label, items]) => <div key={label} className="grid gap-2"><p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{label}</p>{items.map(appointmentItem)}</div>) : <p className="surface-card p-6 text-sm text-zinc-400">No upcoming appointments.</p>}
     {previous.length ? <><h3 className="mt-4 text-sm font-semibold text-zinc-400">Past and cancelled</h3><div className="grid gap-2">{previous.map(appointmentItem)}</div></> : null}
     {draft ? <Modal title={appointments.some((item) => item.id === draft.id) ? "Edit Appointment" : "New Appointment"} onClose={() => setDraft(null)}>
       <form className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 p-4" onSubmit={submitAppointment}>
