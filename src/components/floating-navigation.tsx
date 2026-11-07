@@ -20,7 +20,7 @@ export function FloatingNavigation({ items, activeId, onNavigate, disabled }: { 
       const delta = current - previous;
       distance = Math.sign(delta) === Math.sign(distance) ? distance + delta : delta;
       if (current < 32 || distance < -8) setHidden(false);
-      else if (distance > 18 && !drag.current) setHidden(true);
+      else if (distance > 18 && !drag.current && window.matchMedia("(min-width: 768px)").matches) setHidden(true);
       previous = current;
     };
     window.addEventListener("scroll", scroll, { passive: true });

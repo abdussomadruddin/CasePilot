@@ -46,7 +46,7 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { createRealtimeRefresh, createScopedRealtimeRefresh, mergeRealtimeRows } from "@/lib/realtime-refresh";
 import { MotionSurface, useTabScroll } from "@/components/motion-surface";
@@ -163,6 +163,24 @@ type InstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+
+const phoneQuery = "(max-width: 639px)";
+function subscribePhone(onChange: () => void) {
+  const query = window.matchMedia(phoneQuery);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+function useIsPhone() {
+  return useSyncExternalStore(subscribePhone, () => window.matchMedia(phoneQuery).matches, () => false);
+}
+
+type CaseDetailTab = "remark" | "info" | "documents" | "history";
+const caseDetailTabs: { id: CaseDetailTab; label: string }[] = [
+  { id: "remark", label: "Remark" },
+  { id: "info", label: "Maklumat" },
+  { id: "documents", label: "Dokumen" },
+  { id: "history", label: "History" },
+];
 
 type StatusFilter = "all" | CaseStatus;
 type DealerFilter = "all" | CaseDealer;
@@ -738,6 +756,8 @@ export function CaseDashboard() {
   const [role, setRole] = useState<Role>("admin");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeTab, setActiveTab] = useState<DashboardTab>("all");
+  const [caseSearch, setCaseSearch] = useState("");
+  const [openCaseId, setOpenCaseId] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dealerFilter, setDealerFilter] = useState<DealerFilter>("all");
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("all");
@@ -1870,6 +1890,15 @@ export function CaseDashboard() {
     );
   }
 
+  const searchTerm = caseSearch.trim().toLowerCase();
+  const searchedCases = searchTerm
+    ? filteredCases.filter((record) => [record.customerName, record.customerPhone, record.carModel, record.carVariant].some((value) => (value || "").toLowerCase().includes(searchTerm)))
+    : filteredCases;
+  const dueCases = visibleCases
+    .filter((record) => isFollowUpDue(record))
+    .sort((a, b) => +new Date(a.nextFollowUpAt) - +new Date(b.nextFollowUpAt))
+    .slice(0, 5);
+
   return (
     <main className="mobile-dashboard min-h-screen px-3 py-3 sm:px-5 sm:py-5 lg:px-8">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-5">
@@ -1988,6 +2017,7 @@ export function CaseDashboard() {
         <div className={dataReady ? "grid gap-5" : "hidden"}>
         {appSection === "dashboard" ? (
           <section className="screen-enter grid gap-4">
+            <h1 className="text-2xl font-bold text-white sm:hidden">Kerja hari ini</h1>
             <div className="dashboard-stats grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("this_month"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(currentMonth); setAppSection("cases"); }}><CalendarDays className="mb-3 h-5 w-5 text-violet-400" /><span className="block text-sm text-zinc-400">This Month Cases</span><strong className="text-2xl">{metrics.this_month}</strong></button>
               <button type="button" className="surface-card p-4 text-left" onClick={() => { setActiveTab("last_month"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(lastMonth); setAppSection("cases"); }}><CalendarRange className="mb-3 h-5 w-5 text-amber-400" /><span className="block text-sm text-zinc-400">Last Month Cases</span><strong className="text-2xl">{metrics.last_month}</strong></button>
@@ -2002,6 +2032,19 @@ export function CaseDashboard() {
               {role !== "sales_manager" ? <button type="button" className="surface-card p-4 text-left" onClick={() => openCaseMetric("cancelled_rejected", currentMonth)}><XCircle className="mb-3 h-5 w-5 text-rose-400" /><span className="block text-sm text-zinc-400">Cancelled/Rejected</span><strong className="text-2xl">{dashboardMonthCases.filter((record) => record.status === "cancelled" || record.status === "rejected").length}</strong></button> : null}
               {["admin", "customer_service", "broker"].includes(role) ? <button type="button" className="surface-card p-4 text-left" onClick={() => setAppSection("appointments")}><CalendarDays className="mb-3 h-5 w-5 text-emerald-400" /><span className="block text-sm text-zinc-400">Upcoming appointments</span><strong className="text-2xl">{appointments.filter((item) => item.status === "scheduled" && +new Date(item.startsAt) >= Date.now()).length}</strong></button> : null}
             </div>
+            {role !== "sales_manager" ? <section className="grid gap-2 sm:hidden" aria-label="Hubungi dulu">
+              <h2 className="text-sm font-semibold text-zinc-300">Hubungi dulu</h2>
+              {dueCases.length ? dueCases.map((record) => <article key={record.id} className="surface-card grid gap-2.5 p-3">
+                <button type="button" className="min-w-0 text-left" onClick={() => { setOpenCaseId(record.id); setActiveTab("followup"); setStatusFilter("all"); setDealerFilter("all"); setMonthFilter(""); setAppSection("cases"); }}>
+                  <strong className="block truncate text-[15px] text-white">{record.customerName || "Unnamed customer"}</strong>
+                  <span className="mt-0.5 block truncate text-[13px] text-zinc-400">{record.carModel} · {formatStatus(record.status)}</span>
+                </button>
+                {record.customerPhone.trim() ? <div className="grid grid-cols-2 gap-2">
+                  <a className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-emerald-700 text-sm font-semibold text-white" href={buildWhatsAppUrl(record.customerPhone)} aria-label={`WhatsApp ${record.customerName || "customer"}`}><MessageCircle className="h-4 w-4" aria-hidden="true" />WhatsApp</a>
+                  <a className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-800 text-sm font-semibold text-zinc-100" href={buildTelUrl(record.customerPhone)} aria-label={`Call ${record.customerName || "customer"}`}><PhoneCall className="h-4 w-4" aria-hidden="true" />Call</a>
+                </div> : null}
+              </article>) : <p className="text-sm text-zinc-500">Tiada case perlu follow up sekarang.</p>}
+            </section> : null}
             {role === "customer_service" || role === "broker" ? (
               <section className="grid gap-2">
                 <h2 className="text-sm font-semibold text-zinc-300">New leads ({newOwnLeads.length})</h2>
@@ -2048,6 +2091,7 @@ export function CaseDashboard() {
 
         <section key={activeTab} className="screen-enter grid gap-3">
           <>
+              <input type="search" className="field w-full text-base sm:hidden" aria-label="Search cases" placeholder="Cari nama, telefon atau model" value={caseSearch} onChange={(event) => setCaseSearch(event.target.value)} />
               <div className="flex min-w-0 flex-col gap-3 py-2 lg:flex-row lg:items-center lg:justify-between">
                 <button type="button" className="secondary-button sm:hidden" onClick={() => setFiltersOpen(true)} aria-expanded={filtersOpen}>
                   <Filter className="h-4 w-4" /> Filters {filtersActive ? "· Active" : ""}
@@ -2163,10 +2207,12 @@ export function CaseDashboard() {
                 <div className="grid gap-3" role="status" aria-label="Loading cases">
                   {[0, 1, 2].map((item) => <div key={item} className="h-28 rounded-md bg-zinc-900 animate-pulse motion-reduce:animate-none" />)}
                 </div>
-              ) : filteredCases.length ? (
-                filteredCases.map((record) => (
+              ) : searchedCases.length ? (
+                searchedCases.map((record) => (
                   <CaseCard
                     key={record.id}
+                    autoOpen={openCaseId === record.id}
+                    onAutoOpened={() => setOpenCaseId("")}
                     record={record}
                     role={role}
                     userId={profile?.id || ""}
@@ -2203,7 +2249,7 @@ export function CaseDashboard() {
                 ))
               ) : (
                 <div className="surface-card p-8 text-center text-sm text-muted">
-                  {filtersActive || funnelSelection?.section === "cases"
+                  {filtersActive || caseSearch.trim() || funnelSelection?.section === "cases"
                     ? "No cases match the selected filters"
                     : "No cases in this tab"}
                 </div>
@@ -2274,13 +2320,13 @@ export function CaseDashboard() {
 
       {!["honda_vso", "invoice", "receipt", "ehakmilik"].includes(appSection) ? <FloatingNavigation items={[
         { id: "dashboard", label: "Home", icon: LayoutDashboard, count: navigationCounts.dashboard },
+        { id: "cases", label: "Case", icon: FolderKanban, count: navigationCounts.cases },
         ...(["admin", "customer_service", "broker"].includes(role) ? [
           { id: "leads", label: "Lead", icon: Users, count: navigationCounts.leads },
-          { id: "lead_followup", label: "Follow Up", icon: Clock3, count: navigationCounts.lead_followup },
+          { id: "appointments", label: "Appointment", icon: CalendarDays, count: navigationCounts.appointments },
         ] : []),
-        { id: "cases", label: "Case", icon: FolderKanban, count: navigationCounts.cases },
-        ...(["admin", "customer_service", "broker"].includes(role) ? [{ id: "appointments", label: "Appointment", icon: CalendarDays, count: navigationCounts.appointments }] : []),
-      ]} activeId={appSection === "leads" && leadViewJump === "followup" ? "lead_followup" : appSection} onNavigate={navigateSection} disabled={drawerOpen || isFormOpen || Boolean(accountMode) || aiSettingsOpen} /> : null}
+        { id: "more", label: "More", icon: Menu, count: ["admin", "customer_service", "broker"].includes(role) ? navigationCounts.lead_followup : 0 },
+      ]} activeId={["dashboard", "cases", "appointments"].includes(appSection) ? appSection : appSection === "leads" && leadViewJump !== "followup" ? "leads" : "more"} onNavigate={(id) => { if (id === "more") setDrawerOpen(true); else navigateSection(id); }} disabled={drawerOpen || isFormOpen || Boolean(accountMode) || aiSettingsOpen} /> : null}
 
       {isFormOpen ? (
         <CaseForm
@@ -2534,6 +2580,8 @@ function MetricCard({
 }
 
 function CaseCard({
+  autoOpen = false,
+  onAutoOpened,
   record,
   role,
   userId,
@@ -2546,6 +2594,8 @@ function CaseCard({
   onCreateInvoice,
   onCreateEhakmilik,
 }: {
+  autoOpen?: boolean;
+  onAutoOpened?: () => void;
   record: CaseRecord;
   role: Role;
   userId: string;
@@ -2566,7 +2616,19 @@ function CaseCard({
   const allowEdit = canEditCase(role, record, userId);
   const allowDelete = canDeleteCase(role);
   const showContactLists = role !== "sales_manager";
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(autoOpen);
+  const [detailTab, setDetailTab] = useState<CaseDetailTab>("remark");
+  const isPhone = useIsPhone();
+  const fullScreen = isExpanded && isPhone;
+  useEffect(() => {
+    if (autoOpen) onAutoOpened?.();
+  }, [autoOpen, onAutoOpened]);
+  useEffect(() => {
+    if (!fullScreen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [fullScreen]);
   const [remarkDraft, setRemarkDraft] = useState("");
   const [remarkSaving, setRemarkSaving] = useState(false);
   const [remarkFeedback, setRemarkFeedback] = useState("");
@@ -2629,18 +2691,26 @@ function CaseCard({
     .filter(isVisibleTimelineActivity)
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   function toggleExpanded() {
+    if (fullScreen) return;
     setIsExpanded((current) => !current);
   }
 
-  return (
+  const card = (
     <article
-      className={`mobile-case-card surface-card overflow-hidden border-l-4 transition duration-200 hover:border-zinc-600 hover:shadow-lift ${statusAccent[record.status]}`}
+      role={fullScreen ? "dialog" : undefined}
+      aria-modal={fullScreen ? true : undefined}
+      aria-label={fullScreen ? record.customerName || "Case details" : undefined}
+      data-tab={fullScreen ? detailTab : undefined}
+      className={`mobile-case-card ${fullScreen ? "case-detail-screen" : ""} surface-card overflow-hidden border-l-4 transition duration-200 hover:border-zinc-600 hover:shadow-lift ${statusAccent[record.status]}`}
     >
+      {fullScreen ? <header className="case-detail-header">
+        <button type="button" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-zinc-200" onClick={() => setIsExpanded(false)} autoFocus><X className="h-4 w-4" aria-hidden="true" />Kembali</button>
+      </header> : null}
       <div
-        role="button"
-        tabIndex={0}
-        className="grid w-full cursor-pointer gap-3 bg-gradient-to-r from-zinc-950 via-zinc-950 to-zinc-900/80 p-3 text-left transition hover:from-zinc-900 hover:via-zinc-950 hover:to-red-950/30 sm:p-4 md:grid-cols-[minmax(180px,1fr)_minmax(180px,1fr)] lg:grid-cols-[minmax(190px,1.25fr)_minmax(170px,1fr)_minmax(160px,0.9fr)_auto_auto] lg:items-center"
-        aria-expanded={isExpanded}
+        role={fullScreen ? undefined : "button"}
+        tabIndex={fullScreen ? undefined : 0}
+        className="case-card-summary grid w-full cursor-pointer gap-3 bg-gradient-to-r from-zinc-950 via-zinc-950 to-zinc-900/80 p-3 text-left transition hover:from-zinc-900 hover:via-zinc-950 hover:to-red-950/30 sm:p-4 md:grid-cols-[minmax(180px,1fr)_minmax(180px,1fr)] lg:grid-cols-[minmax(190px,1.25fr)_minmax(170px,1fr)_minmax(160px,0.9fr)_auto_auto] lg:items-center"
+        aria-expanded={fullScreen ? undefined : isExpanded}
         onClick={toggleExpanded}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -2653,10 +2723,11 @@ function CaseCard({
           <h2 className="line-clamp-2 break-words text-base font-bold leading-tight text-white">
             {record.customerName || "Unnamed customer"}
           </h2>
-          <p className="mt-1 break-words text-xs font-medium text-zinc-400">
+          {followUpDue ? <p className="case-card-due mt-1 text-xs font-semibold text-amber-300 sm:hidden">Follow up due</p> : null}
+          <p className="case-card-secondary mt-1 break-words text-xs font-medium text-zinc-400">
             {record.customerPhone || "No phone"}
           </p>
-          <p className="mt-1 line-clamp-1 text-xs font-semibold text-zinc-300">
+          <p className="case-card-secondary mt-1 line-clamp-1 text-xs font-semibold text-zinc-300">
             {record.ownerRole === "broker"
               ? `Broker${record.ownerName ? `: ${record.ownerName}` : ""}`
               : `Customer Service${record.ownerName ? `: ${record.ownerName}` : ""}`}
@@ -2667,7 +2738,7 @@ function CaseCard({
           <p className="line-clamp-2 break-words text-sm font-semibold text-zinc-100">
             {record.carModel} {record.carVariant}
           </p>
-          <p className="mt-1 break-words text-xs text-zinc-500">{record.carColor || "No color"}</p>
+          <p className="case-card-secondary mt-1 break-words text-xs text-zinc-500">{record.carColor || "No color"}</p>
         </div>
 
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -2676,13 +2747,13 @@ function CaseCard({
           >
             {formatStatus(record.status)}
           </span>
-          <span className="max-w-full rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs font-semibold leading-snug text-zinc-200">
+          <span className="case-card-secondary max-w-full rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs font-semibold leading-snug text-zinc-200">
             {record.dealer ? caseDealerLabels[record.dealer] : "No dealer"}
           </span>
         </div>
 
         <div
-          className="grid grid-cols-2 gap-2 md:col-span-2 lg:col-span-1 lg:flex lg:flex-wrap lg:items-center lg:justify-end"
+          className="case-card-contact grid grid-cols-2 gap-2 md:col-span-2 lg:col-span-1 lg:flex lg:flex-wrap lg:items-center lg:justify-end"
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
         >
@@ -2709,7 +2780,7 @@ function CaseCard({
           </a>
         </div>
 
-        <div className="flex min-w-0 items-center justify-between gap-3 md:col-span-2 lg:col-span-1 lg:justify-end">
+        <div className="case-card-preview flex min-w-0 items-center justify-between gap-3 md:col-span-2 lg:col-span-1 lg:justify-end">
           <p className="line-clamp-2 min-w-0 text-xs leading-5 text-zinc-400 lg:hidden">
             {latestRemark}
           </p>
@@ -2728,9 +2799,10 @@ function CaseCard({
         </div>
       </div>
 
-      {role !== "sales_manager" ? <div className="flex flex-wrap gap-2 border-t border-zinc-800 px-3 py-2 sm:px-4"><button type="button" className="secondary-button" onClick={() => onCreateInvoice(record)}><FileText className="h-4 w-4" />Create Invoice</button><button type="button" className="secondary-button" onClick={() => onCreateEhakmilik(record)}><FileText className="h-4 w-4" />e-hakmilik</button></div> : null}
+      {fullScreen ? <div className="case-detail-tabs" role="tablist" aria-label="Case sections">{caseDetailTabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={detailTab === tab.id} onClick={() => setDetailTab(tab.id)}>{tab.label}</button>)}</div> : null}
+      {role !== "sales_manager" ? <div className="case-pane case-pane-info flex flex-wrap gap-2 border-t border-zinc-800 px-3 py-2 sm:px-4"><button type="button" className="secondary-button" onClick={() => onCreateInvoice(record)}><FileText className="h-4 w-4" />Create Invoice</button><button type="button" className="secondary-button" onClick={() => onCreateEhakmilik(record)}><FileText className="h-4 w-4" />e-hakmilik</button></div> : null}
       {allowEdit ? (
-        <div className="grid gap-2 border-t border-zinc-800 px-3 py-2 sm:px-4">
+        <div className="case-pane case-pane-remark grid gap-2 border-t border-zinc-800 px-3 py-2 sm:px-4">
           <div className="flex items-center gap-2">
             <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-zinc-400">
               Status
@@ -2763,7 +2835,7 @@ function CaseCard({
 
       {isExpanded ? (
         <>
-          <div className="border-t border-zinc-800 px-3 py-2.5 sm:px-4">
+          <div className="case-pane case-pane-info border-t border-zinc-800 px-3 py-2.5 sm:px-4">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 {needsAttention ? (
@@ -2812,7 +2884,7 @@ function CaseCard({
             }`}
           >
             <div className="grid content-start gap-3">
-              <dl className="grid gap-1.5 rounded-md bg-zinc-950 p-3 ring-1 ring-zinc-800">
+              <dl className="case-pane case-pane-info grid gap-1.5 rounded-md bg-zinc-950 p-3 ring-1 ring-zinc-800">
                 <CompactInfoItem
                   label="Team"
                   value={describeAssignedTeam(record.status, record.dealer)}
@@ -2829,7 +2901,7 @@ function CaseCard({
                 <CompactInfoItem label="Phone" value={record.customerPhone} />
               </dl>
 
-              <div className="rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
+              <div className="case-pane case-pane-remark rounded-md bg-zinc-900/70 p-3 ring-1 ring-zinc-800">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-normal text-muted">
                   Latest remark
                 </p>
@@ -2837,7 +2909,7 @@ function CaseCard({
               </div>
             </div>
 
-            <div className="grid content-start gap-3">
+            <div className="case-pane case-pane-documents grid content-start gap-3">
                 <Panel
                   title="Document files"
                   icon={FileText}
@@ -2901,7 +2973,7 @@ function CaseCard({
             </div>
 
             {showContactLists ? (
-              <div className="grid content-start gap-3">
+              <div className="case-pane case-pane-info grid content-start gap-3">
                 <Panel title="Bank list" icon={Banknote}>
                   <div className="grid gap-2">
                     {record.banks.length ? (
@@ -2973,6 +3045,7 @@ function CaseCard({
               </div>
             ) : null}
 
+            <div className="case-pane case-pane-history grid">
             <Panel title="Activity timeline" icon={Clock3}>
               {timelineError ? <button type="button" className="secondary-button text-red-300" onClick={() => setTimelineRetry((n) => n + 1)}>{timelineError}</button> : timeline?.source !== record ? <p role="status" className="text-sm text-zinc-400">Loading History…</p> : null}
               {visibleTimelineActivities.length ? (
@@ -2997,10 +3070,11 @@ function CaseCard({
                 timeline?.source === record && !timelineError ? <p className="text-sm text-muted">No activity yet</p> : null
               )}
             </Panel>
+            </div>
           </div>
 
           {assignedRoles.includes(role) && !isTerminalStatus(record.status) ? (
-            <div className="border-t border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-400 sm:px-5">
+            <div className="case-detail-hint border-t border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-400 sm:px-5">
               <span className="font-medium text-ink">{roleLabels[role]}</span> should review
               this case and update the remark or status when needed.
             </div>
@@ -3010,6 +3084,7 @@ function CaseCard({
 
     </article>
   );
+  return fullScreen ? createPortal(card, document.body) : card;
 }
 
 function CompactInfoItem({ label, value }: { label: string; value: string }) {
